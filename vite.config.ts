@@ -6,6 +6,9 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // GitHub Pages 部署时使用仓库名作为 base path
+  // CI 构建时通过 --base 参数传入，本地开发使用 '/'
+  base: '/',
   plugins: [react(), tailwindcss(), wasm(), topLevelAwait()],
   server: {
     port: 3000,

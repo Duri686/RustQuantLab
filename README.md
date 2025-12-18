@@ -1,81 +1,188 @@
+<div align="center">
+
 # 🦀 RustQuantLab
 
-**探索 WebAssembly 在高频金融数据处理场景中的性能边界**
+**High-Performance Financial Terminal · Rust/Wasm + React + ECharts**
 
 [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org/)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Enabled-654FF0?logo=webassembly)](https://webassembly.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38BDF8?logo=tailwindcss)](https://tailwindcss.com/)
+[![ECharts](https://img.shields.io/badge/ECharts-6-AA344D?logo=apacheecharts)](https://echarts.apache.org/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite)](https://vitejs.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-## 项目背景
+*A high-fidelity engineering showcase demonstrating sub-millisecond market data processing with Rust/WebAssembly, featuring a professional-grade trading terminal UI.*
 
-在证券交易 Web 端，面临高频行情推送（每秒数十至上百次更新）时，JavaScript 在主线程进行大量数据的序列化、排序、聚合及金融指标计算，容易造成 **UI 掉帧与卡顿**。
+</div>
 
-本项目旨在通过 **Rust + WebAssembly** 接管核心计算逻辑，验证其相比纯 JavaScript 的性能优势。
+---
 
-## 研究目标
+## 📸 Snapshot
 
-- 🔬 **性能对比**：量化 Wasm vs JavaScript 在大规模数据处理中的性能差异
-- 📊 **实战场景**：模拟高频行情推送、订单簿聚合、技术指标计算（SMA/MACD）
-- 🧠 **最佳实践**：探索 JS ↔ Rust 数据传递的优化策略（零拷贝、SharedArrayBuffer）
+![Dashboard Preview](docs/preview.png)
 
-## 技术架构
+### ✨ Key Highlights
 
+- **⚡ Rust-Powered Performance** — Core market analysis engine compiled to WebAssembly, handling high-frequency tick data with near-native speed
+- **📊 Professional Trading UI** — TradingView/Binance-inspired dark theme with real-time K-line charts, order book visualization, and technical indicators
+- **🌊 Organic Data Flow** — Simulated market heartbeat with burst-mode volatility patterns (50ms~1500ms adaptive intervals)
+- **📱 4K Responsive Layout** — Fluid grid system optimized for screens from mobile to ultra-wide displays
+- **🔄 Zero-Copy Bridge** — Efficient JS ↔ Rust data serialization via `serde-wasm-bindgen`
+
+---
+
+## 🔧 Workflow (Architecture)
+
+The system implements a unidirectional data flow optimized for high-frequency financial data processing:
+
+```mermaid
+flowchart LR
+    subgraph Worker["⚙️ Web Worker"]
+        A[Mock Data Generator<br/>Random Walk Algorithm]
+    end
+    
+    subgraph Wasm["🦀 Rust/Wasm Engine"]
+        B[MarketEngine<br/>• Spread Calculation<br/>• SMA Technical Indicator<br/>• Price History Buffer]
+    end
+    
+    subgraph React["⚛️ React Layer"]
+        C[useTradingEngine Hook<br/>State Orchestrator]
+        D[useCandleData Hook<br/>OHLCV Aggregation]
+    end
+    
+    subgraph UI["🖥️ Visualization"]
+        E[ECharts K-Line<br/>Candlestick + MA Lines]
+        F[Order Book Panel<br/>50-Level Depth]
+        G[Stats Dashboard<br/>Real-time Metrics]
+    end
+    
+    A -->|"OrderBook JSON<br/>(postMessage)"| C
+    C -->|"Tick Data"| B
+    B -->|"AnalysisResult<br/>{spread, sma5}"| C
+    C -->|"Price Stream"| D
+    D -->|"Candle[]"| E
+    C -->|"Bids/Asks"| F
+    C -->|"Metrics"| G
+    
+    style A fill:#2d333b,stroke:#00d4ff,color:#fff
+    style B fill:#4a2c0a,stroke:#f7931e,color:#fff
+    style C fill:#1a365d,stroke:#61dafb,color:#fff
+    style D fill:#1a365d,stroke:#61dafb,color:#fff
+    style E fill:#3c1f3c,stroke:#aa344d,color:#fff
+    style F fill:#1e3a2f,stroke:#0ecb81,color:#fff
+    style G fill:#1e3a2f,stroke:#0ecb81,color:#fff
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      React 18 + TypeScript                  │
-│                        (展示层 / UI)                         │
-├─────────────────────────────────────────────────────────────┤
-│                      wasm-bindgen                           │
-│                      (通信桥梁)                              │
-├─────────────────────────────────────────────────────────────┤
-│                   Rust → WebAssembly                        │
-│              (核心计算: 排序/聚合/指标计算)                    │
-├─────────────────────────────────────────────────────────────┤
-│                     Web Worker                              │
-│                  (Mock 高频数据生成器)                        │
-└─────────────────────────────────────────────────────────────┘
+
+### Data Pipeline
+
+| Stage | Component | Responsibility |
+|-------|-----------|----------------|
+| **1. Generation** | `mockWorker.ts` | Random-walk price simulation with burst-mode volatility |
+| **2. Computation** | `MarketEngine` (Rust) | Spread calculation, SMA(5) indicator, history management |
+| **3. Orchestration** | `useTradingEngine` | Wasm lifecycle, state coordination, price trend detection |
+| **4. Aggregation** | `useCandleData` | Tick-to-OHLCV conversion, MA(5/10/20/30) computation |
+| **5. Rendering** | React + ECharts | 60fps candlestick charts, depth visualization |
+
+---
+
+## 🛠️ Technology Stack
+
+### Core Engine (Rust/Wasm)
+
+| Crate | Version | Purpose |
+|-------|---------|---------|
+| `wasm-bindgen` | 0.2 | JS ↔ Rust FFI bridge |
+| `serde` | 1.0 | Serialization framework |
+| `serde-wasm-bindgen` | 0.4 | Zero-copy Wasm serialization |
+| `console_error_panic_hook` | 0.1 | Debug-friendly panic messages |
+
+### Frontend Stack
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| **React** | 18.3 | UI component framework |
+| **TypeScript** | 5.6 | Type-safe development |
+| **Vite** | 5.4 | Next-gen build tooling |
+| **Tailwind CSS** | 4.0 | Utility-first styling |
+| **ECharts** | 6.0 | Professional charting library |
+| **vite-plugin-wasm** | 3.3 | Seamless Wasm integration |
+
+### Build Optimizations
+
+```toml
+# Cargo.toml - Release Profile
+[profile.release]
+opt-level = "s"    # Size optimization
+lto = true         # Link-Time Optimization
 ```
 
-| 层级 | 技术选型 |
-|------|----------|
-| 构建工具 | Vite 5 + vite-plugin-wasm |
-| 前端框架 | React 18 + TypeScript |
-| 核心计算 | Rust (2021 Edition) → WebAssembly |
-| 样式方案 | Tailwind CSS v4 |
-| 数据模拟 | Web Worker + Mock Generator |
+---
 
-## 快速开始
+## 🚀 Operation (Setup)
+
+### Prerequisites
+
+- **Node.js** ≥ 18.x
+- **Rust** ≥ 1.70 ([Install via rustup](https://rustup.rs/))
+- **wasm-pack** ([Installation Guide](https://rustwasm.github.io/wasm-pack/installer/))
+
+### Quick Start
 
 ```bash
-# 安装依赖
+# 1. Clone the repository
+git clone https://github.com/Duri686/RustQuantLab.git
+cd RustQuantLab
+
+# 2. Install frontend dependencies
 npm install
 
-# 启动开发服务器（自动编译 Rust → Wasm）
+# 3. Build Rust → WebAssembly module
+cd core && wasm-pack build --target web --out-dir pkg && cd ..
+
+# 4. Start development server
 npm run dev
 ```
 
-> **前置条件**：需安装 [Rust](https://rustup.rs/) 和 [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+### Available Scripts
 
-## 项目状态
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Build Wasm + Start Vite dev server (port 3000) |
+| `npm run build` | Production build (Wasm + Vite) |
+| `npm run build:wasm` | Compile Rust to WebAssembly only |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint checks |
 
-🚧 **开发中** - 当前为 MVP 阶段，已完成基础框架搭建
+---
 
-- [x] Vite + React + TypeScript 工程初始化
-- [x] Rust + wasm-pack 编译流程
-- [x] JS ↔ Wasm 双向通信验证
-- [ ] 高频行情 Mock 数据生成器
-- [ ] 订单簿聚合算法 (Rust)
-- [ ] SMA/MACD 技术指标计算
-- [ ] 性能对比面板
+## 📁 Project Structure
 
-## 适合谁
+```
+RustQuantLab/
+├── core/                      # Rust/Wasm Engine
+│   ├── src/lib.rs             # MarketEngine implementation
+│   ├── Cargo.toml             # Rust dependencies
+│   └── pkg/                   # Compiled Wasm output (generated)
+├── src/
+│   ├── components/
+│   │   ├── Dashboard/         # StatsPanel, OrderBook
+│   │   ├── Layout/            # Header, LoadingScreen, ErrorScreen
+│   │   └── KLineChart.tsx     # ECharts candlestick component
+│   ├── hooks/
+│   │   ├── useTradingEngine.ts   # Main orchestrator hook
+│   │   ├── useMockMarket.ts      # Worker communication
+│   │   └── useCandleData.ts      # OHLCV aggregation
+│   ├── workers/
+│   │   └── mockWorker.ts      # Market data simulator
+│   ├── types/index.ts         # TypeScript interfaces
+│   └── App.tsx                # Root component
+├── vite.config.ts             # Vite + Wasm plugin config
+└── package.json
+```
 
-- 🎯 前端工程师希望学习 **Rust + WebAssembly**
-- 🎯 对金融交易系统性能优化感兴趣的开发者
-- 🎯 探索浏览器端高性能计算方案的研究者
+---
 
-## License
+## 📜 License
 
 [MIT](./LICENSE)

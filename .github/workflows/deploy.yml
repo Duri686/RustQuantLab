@@ -1,0 +1,93 @@
+# =============================================================================
+# RustQuantLab - GitHub Pages Deployment Workflow
+# =============================================================================
+# Triggered on push to main branch
+# Builds Rust/Wasm + Vite frontend and deploys to GitHub Pages
+# =============================================================================
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual trigger
+
+# Sets permissions for GITHUB_TOKEN to deploy to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # ===== 1. Checkout Code =====
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ===== 2. Setup Rust Toolchain =====
+      - name: 🦀 Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # ===== 3. Cache Rust dependencies =====
+      - name: 📦 Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('core/Cargo.lock', 'core/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # ===== 4. Install wasm-pack =====
+      - name: 📦 Install wasm-pack
+        run: cargo install wasm-pack --locked || true
+
+      # ===== 5. Setup Node.js =====
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ===== 6. Install npm dependencies =====
+      - name: 📦 Install npm dependencies
+        run: npm ci
+
+      # ===== 7. Build Rust → WebAssembly =====
+      - name: 🔨 Build Rust to WebAssembly
+        run: |
+          cd core
+          wasm-pack build --target web --out-dir pkg --release
+          cd ..
+
+      # ===== 8. Build Frontend (Vite) =====
+      - name: 🏗️ Build frontend
+        run: npx vite build --base=/RustQuantLab/
+
+      # ===== 9. Setup GitHub Pages =====
+      - name: 📄 Setup Pages
+        uses: actions/configure-pages@v4
+
+      # ===== 10. Upload artifact =====
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      # ===== 11. Deploy to GitHub Pages =====
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,112 +1,102 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useTradingEngine } from './hooks/useTradingEngine';
+import Header from './components/Layout/Header';
+import LoadingScreen from './components/Layout/LoadingScreen';
+import ErrorScreen from './components/Layout/ErrorScreen';
+import StatsPanel from './components/Dashboard/StatsPanel';
+import OrderBook from './components/Dashboard/OrderBook';
+import KLineChart from './components/KLineChart';
 
-// Wasm 模块类型声明
-interface WasmModule {
-  greet: (name: string) => string;
-  add: (a: number, b: number) => number;
-}
+/* ============================================
+   Main App Component (Composition Root)
+   ============================================ */
 
 function App() {
-  const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
-  const [greeting, setGreeting] = useState<string>('');
-  const [inputName, setInputName] = useState<string>('World');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    latestData,
+    analysisResult,
+    candleHistory,
+    currentLiveCandle,
+    isRunning,
+    loading,
+    error,
+    priceTrend,
+    priceColorClass,
+    toggleFeed,
+  } = useTradingEngine(100);
 
-  // 初始化 Wasm 模块
-  useEffect(() => {
-    const initWasm = async () => {
-      try {
-        // 动态导入 wasm-pack 生成的模块
-        const wasm = await import('../core/pkg/quant_core');
+  // Loading State
+  if (loading) return <LoadingScreen />;
 
-        // 初始化 wasm 模块（如果需要）
-        if (typeof wasm.default === 'function') {
-          await wasm.default();
-        }
+  // Error State
+  if (error) return <ErrorScreen message={error} />;
 
-        setWasmModule(wasm as unknown as WasmModule);
-        setLoading(false);
-      } catch (err) {
-        console.error('Wasm 模块加载失败:', err);
-        setError(err instanceof Error ? err.message : '未知错误');
-        setLoading(false);
-      }
-    };
-
-    initWasm();
-  }, []);
-
-  // 调用 Rust greet 函数
-  const handleGreet = useCallback(() => {
-    if (wasmModule) {
-      const result = wasmModule.greet(inputName);
-      setGreeting(result);
-    }
-  }, [wasmModule, inputName]);
-
-  // 模块加载完成后自动问候
-  useEffect(() => {
-    if (wasmModule && !greeting) {
-      handleGreet();
-    }
-  }, [wasmModule, greeting, handleGreet]);
-
-  // 渲染加载状态
-  if (loading) {
-    return (
-      <div className="app">
-        <h1>🦀 RustQuantLab</h1>
-        <div className="card">
-          <p className="loading">正在加载 WebAssembly 模块...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 渲染错误状态
-  if (error) {
-    return (
-      <div className="app">
-        <h1>🦀 RustQuantLab</h1>
-        <div className="card">
-          <p className="error">加载失败: {error}</p>
-          <p>
-            请确保已运行 <code>npm run build:wasm</code>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // Main Layout: Professional Trading Terminal
   return (
-    <div className="app">
-      <h1>🦀 RustQuantLab</h1>
-      <p>Rust + WebAssembly + React 通信测试</p>
+    <div className="h-screen w-screen bg-[#161a1e] flex flex-col overflow-hidden">
+      <Header
+        isRunning={isRunning}
+        onToggle={toggleFeed}
+        price={latestData?.price}
+        symbol={latestData?.symbol}
+        priceTrend={priceTrend}
+        priceColorClass={priceColorClass}
+      />
 
-      <div className="card">
-        <h2>Greet Function</h2>
-        <div style={{ marginTop: '1rem' }}>
-          <input
-            type="text"
-            value={inputName}
-            onChange={(e) => setInputName(e.target.value)}
-            placeholder="输入名称"
-          />
-          <button onClick={handleGreet}>调用 Rust</button>
-        </div>
-
-        {greeting && (
-          <div className="result">
-            <strong>Rust 返回:</strong> {greeting}
+      {/* Main Grid: Left (Chart + Stats) | Right (OrderBook) */}
+      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-px bg-[#2b2f36] min-h-0">
+        {/* ========== 左列: 图表 + 分析条 ========== */}
+        <section className="flex flex-col h-[50vh] lg:h-full min-h-0 bg-terminal-bg overflow-hidden">
+          {/* K 线图表区域 - 占据剩余空间 */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Chart Header */}
+            <div className="shrink-0 h-9 px-3 flex items-center justify-between border-b border-[#2b2f36]">
+              <div className="flex items-center gap-3">
+                <h2 className="text-[11px] font-medium text-gray-400">
+                  {latestData?.symbol ?? 'BBB-AAA'} · 1s K线
+                </h2>
+                <span className="text-[10px] font-mono text-gray-600">
+                  {candleHistory.length} 根
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-[#0ECB81] rounded-sm" />
+                  <span className="w-2 h-2 bg-[#F6465D] rounded-sm" />
+                </span>
+                <span>OHLC</span>
+              </div>
+            </div>
+            {/* Chart Body */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <KLineChart
+                candleHistory={candleHistory}
+                currentLiveCandle={currentLiveCandle}
+              />
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="card">
-        <h2>Add Function</h2>
-        <p>2 + 3 = {wasmModule?.add(2, 3)}</p>
-      </div>
+          {/* 底部分析条 - 固定高度 */}
+          <StatsPanel
+            latestData={latestData}
+            analysisResult={analysisResult}
+            priceColorClass={priceColorClass}
+            candleCount={candleHistory.length}
+            isRunning={isRunning}
+          />
+        </section>
+
+        {/* ========== 右列: 订单簿 ========== */}
+        <section className="h-full min-h-0 bg-terminal-bg">
+          <OrderBook
+            bids={latestData?.bids ?? []}
+            asks={latestData?.asks ?? []}
+            price={latestData?.price}
+            priceTrend={priceTrend}
+            priceColorClass={priceColorClass}
+            timestamp={latestData?.timestamp}
+          />
+        </section>
+      </main>
     </div>
   );
 }
