@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+
+/* 自定义主题配置 (Tailwind v4 CSS-first 方式) */
+@theme {
+  --color-primary: #646cff;
+  --color-primary-hover: #535bf2;
+  --color-surface: #242424;
+  --color-surface-light: rgba(255, 255, 255, 0.05);
+  --color-text: rgba(255, 255, 255, 0.87);
+  --color-text-muted: #888;
+  --color-accent: #61dafb;
+  --color-error: #ff6b6b;
+}
+
+/* 基础样式 */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: light dark;
+}
+
+body {
+  @apply min-h-screen flex justify-center items-center bg-surface text-text antialiased;
+}
+
+#root {
+  @apply w-full max-w-5xl mx-auto p-8;
+}
+
+/* 组件样式 */
+.card {
+  @apply p-8 bg-surface-light rounded-xl mt-6;
+}
+
+.result {
+  @apply text-lg text-accent mt-4 p-4 bg-accent/10 rounded-lg;
+}
+
+.loading {
+  @apply text-text-muted;
+}
+
+.error {
+  @apply text-error;
+}
+
+button {
+  @apply rounded-lg border border-transparent px-5 py-2.5 text-base font-medium 
+         bg-zinc-900 cursor-pointer transition-colors duration-200
+         hover:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+}
+
+input {
+  @apply px-4 py-2.5 text-base rounded-lg border border-zinc-700 
+         bg-zinc-900 text-inherit mr-2
+         focus:outline-none focus:border-primary;
+}

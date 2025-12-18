@@ -1,0 +1,18 @@
+[package]
+name = "quant_core"
+version = "0.1.0"
+edition = "2021"
+description = "RustQuantLab 核心计算引擎"
+authors = ["Your Name"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+
+[profile.release]
+# 优化 wasm 体积
+opt-level = "s"
+lto = true
