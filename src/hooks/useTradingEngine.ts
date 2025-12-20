@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useMockMarket } from './useMockMarket';
 import { useCandleData } from './useCandleData';
+import { wasmLock } from './wasmLock';
 import type {
   AnalysisResult,
   MarketEngineInstance,
@@ -75,6 +76,13 @@ async function initWasmEngine(): Promise<MarketEngineInstance> {
   })();
 
   return wasmSingleton.initPromise;
+}
+
+/**
+ * 获取共享的 Wasm 引擎实例 (供其他 hook 使用)
+ */
+export function getSharedWasmEngine(): MarketEngineInstance | null {
+  return wasmSingleton.engine;
 }
 
 /**
@@ -250,9 +258,15 @@ export function useTradingEngine(
       return;
     }
 
+    // 使用共享锁防止与 useTradingState 的并发调用
+    if (!wasmLock.acquire()) {
+      return;
+    }
+
     // 增加最小调用间隔保护 (10ms)
     const now = Date.now();
     if (now - lastProcessTimeRef.current < 10) {
+      wasmLock.release();
       return;
     }
 
@@ -263,6 +277,7 @@ export function useTradingEngine(
       // 额外检查引擎是否仍然有效
       if (!wasmSingleton.engine || engineRef.current !== wasmSingleton.engine) {
         isProcessingRef.current = false;
+        wasmLock.release();
         return;
       }
 
@@ -318,6 +333,7 @@ export function useTradingEngine(
       }
     } finally {
       isProcessingRef.current = false;
+      wasmLock.release();
     }
   }, [latestData]);
 

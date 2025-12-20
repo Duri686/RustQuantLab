@@ -151,6 +151,8 @@ pub struct TradingState {
     pub current_price: f64,
     /// 所有活跃仓位 (按 symbol 索引)
     pub positions: Vec<Position>,
+    /// 已平仓仓位历史
+    pub closed_positions: Vec<Position>,
     /// 当前选中的仓位 (向后兼容)
     pub position: Option<Position>,
     /// 最新风险评估结果 (当前选中仓位)

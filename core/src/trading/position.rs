@@ -31,6 +31,28 @@ impl Default for MarginMode {
 }
 
 // ============================================================================
+// 仓位状态
+// ============================================================================
+
+/// 仓位状态
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PositionStatus {
+    /// 活跃仓位
+    Open,
+    /// 已平仓 (用户主动平仓)
+    Closed,
+    /// 已强平 (触发强制平仓)
+    Liquidated,
+}
+
+impl Default for PositionStatus {
+    fn default() -> Self {
+        PositionStatus::Open
+    }
+}
+
+// ============================================================================
 // 交易执行结果
 // ============================================================================
 
@@ -139,11 +161,13 @@ impl TradeResult {
 
 /// 活跃仓位
 ///
-/// 表示某个交易对的单一持仓 (One-Way Mode)。
+/// 表示某个交易对的持仓 (Hedge Mode: 多空可同时存在)。
 /// 包含仓位状态和 PnL 计算所需的所有字段。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
+    /// 仓位唯一标识 (如 "BTCUSDT_Long", "BTCUSDT_Short")
+    pub id: String,
     /// 交易对符号 (如 "BTCUSDT")
     pub symbol: String,
     /// 仓位方向
@@ -166,11 +190,26 @@ pub struct Position {
     pub unrealized_pnl: f64,
     /// 盈亏百分比
     pub pnl_percentage: f64,
+    /// 保证金率 (仓位权益 / 维持保证金)
+    pub margin_ratio: f64,
+    /// 仓位状态
+    #[serde(default)]
+    pub status: PositionStatus,
+    /// 已实现盈亏 (平仓后有值)
+    #[serde(default)]
+    pub realized_pnl: f64,
+    /// 平仓价格 (平仓后有值)
+    #[serde(default)]
+    pub exit_price: f64,
+    /// 平仓时间戳 (平仓后有值)
+    #[serde(default)]
+    pub close_time: u64,
 }
 
 impl Position {
     /// 创建新仓位
     pub fn new(
+        id: String,
         symbol: String,
         side: PositionSide,
         size: f64,
@@ -181,7 +220,18 @@ impl Position {
         liquidation_price: f64,
         open_time: u64,
     ) -> Self {
+        // 初始保证金率 = 保证金 / 维持保证金 (开仓时 PnL = 0)
+        let notional = size * entry_price;
+        let mmr = 0.005; // ~0.5% 维持保证金率
+        let maintenance_margin = notional * mmr;
+        let initial_margin_ratio = if maintenance_margin > 0.0 {
+            margin / maintenance_margin
+        } else {
+            0.0
+        };
+        
         Self {
+            id,
             symbol,
             side,
             size,
@@ -193,6 +243,11 @@ impl Position {
             liquidation_price,
             unrealized_pnl: 0.0,
             pnl_percentage: 0.0,
+            margin_ratio: initial_margin_ratio,
+            status: PositionStatus::Open,
+            realized_pnl: 0.0,
+            exit_price: 0.0,
+            close_time: 0,
         }
     }
 
@@ -325,11 +380,22 @@ impl Position {
 
     /// 更新未实现盈亏
     ///
-    /// 根据当前市场价格重新计算 unrealized_pnl 和 pnl_percentage
+    /// 根据当前市场价格重新计算 unrealized_pnl, pnl_percentage 和 margin_ratio
     pub fn update_pnl(&mut self, current_price: f64) {
         self.unrealized_pnl = self.calculate_pnl(current_price, self.size);
         self.pnl_percentage = if self.margin > 0.0 {
             (self.unrealized_pnl / self.margin) * 100.0
+        } else {
+            0.0
+        };
+        
+        // 更新保证金率 = 仓位权益 / 维持保证金
+        let position_equity = self.margin + self.unrealized_pnl;
+        let notional = self.size * current_price;
+        let mmr = 0.005; // ~0.5% 维持保证金率
+        let maintenance_margin = notional * mmr;
+        self.margin_ratio = if maintenance_margin > 0.0 {
+            position_equity / maintenance_margin
         } else {
             0.0
         };
@@ -355,7 +421,9 @@ mod tests {
     use super::*;
 
     fn create_test_position(side: PositionSide, size: f64, entry: f64) -> Position {
+        let id = format!("BTCUSDT_{:?}", side);
         Position::new(
+            id,
             "BTCUSDT".to_string(),
             side,
             size,

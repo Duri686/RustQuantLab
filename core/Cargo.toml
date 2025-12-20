@@ -25,6 +25,10 @@ codegen-units = 1       # 单代码单元，更好的优化
 strip = true            # 移除调试符号
 panic = "abort"         # 不需要 unwind 代码
 
+# 禁用 wasm-opt (旧版不支持 bulk memory 操作)
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 

@@ -26,6 +26,9 @@ export type PositionSide = 'Long' | 'Short';
  * 由 Rust `Position` 结构体序列化而来
  */
 export interface Position {
+  /** 仓位唯一标识 (如 "BTCUSDT_Long", "BTCUSDT_Short") */
+  id: string;
+
   /** 仓位方向 */
   side: PositionSide;
 
@@ -53,11 +56,26 @@ export interface Position {
   /** 盈亏百分比 (相对于保证金) */
   pnlPercentage: number;
 
+  /** 保证金率 (仓位权益 / 维持保证金) */
+  marginRatio: number;
+
   /** 交易对符号 (如 "BTCUSDT") */
   symbol?: string;
 
   /** 保证金模式 */
   marginMode?: 'Cross' | 'Isolated';
+
+  /** 仓位状态 */
+  status?: 'open' | 'closed' | 'liquidated';
+
+  /** 已实现盈亏 (平仓后有值) */
+  realizedPnl?: number;
+
+  /** 平仓价格 (平仓后有值) */
+  exitPrice?: number;
+
+  /** 平仓时间戳 (平仓后有值) */
+  closeTime?: number;
 }
 
 // ============================================================================
@@ -265,6 +283,9 @@ export interface TradingState {
   /** 所有活跃仓位 (多仓位模式) */
   positions: Position[];
 
+  /** 已平仓仓位历史 */
+  closedPositions: Position[];
+
   /** 主仓位 (向后兼容，通常是 BTCUSDT) */
   position: Position | null;
 
@@ -388,18 +409,24 @@ export interface UseTradingStateReturn {
    * @param side - 仓位方向 ('LONG' | 'SHORT')
    * @param size - 仓位大小 (BTC)
    * @param leverage - 杠杆倍数 (可选，使用当前设置)
+   * @param marginMode - 保证金模式 (可选，默认 'cross')
    */
   placeOrder: (
     side: 'LONG' | 'SHORT',
     size: number,
     leverage?: number,
+    marginMode?: MarginMode,
   ) => OpenPositionResult | null;
 
   /**
-   * 平仓
-   * @param exitPrice - 可选的平仓价格，默认使用当前市价
+   * 平仓 (支持按 symbol 或 exitPrice)
+   * @param symbolOrPrice - symbol 字符串或 exitPrice 数值
+   * @param exitPrice - 当第一个参数为 symbol 时的平仓价格
    */
-  closePosition: (exitPrice?: number) => ClosePositionResult | null;
+  closePosition: (
+    symbolOrPrice?: string | number,
+    exitPrice?: number,
+  ) => ClosePositionResult | null;
 
   /**
    * 设置杠杆倍数 (仅在无持仓时有效)

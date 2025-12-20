@@ -299,6 +299,7 @@ impl MarketEngine {
             leverage: self.account.leverage(),
             current_price: self.current_price,
             positions,
+            closed_positions: self.position_manager.closed_positions().clone(),
             position: primary_position,
             risk_assessment: self.risk_assessment.clone(),
             pending_events: events,
@@ -309,8 +310,11 @@ impl MarketEngine {
     }
 
     /// 设置杠杆倍数
+    /// 全仓模式: 允许随时调整杠杆
+    /// 逐仓模式: 持仓期间不允许调整
     pub fn set_leverage(&mut self, leverage: u8) -> bool {
-        self.account.set_leverage(leverage, !self.position_manager.is_empty())
+        // 只有存在逐仓仓位时才禁止修改杠杆
+        self.account.set_leverage(leverage, self.position_manager.has_isolated_positions())
     }
 
     /// 获取当前杠杆倍数
@@ -475,9 +479,14 @@ impl MarketEngine {
         );
 
         // 执行强平
-        for symbol in positions_to_liquidate {
-            let pos_price = *self.symbol_prices.get(&symbol).unwrap_or(&price);
-            self.close_position_internal(&symbol, pos_price, None, true);
+        // position_key 是 "BTCUSDT_Long" 格式，需要提取 display_symbol 来获取价格
+        for position_key in positions_to_liquidate {
+            // 从 position_key 提取 display_symbol (如 "BTCUSDT_Long" -> "BTCUSDT")
+            let display_symbol = position_key.rsplit_once('_')
+                .map(|(s, _)| s.to_string())
+                .unwrap_or_else(|| position_key.clone());
+            let pos_price = *self.symbol_prices.get(&display_symbol).unwrap_or(&price);
+            self.close_position_internal(&position_key, pos_price, None, true);
         }
     }
 

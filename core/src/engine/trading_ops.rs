@@ -139,12 +139,13 @@ impl TradingExecutor {
         to_liquidate
     }
 
-    /// 开仓内部实现 (支持多仓位 One-Way Mode)
+    /// 开仓内部实现 (支持 Hedge Mode - 多空可同时存在)
     ///
-    /// ## 三种场景:
-    /// - **Scenario A**: 无现有仓位 → 创建新仓位
-    /// - **Scenario B**: 同方向仓位 → 合并 (加权平均价)
-    /// - **Scenario C**: 反方向仓位 → 减仓 (Netting)
+    /// ## 两种场景:
+    /// - **Scenario A**: 无同方向仓位 → 创建新仓位
+    /// - **Scenario B**: 已有同方向仓位 → 合并 (加权平均价)
+    /// 
+    /// 注: Hedge Mode 下多空仓位独立，使用 `symbol_side` 作为 key
     pub fn open_position(
         req: OpenPositionRequest,
         current_price: f64,
@@ -181,37 +182,59 @@ impl TradingExecutor {
         }
         let leverage = req.leverage.unwrap_or(account.leverage());
 
-        // 3. 检查是否已有该交易对的仓位
-        let existing_side = position_manager.get(&req.symbol).map(|p| p.side);
-
-        match existing_side {
-            // ========== Scenario A: 无现有仓位 → 新开仓 ==========
-            None => Self::open_new_position(
-                req.symbol, order_side, req.size, trade_price, leverage, req.margin_mode,
-                position_manager, account, risk_config, pending_events, get_timestamp,
-            ),
-            
-            Some(pos_side) => {
-                if pos_side == order_side {
-                    // ========== Scenario B: 同方向 → 合并 (加仓) ==========
-                    Self::merge_position(
-                        &req.symbol, req.size, trade_price,
-                        position_manager, account, risk_config, pending_events,
-                    )
-                } else {
-                    // ========== Scenario C: 反方向 → 减仓 (Netting) ==========
-                    Self::reduce_position(
-                        &req.symbol, req.size, trade_price, order_side, leverage, req.margin_mode,
-                        position_manager, account, risk_config, pending_events, risk_assessment, get_timestamp,
-                    )
+        // 3. 检查保证金模式冲突 (禁止混合全仓/逐仓)
+        if !position_manager.is_empty() {
+            let existing_mode = position_manager.iter().next().map(|(_, p)| p.margin_mode);
+            if let Some(existing) = existing_mode {
+                if existing != req.margin_mode {
+                    let existing_mode_str = match existing {
+                        MarginMode::Cross => "全仓",
+                        MarginMode::Isolated => "逐仓",
+                    };
+                    let new_mode_str = match req.margin_mode {
+                        MarginMode::Cross => "全仓",
+                        MarginMode::Isolated => "逐仓",
+                    };
+                    return OpenPositionResult {
+                        success: false,
+                        message: format!(
+                            "保证金模式冲突: 已有{}仓位，不能开{}仓位。请先平仓或切换模式。",
+                            existing_mode_str, new_mode_str
+                        ),
+                        position: None,
+                        error_code: Some("MARGIN_MODE_CONFLICT".to_string()),
+                    };
                 }
             }
+        }
+
+        // 4. Hedge Mode: 使用 symbol_side 作为 key，多空独立
+        let position_key = format!("{}_{:?}", req.symbol, order_side);
+        
+        // 检查是否已有同方向仓位
+        let has_same_side = position_manager.get(&position_key).is_some();
+
+        if has_same_side {
+            // ========== Scenario B: 同方向 → 合并 (加仓) ==========
+            Self::merge_position(
+                &position_key, req.size, trade_price,
+                position_manager, account, risk_config, pending_events,
+            )
+        } else {
+            // ========== Scenario A: 无同方向仓位 → 新开仓 ==========
+            Self::open_new_position(
+                position_key, req.symbol, order_side, req.size, trade_price, leverage, req.margin_mode,
+                position_manager, account, risk_config, pending_events, get_timestamp,
+            )
         }
     }
 
     /// Scenario A: 创建新仓位
+    /// - `position_key`: 存储 key (如 "BTCUSDT_Long")
+    /// - `display_symbol`: 显示用交易对 (如 "BTCUSDT")
     fn open_new_position(
-        symbol: String,
+        position_key: String,
+        display_symbol: String,
         side: PositionSide,
         size: f64,
         entry_price: f64,
@@ -238,10 +261,11 @@ impl TradingExecutor {
             };
         }
 
-        // 使用 PositionManager 创建仓位
+        // 使用 PositionManager 创建仓位 (Hedge Mode: id = position_key, symbol = display_symbol)
         let timestamp = get_timestamp();
         let params = OpenPositionParams {
-            symbol: symbol.clone(),
+            symbol: position_key,
+            display_symbol: Some(display_symbol.clone()),
             side,
             size,
             price: entry_price,
@@ -253,7 +277,7 @@ impl TradingExecutor {
 
         // 发送事件
         pending_events.push(EngineEvent::PositionOpened {
-            symbol: symbol.clone(),
+            symbol: display_symbol.clone(),
             side: format!("{:?}", side),
             size,
             entry_price,
@@ -449,9 +473,17 @@ impl TradingExecutor {
             TradeAction::Reversed { closed_pnl, excess_size, new_side: reversed_side } => {
                 account.update_balance(closed_pnl);
                 
+                // Hedge Mode: 从 position_key 提取 display_symbol
+                // position_key 格式: "BTCUSDT_Long" -> display_symbol: "BTCUSDT"
+                let display_symbol = symbol.rsplit_once('_')
+                    .map(|(s, _)| s.to_string())
+                    .unwrap_or_else(|| symbol.to_string());
+                let new_position_key = format!("{}_{:?}", display_symbol, reversed_side);
+                
                 // 开反向仓位
                 Self::open_new_position(
-                    symbol.to_string(),
+                    new_position_key,
+                    display_symbol,
                     reversed_side,
                     excess_size,
                     exit_price,
@@ -496,7 +528,6 @@ impl TradingExecutor {
 
         // 确定平仓数量
         let actual_close_size = close_size.unwrap_or(position.size).min(position.size);
-        let is_partial = actual_close_size < position.size;
 
         // 使用反方向执行平仓
         let opposite_side = match position.side {
@@ -519,33 +550,37 @@ impl TradingExecutor {
             }
         };
 
-        // 提取盈亏
-        let realized_pnl = match &trade_result.action {
-            TradeAction::Reduced { realized_pnl, .. } => *realized_pnl,
-            TradeAction::Closed { realized_pnl, .. } => *realized_pnl,
-            _ => 0.0,
+        // 根据 TradeAction 判断是部分平仓还是完全平仓
+        let (realized_pnl, is_fully_closed) = match &trade_result.action {
+            TradeAction::Reduced { realized_pnl, remaining_size, closed_size } => {
+                // 部分平仓
+                pending_events.push(EngineEvent::PositionReduced {
+                    symbol: symbol.to_string(),
+                    side: format!("{:?}", position.side),
+                    closed_size: *closed_size,
+                    remaining_size: *remaining_size,
+                    realized_pnl: *realized_pnl,
+                });
+                (*realized_pnl, false)
+            }
+            TradeAction::Closed { realized_pnl, .. } => (*realized_pnl, true),
+            _ => (0.0, false),
         };
 
         account.update_balance(realized_pnl);
 
-        // 处理事件
-        if is_partial {
-            let remaining_size = position.size - actual_close_size;
-            pending_events.push(EngineEvent::PositionReduced {
-                symbol: symbol.to_string(),
-                side: format!("{:?}", position.side),
-                closed_size: actual_close_size,
-                remaining_size,
-                realized_pnl,
-            });
-        } else {
-            if symbol == "BTCUSDT" {
+        // 完全平仓时处理
+        if is_fully_closed {
+            // 完全平仓: 移动到历史记录
+            position_manager.move_to_history(symbol, exit_price, realized_pnl, is_liquidation);
+            
+            if symbol.contains("BTCUSDT") {
                 *risk_assessment = None;
             }
 
             if is_liquidation {
                 pending_events.push(EngineEvent::Liquidated {
-                    symbol: symbol.to_string(),
+                    symbol: position.symbol.clone(),
                     side: format!("{:?}", position.side),
                     size: position.size,
                     entry_price: position.entry_price,
@@ -554,7 +589,7 @@ impl TradingExecutor {
                 });
             } else {
                 pending_events.push(EngineEvent::PositionClosed {
-                    symbol: symbol.to_string(),
+                    symbol: position.symbol.clone(),
                     side: format!("{:?}", position.side),
                     size: position.size,
                     entry_price: position.entry_price,
@@ -568,13 +603,13 @@ impl TradingExecutor {
             success: true,
             message: if is_liquidation {
                 format!("⚠️ 强制平仓: {} {:?} {:.4} @ {:.2}, 亏损 {:.2} USDT",
-                    symbol, position.side, actual_close_size, exit_price, realized_pnl.abs())
-            } else if is_partial {
-                format!("部分平仓: {} {:?} {:.4} @ {:.2}, 盈亏 {:.2} USDT",
-                    symbol, position.side, actual_close_size, exit_price, realized_pnl)
-            } else {
+                    position.symbol, position.side, actual_close_size, exit_price, realized_pnl.abs())
+            } else if is_fully_closed {
                 format!("平仓成功: {} {:?} {:.4} @ {:.2}, 盈亏 {:.2} USDT",
-                    symbol, position.side, position.size, exit_price, realized_pnl)
+                    position.symbol, position.side, actual_close_size, exit_price, realized_pnl)
+            } else {
+                format!("部分平仓: {} {:?} {:.4} @ {:.2}, 盈亏 {:.2} USDT",
+                    position.symbol, position.side, actual_close_size, exit_price, realized_pnl)
             },
             realized_pnl,
             exit_price,

@@ -293,11 +293,13 @@ function App() {
               availableBalance={tradingState?.availableBalance ?? 10000}
               currentLeverage={tradingState?.leverage ?? 10}
               position={position}
+              positions={tradingState?.positions ?? []}
+              closedPositions={tradingState?.closedPositions ?? []}
               riskAssessment={riskAssessment}
               hasPosition={hasPosition}
               // Wasm Actions
               onPlaceOrder={placeOrder}
-              onClosePosition={closePosition}
+              onClosePosition={(positionId) => closePosition(positionId)}
               onSetLeverage={setLeverage}
             />
           </section>

@@ -66,13 +66,17 @@ function WasmPositionCard({
   const isProfit = position.unrealizedPnl >= 0;
 
   // 🔴 直接使用 Wasm 计算的值，无本地计算
+  // Hedge Mode: 每个仓位有独立的字段，由 Rust 计算
   const pnlValue = position.unrealizedPnl;
   const pnlPercent = position.pnlPercentage;
-  const liquidationPrice =
-    riskAssessment?.liquidationPrice ?? position.liquidationPrice;
-  const marginRatio = riskAssessment?.marginRatio ?? 0;
+  const liquidationPrice = position.liquidationPrice;
+  const marginRatio = position.marginRatio; // 由 Rust 计算
   const riskLevel = riskAssessment?.riskLevel ?? 'Safe';
-  const distanceToLiq = riskAssessment?.distanceToLiquidationPct ?? 100;
+  // 计算该仓位距离强平的距离
+  const distanceToLiq =
+    liquidationPrice > 0
+      ? Math.abs(((currentPrice - liquidationPrice) / currentPrice) * 100)
+      : 100;
 
   // 风险预警：距离强平 < 10%
   const isLiqNear = distanceToLiq < 10;
@@ -172,11 +176,16 @@ function WasmPositionCard({
           </span>
         </div>
 
-        {/* Margin Ratio from Rust */}
+        {/* Margin Ratio */}
         <div className="flex justify-between">
           <span className="text-gray-500">Margin Ratio</span>
           <span className="font-mono tabular-nums" style={{ color: riskColor }}>
-            {marginRatio.toFixed(2)}x
+            {Number.isFinite(marginRatio) && marginRatio < 10000
+              ? marginRatio.toFixed(2)
+              : marginRatio > 10000
+              ? '>9999'
+              : '0.00'}
+            x
           </span>
         </div>
       </div>

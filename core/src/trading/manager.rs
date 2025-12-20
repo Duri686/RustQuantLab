@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use crate::risk::{PositionSide, RiskCalculator, RiskConfig};
-use super::position::{MarginMode, Position, TradeResult};
+use super::position::{MarginMode, Position, PositionStatus, TradeResult};
 
 // ============================================================================
 // 开仓参数
@@ -18,7 +18,10 @@ use super::position::{MarginMode, Position, TradeResult};
 /// 开仓参数 (由 Engine 层解析后传入)
 #[derive(Debug, Clone)]
 pub struct OpenPositionParams {
+    /// 仓位 ID/存储 Key (如 "BTCUSDT_Long")
     pub symbol: String,
+    /// 显示用交易对名称 (如 "BTCUSDT")
+    pub display_symbol: Option<String>,
     pub side: PositionSide,
     pub size: f64,
     pub price: f64,
@@ -37,8 +40,10 @@ pub struct OpenPositionParams {
 /// 并提供批量 PnL 更新功能。
 #[derive(Debug, Default)]
 pub struct PositionManager {
-    /// 仓位存储 (Key: Symbol)
+    /// 活跃仓位存储 (Key: position_key)
     positions: HashMap<String, Position>,
+    /// 已平仓仓位历史
+    closed_positions: Vec<Position>,
 }
 
 impl PositionManager {
@@ -46,6 +51,7 @@ impl PositionManager {
     pub fn new() -> Self {
         Self {
             positions: HashMap::new(),
+            closed_positions: Vec::new(),
         }
     }
 
@@ -88,6 +94,12 @@ impl PositionManager {
         self.positions.is_empty()
     }
 
+    /// 检查是否有逐仓仓位 (用于杠杆修改限制)
+    pub fn has_isolated_positions(&self) -> bool {
+        use crate::trading::position::MarginMode;
+        self.positions.values().any(|p| p.margin_mode == MarginMode::Isolated)
+    }
+
     /// 清空所有仓位
     pub fn clear(&mut self) {
         self.positions.clear();
@@ -103,9 +115,34 @@ impl PositionManager {
         self.positions.iter_mut()
     }
 
-    /// 获取所有仓位的 Vec (用于序列化)
+    /// 获取所有活跃仓位的 Vec (用于序列化)
     pub fn to_vec(&self) -> Vec<Position> {
         self.positions.values().cloned().collect()
+    }
+
+    /// 获取所有已平仓仓位历史
+    pub fn closed_positions(&self) -> &Vec<Position> {
+        &self.closed_positions
+    }
+
+    /// 移动仓位到历史 (平仓时调用)
+    pub fn move_to_history(&mut self, position_key: &str, exit_price: f64, realized_pnl: f64, is_liquidation: bool) {
+        self.move_to_history_with_time(position_key, exit_price, realized_pnl, is_liquidation, 0);
+    }
+    
+    /// 移动仓位到历史 (带时间戳)
+    pub fn move_to_history_with_time(&mut self, position_key: &str, exit_price: f64, realized_pnl: f64, is_liquidation: bool, close_time: u64) {
+        if let Some(mut pos) = self.positions.remove(position_key) {
+            pos.status = if is_liquidation {
+                PositionStatus::Liquidated
+            } else {
+                PositionStatus::Closed
+            };
+            pos.exit_price = exit_price;
+            pos.realized_pnl = realized_pnl;
+            pos.close_time = close_time;
+            self.closed_positions.push(pos);
+        }
     }
 
     /// 获取所有仓位符号列表
@@ -127,8 +164,10 @@ impl PositionManager {
     pub fn update_pnl(&mut self, current_prices: &HashMap<String, f64>) -> f64 {
         let mut total_unrealized_pnl = 0.0;
 
-        for (symbol, position) in self.positions.iter_mut() {
-            if let Some(&price) = current_prices.get(symbol) {
+        for (_position_key, position) in self.positions.iter_mut() {
+            // Hedge Mode: 使用 position.symbol (display_symbol) 查找价格
+            // position_key 是 "BTCUSDT_Long"，但价格 map 用 "BTCUSDT"
+            if let Some(&price) = current_prices.get(&position.symbol) {
                 position.update_pnl(price);
                 total_unrealized_pnl += position.unrealized_pnl;
             }
@@ -176,10 +215,8 @@ impl PositionManager {
         let position = self.positions.get_mut(symbol)?;
         let result = position.apply_trade(order_side, order_size, order_price, margin_rate);
 
-        // 如果仓位已关闭 (size == 0)，移除它
-        if position.is_closed() {
-            self.positions.remove(symbol);
-        }
+        // 注: 不再自动删除已关闭仓位
+        // 由调用者决定是删除还是移到历史 (通过 move_to_history)
 
         Some(result)
     }
@@ -207,9 +244,11 @@ impl PositionManager {
             mmr,
         );
 
-        // 创建仓位
+        // 创建仓位 (Hedge Mode: id = position_key, symbol = display_symbol)
+        let display_symbol = params.display_symbol.clone().unwrap_or_else(|| params.symbol.clone());
         let position = Position::new(
-            params.symbol.clone(),
+            params.symbol.clone(),  // id = position_key
+            display_symbol,         // symbol = 显示用交易对
             params.side,
             params.size,
             params.price,
@@ -294,8 +333,9 @@ impl PositionManager {
         let mut total_cross_mm = 0.0;
         let mut isolated_to_liquidate = Vec::new();
 
-        for (symbol, pos) in &self.positions {
-            let price = current_prices.get(symbol).copied().unwrap_or(pos.entry_price);
+        for (position_key, pos) in &self.positions {
+            // Hedge Mode: 使用 pos.symbol (display_symbol) 查找价格
+            let price = current_prices.get(&pos.symbol).copied().unwrap_or(pos.entry_price);
             let notional = pos.size * price;
             let mmr = risk_config.get_maintenance_margin_rate(notional);
             let maintenance_margin = notional * mmr;
@@ -308,7 +348,7 @@ impl PositionManager {
                     // 逐仓: 检查独立保证金是否足够
                     let isolated_equity = pos.margin + pos.unrealized_pnl;
                     if isolated_equity <= maintenance_margin {
-                        isolated_to_liquidate.push(symbol.clone());
+                        isolated_to_liquidate.push(position_key.clone());
                     }
                 }
             }
@@ -328,7 +368,9 @@ mod tests {
     use crate::trading::TradeAction;
 
     fn create_test_position(symbol: &str, side: PositionSide, size: f64, entry: f64) -> Position {
+        let id = format!("{}_{:?}", symbol, side);
         Position::new(
+            id,
             symbol.to_string(),
             side,
             size,

@@ -6,6 +6,7 @@ import type {
   Position,
   LiquidationResult,
   OpenPositionResult,
+  MarginMode,
 } from '../../../types/trading';
 
 /* ============================================
@@ -24,6 +25,12 @@ const COLORS = {
   sellRed: '#F6465D',
   accent: '#FCD535',
 } as const;
+
+/** 保证金模式选项 */
+const MARGIN_MODES: { value: MarginMode; label: string; desc: string }[] = [
+  { value: 'cross', label: '全仓', desc: '共享保证金' },
+  { value: 'isolated', label: '逐仓', desc: '独立保证金' },
+];
 
 export type OrderType = (typeof ORDER_TYPES)[number];
 
@@ -45,12 +52,18 @@ export interface TradeFormProps {
   availableBalance?: number;
   /** 当前杠杆 (来自 Wasm) */
   currentLeverage?: number;
-  /** 当前仓位 (来自 Wasm，单仓位模式) */
+  /** 当前仓位 (来自 Wasm，向后兼容) */
   position?: Position | null;
+  /** 所有活跃仓位 (多仓位模式) */
+  positions?: Position[];
+  /** 已平仓仓位历史 */
+  closedPositions?: Position[];
   /** 风险评估 (来自 Wasm) */
   riskAssessment?: LiquidationResult | null;
   /** 是否有持仓 */
   hasPosition?: boolean;
+  /** 当前保证金模式 */
+  marginMode?: MarginMode;
 
   // ========== Wasm Actions ==========
 
@@ -59,11 +72,14 @@ export interface TradeFormProps {
     side: 'LONG' | 'SHORT',
     size: number,
     leverage: number,
+    marginMode?: MarginMode,
   ) => OpenPositionResult | null;
   /** 平仓回调 (调用 Wasm closePosition) */
-  onClosePosition?: () => void;
+  onClosePosition?: (symbol?: string) => void;
   /** 设置杠杆回调 */
   onSetLeverage?: (leverage: number) => boolean;
+  /** 设置保证金模式回调 */
+  onSetMarginMode?: (mode: MarginMode) => void;
 }
 
 /* ============================================
@@ -126,12 +142,16 @@ function TradeForm({
   balance = 10000,
   availableBalance = 10000,
   currentLeverage = 10,
-  position = null,
+  position: _position = null, // 向后兼容，使用 positions 替代
+  positions = [],
+  closedPositions = [],
   riskAssessment = null,
   hasPosition = false,
+  marginMode: propMarginMode = 'cross',
   onPlaceOrder,
   onClosePosition,
   onSetLeverage,
+  onSetMarginMode,
 }: TradeFormProps) {
   // Toast
   const toast = useToast();
@@ -142,6 +162,12 @@ function TradeForm({
   const [price, setPrice] = useState(currentPrice.toFixed(2));
   const [size, setSize] = useState('');
   const [sizePercent, setSizePercent] = useState<number | null>(null);
+  const [marginMode, setMarginMode] = useState<MarginMode>(propMarginMode);
+
+  // 当前交易对的仓位 (用于 UI 提示)
+  const currentSymbolPosition = positions.find(
+    (p) => p.symbol === `${symbol}USDT`,
+  );
 
   // Derived values (简化计算，仅用于 UI 展示)
   const sizeValue = parseFloat(size) || 0;
@@ -150,15 +176,23 @@ function TradeForm({
   const maxSize = (availableBalance * leverage) / priceValue;
 
   // 🔴 按钮禁用状态：简化验证，详细验证由 Wasm 处理
+  // One-Way Mode: 同交易对同方向可合并，反方向可减仓，所以不应禁用
   const isSubmitDisabled = useMemo(() => {
-    // 已有持仓时禁用开仓（单仓位模式）
-    if (hasPosition) return true;
     // 数量为 0
     if (sizeValue <= 0) return true;
-    // 估算保证金不足
+    // 估算保证金不足 (加仓时需要额外保证金)
     if (estimatedCost > availableBalance) return true;
     return false;
-  }, [hasPosition, sizeValue, estimatedCost, availableBalance]);
+  }, [sizeValue, estimatedCost, availableBalance]);
+
+  // 🔴 保证金模式变更 Handler
+  const handleMarginModeChange = useCallback(
+    (mode: MarginMode) => {
+      setMarginMode(mode);
+      onSetMarginMode?.(mode);
+    },
+    [onSetMarginMode],
+  );
 
   // 🔴 杠杆变更 Handler - 调用 Wasm
   const handleLeverageChange = useCallback(
@@ -194,13 +228,11 @@ function TradeForm({
         toast.warning('请输入下单数量');
         return;
       }
-      if (hasPosition) {
-        toast.warning('已有持仓，请先平仓');
-        return;
-      }
+      // One-Way Mode: 允许同交易对同方向加仓/反方向减仓
+      // 详细验证由 Wasm 处理
 
       // 🔴 调用 Wasm 开仓，验证由 Wasm 处理
-      const result = onPlaceOrder?.(side, sizeValue, leverage);
+      const result = onPlaceOrder?.(side, sizeValue, leverage, marginMode);
 
       if (result) {
         if (result.success) {
@@ -237,18 +269,51 @@ function TradeForm({
 
       {/* ========== Main Content ========== */}
       <div className="flex-1 min-h-0 flex flex-col px-4 py-4 gap-4">
-        {/* Leverage Slider - 🔴 调用 Wasm 设置杠杆 */}
+        {/* Leverage Slider - 🔴 全仓模式可调整杠杆 */}
         <div className="shrink-0">
           <LeverageSlider
             value={leverage}
             onChange={handleLeverageChange}
-            disabled={hasPosition}
+            disabled={marginMode === 'isolated' && hasPosition}
           />
-          {hasPosition && (
+          {marginMode === 'isolated' && hasPosition && (
             <span className="text-[10px] text-gray-600 mt-1 block">
-              持仓期间无法修改杠杆
+              逐仓模式持仓期间无法修改杠杆
             </span>
           )}
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-[#2b2f36] shrink-0" />
+
+        {/* 🔴 保证金模式切换 (Cross/Isolated) - 新订单默认模式 */}
+        <div className="shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-gray-400">保证金模式</label>
+            <span className="text-[10px] text-gray-600">
+              {marginMode === 'cross' ? '全仓: 共享余额' : '逐仓: 独立保证金'}
+            </span>
+          </div>
+          <div className="flex rounded bg-[#1e2026] p-0.5">
+            {MARGIN_MODES.map((mode) => (
+              <button
+                key={mode.value}
+                onClick={() => handleMarginModeChange(mode.value)}
+                className={`
+                  flex-1 py-2 text-xs font-medium rounded transition-colors
+                  ${
+                    marginMode === mode.value
+                      ? mode.value === 'cross'
+                        ? 'bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30'
+                        : 'bg-[#FCD535]/20 text-[#FCD535] border border-[#FCD535]/30'
+                      : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                  }
+                `}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Divider */}
@@ -321,6 +386,24 @@ function TradeForm({
         {/* Divider */}
         <div className="h-px bg-[#2b2f36] shrink-0" />
 
+        {/* 当前仓位提示 */}
+        {currentSymbolPosition && (
+          <div className="flex items-center gap-2 text-[10px] shrink-0 -mt-2">
+            <span className="text-gray-500">当前持仓:</span>
+            <span
+              className={
+                currentSymbolPosition.side === 'Long'
+                  ? 'text-[#0ECB81]'
+                  : 'text-[#F6465D]'
+              }
+            >
+              {currentSymbolPosition.side === 'Long' ? '多' : '空'}{' '}
+              {currentSymbolPosition.size.toFixed(4)} {symbol}
+            </span>
+            <span className="text-gray-600">· 同方向加仓</span>
+          </div>
+        )}
+
         {/* Action Buttons - 🔴 调用 Wasm placeOrder */}
         <div className="grid grid-cols-2 gap-2 shrink-0">
           <button
@@ -384,31 +467,105 @@ function TradeForm({
         {/* Divider */}
         <div className="h-px bg-[#2b2f36] shrink-0" />
 
-        {/* ========== Position Display (单仓位模式) ========== */}
+        {/* ========== Position Display (多仓位模式) ========== */}
         <div className="flex-1 min-h-[120px] flex flex-col">
           <div className="flex items-center justify-between mb-3 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-white">Position</span>
-              {hasPosition && (
+              <span className="text-xs font-semibold text-white">
+                Positions
+              </span>
+              {positions.length > 0 && (
                 <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#0ECB81]/20 text-[#0ECB81]">
-                  ACTIVE
+                  {positions.length} ACTIVE
                 </span>
               )}
             </div>
             <span className="text-[10px] text-gray-500 font-mono">
-              {leverage}x Leverage
+              {marginMode === 'cross' ? '全仓' : '逐仓'} · {leverage}x
             </span>
           </div>
 
-          {/* 🔴 Wasm Position Display */}
-          {position ? (
-            <WasmPositionCard
-              position={position}
-              riskAssessment={riskAssessment}
-              symbol={symbol}
-              currentPrice={currentPrice}
-              onClose={onClosePosition}
-            />
+          {/* 🔴 Wasm Position Display - Hedge Mode 多仓位列表 */}
+          {positions.length > 0 || closedPositions.length > 0 ? (
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {/* 活跃仓位 */}
+              {positions.map((pos) => (
+                <WasmPositionCard
+                  key={pos.id}
+                  position={pos}
+                  riskAssessment={
+                    pos.symbol === `${symbol}USDT` ? riskAssessment : null
+                  }
+                  symbol={pos.symbol?.replace('USDT', '') || symbol}
+                  currentPrice={currentPrice}
+                  onClose={() => onClosePosition?.(pos.id)}
+                />
+              ))}
+              {/* 历史仓位 (灰色显示) */}
+              {closedPositions.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 pt-2 pb-1">
+                    <span className="text-[10px] text-gray-600">已平仓</span>
+                    <div className="flex-1 h-px bg-[#2b2f36]" />
+                  </div>
+                  {closedPositions
+                    .slice(-5)
+                    .reverse()
+                    .map((pos, idx) => (
+                      <div
+                        key={`closed-${idx}`}
+                        className="p-2 rounded bg-[#161a25]/50 border-l-2 border-gray-600 opacity-60"
+                      >
+                        <div className="flex items-center justify-between text-[10px]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-500">{pos.symbol}</span>
+                            <span
+                              className={
+                                pos.side === 'Long'
+                                  ? 'text-[#0ECB81]/60'
+                                  : 'text-[#F6465D]/60'
+                              }
+                            >
+                              {pos.side}
+                            </span>
+                            <span className="text-gray-600">
+                              {pos.leverage}x
+                            </span>
+                            <span
+                              className={`px-1 rounded text-[9px] ${
+                                pos.status === 'liquidated'
+                                  ? 'bg-[#F6465D]/20 text-[#F6465D]'
+                                  : 'bg-gray-700 text-gray-400'
+                              }`}
+                            >
+                              {pos.status === 'liquidated'
+                                ? '已强平'
+                                : '已平仓'}
+                            </span>
+                          </div>
+                          <span
+                            className={`font-mono ${
+                              (pos.realizedPnl ?? 0) >= 0
+                                ? 'text-[#0ECB81]/60'
+                                : 'text-[#F6465D]/60'
+                            }`}
+                          >
+                            {(pos.realizedPnl ?? 0) >= 0 ? '+' : ''}
+                            {(pos.realizedPnl ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-gray-600 mt-1">
+                          <span>
+                            Entry: {pos.entryPrice.toFixed(2)} → Exit:{' '}
+                            {(pos.exitPrice ?? 0).toFixed(2)}
+                          </span>
+                          <span>Size: {pos.size.toFixed(4)}</span>
+                        </div>
+                      </div>
+                    ))}
+                </>
+              )}
+            </div>
           ) : (
             <EmptyPositionState />
           )}

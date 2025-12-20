@@ -251,7 +251,9 @@ mod tests {
     use crate::trading::{Position, MarginMode};
 
     fn create_test_position(symbol: &str, margin: f64, mode: MarginMode, pnl: f64) -> Position {
+        let id = format!("{}_Long", symbol);
         let mut pos = Position::new(
+            id,
             symbol.to_string(),
             PositionSide::Long,
             0.1,

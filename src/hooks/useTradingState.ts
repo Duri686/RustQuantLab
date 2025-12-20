@@ -23,6 +23,7 @@ import type {
   OpenPositionResult,
   ClosePositionResult,
   UseTradingStateReturn,
+  MarginMode,
 } from '../types/trading';
 import {
   isPositionOpenedEvent,
@@ -31,6 +32,8 @@ import {
   isMarginWarningEvent,
   RISK_LEVEL_CONFIG,
 } from '../types/trading';
+import { wasmLock } from './wasmLock';
+import { getSharedWasmEngine } from './useTradingEngine';
 
 // ============================================================================
 // Wasm 接口类型 (扩展现有 WasmMarketEngine)
@@ -44,68 +47,17 @@ interface TradingWasmEngine {
   get_trading_state(): TradingState;
   open_position(request: OpenPositionRequest): OpenPositionResult;
   close_position(exitPrice?: number): ClosePositionResult;
+  close_position_by_symbol(
+    symbol?: string,
+    exitPrice?: number,
+    closeSize?: number,
+  ): ClosePositionResult;
   set_leverage(leverage: number): boolean;
   get_leverage(): number;
   get_balance(): number;
   reset_balance(initialBalance?: number): void;
   has_position(): boolean;
   pending_event_count(): number;
-}
-
-// ============================================================================
-// 模块级单例 (复用现有 Wasm 初始化逻辑)
-// ============================================================================
-
-interface WasmTradingSingleton {
-  engine: TradingWasmEngine | null;
-  initPromise: Promise<TradingWasmEngine> | null;
-  isInitializing: boolean;
-}
-
-const wasmTradingSingleton: WasmTradingSingleton = {
-  engine: null,
-  initPromise: null,
-  isInitializing: false,
-};
-
-/**
- * 初始化交易 Wasm 引擎 (单例模式)
- */
-async function initTradingEngine(): Promise<TradingWasmEngine> {
-  if (wasmTradingSingleton.engine) {
-    return wasmTradingSingleton.engine;
-  }
-
-  if (wasmTradingSingleton.initPromise) {
-    return wasmTradingSingleton.initPromise;
-  }
-
-  wasmTradingSingleton.isInitializing = true;
-  wasmTradingSingleton.initPromise = (async () => {
-    try {
-      const wasm = await import('../../core/pkg/quant_core');
-      if (typeof wasm.default === 'function') {
-        await wasm.default();
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const wasmMod = wasm as any;
-      const engine = new wasmMod.MarketEngine() as TradingWasmEngine;
-
-      wasmTradingSingleton.engine = engine;
-      // eslint-disable-next-line no-console
-      console.log('[TradingState] Wasm 交易引擎初始化成功');
-
-      return engine;
-    } catch (err) {
-      wasmTradingSingleton.initPromise = null;
-      throw err;
-    } finally {
-      wasmTradingSingleton.isInitializing = false;
-    }
-  })();
-
-  return wasmTradingSingleton.initPromise;
 }
 
 // ============================================================================
@@ -239,36 +191,52 @@ export function useTradingState(): UseTradingStateReturn {
   // ========== 并发控制 ==========
   const isProcessingRef = useRef(false);
 
-  // ========== 初始化 Wasm ==========
+  // ========== 使用共享 Wasm 引擎 ==========
+  // 不再独立初始化，复用 useTradingEngine 的引擎实例
   useEffect(() => {
     let aborted = false;
+    let checkInterval: ReturnType<typeof setInterval>;
 
-    const init = async () => {
-      try {
-        const engine = await initTradingEngine();
-        if (aborted) return;
+    const checkSharedEngine = () => {
+      if (aborted) return;
 
-        engineRef.current = engine;
+      // 尝试获取共享引擎
+      const sharedEngine = getSharedWasmEngine();
+      if (sharedEngine) {
+        // 共享引擎已就绪
+        engineRef.current = sharedEngine as unknown as TradingWasmEngine;
         engineAlive.current = true;
         setWasmReady(true);
 
+        // 清除轮询
+        if (checkInterval) clearInterval(checkInterval);
+
         // 获取初始状态
-        try {
-          const state = engine.get_trading_state();
-          setTradingState(state);
-        } catch {
-          // 初始状态获取失败不阻塞
+        if (wasmLock.acquire()) {
+          try {
+            const state = engineRef.current.get_trading_state();
+            setTradingState(state);
+          } catch {
+            // 初始状态获取失败不阻塞
+          } finally {
+            wasmLock.release();
+          }
         }
-      } catch (err) {
-        console.error('[TradingState] Wasm 初始化失败:', err);
       }
     };
 
-    init();
+    // 立即检查一次
+    checkSharedEngine();
+
+    // 如果没有就绪，轮询检查
+    if (!engineRef.current) {
+      checkInterval = setInterval(checkSharedEngine, 100);
+    }
 
     return () => {
       aborted = true;
       engineAlive.current = false;
+      if (checkInterval) clearInterval(checkInterval);
       engineRef.current = null;
     };
   }, []);
@@ -280,36 +248,40 @@ export function useTradingState(): UseTradingStateReturn {
   const hasPosition = position !== null;
 
   // ========== onTick: 价格更新 + 状态同步 ==========
+  // 使用 setTimeout 延迟执行，避免与 useTradingEngine 的 on_tick 冲突
   const onTick = useCallback(
     (_currentPrice: number) => {
       if (!engineAlive.current || !engineRef.current) return;
       if (isProcessingRef.current) return;
 
-      isProcessingRef.current = true;
+      // 延迟 50ms 执行，确保 useTradingEngine 的 on_tick 已完成
+      setTimeout(() => {
+        if (!engineAlive.current || !engineRef.current) return;
+        if (isProcessingRef.current) return;
+        if (!wasmLock.acquire()) return;
 
-      try {
-        // 注意: on_tick 在 Rust 端已经内部调用 update_price
-        // 这里直接获取最新状态即可
-        const state = engineRef.current.get_trading_state();
-        setTradingState(state);
+        isProcessingRef.current = true;
 
-        // 处理事件 (单独 try-catch 防止事件处理错误影响状态更新)
-        if (state.pendingEvents && state.pendingEvents.length > 0) {
-          try {
-            handleEngineEvents(state.pendingEvents, toast);
-          } catch (eventErr) {
-            console.error('[TradingState] 事件处理错误:', eventErr);
+        try {
+          const state = engineRef.current.get_trading_state();
+          setTradingState(state);
+
+          // 处理事件
+          if (state.pendingEvents && state.pendingEvents.length > 0) {
+            try {
+              handleEngineEvents(state.pendingEvents, toast);
+            } catch (eventErr) {
+              console.error('[TradingState] 事件处理错误:', eventErr);
+            }
+            setLastEvents(state.pendingEvents);
           }
-          setLastEvents(state.pendingEvents);
+        } catch (err) {
+          // 静默处理
+        } finally {
+          isProcessingRef.current = false;
+          wasmLock.release();
         }
-      } catch (err) {
-        // 静默处理，避免日志刷屏
-        if (engineAlive.current) {
-          console.error('[TradingState] onTick 错误:', err);
-        }
-      } finally {
-        isProcessingRef.current = false;
-      }
+      }, 50);
     },
     [toast],
   );
@@ -320,6 +292,7 @@ export function useTradingState(): UseTradingStateReturn {
       side: 'LONG' | 'SHORT',
       size: number,
       leverage?: number,
+      marginMode?: MarginMode,
     ): OpenPositionResult | null => {
       if (!engineAlive.current || !engineRef.current) {
         console.warn('[TradingState] 引擎未就绪');
@@ -345,6 +318,7 @@ export function useTradingState(): UseTradingStateReturn {
         const request: OpenPositionRequest = {
           side: side.toLowerCase(),
           size,
+          marginMode: marginMode ?? 'cross',
         };
 
         // 调用 Wasm 开仓
@@ -387,9 +361,12 @@ export function useTradingState(): UseTradingStateReturn {
     [toast],
   );
 
-  // ========== closePosition: 平仓 ==========
+  // ========== closePosition: 平仓 (支持按 symbol 平仓) ==========
   const closePosition = useCallback(
-    (exitPrice?: number): ClosePositionResult | null => {
+    (
+      symbolOrPrice?: string | number,
+      exitPrice?: number,
+    ): ClosePositionResult | null => {
       if (!engineAlive.current || !engineRef.current) {
         console.warn('[TradingState] 引擎未就绪');
         return null;
@@ -405,8 +382,17 @@ export function useTradingState(): UseTradingStateReturn {
       let result: ClosePositionResult | null = null;
 
       try {
-        // 调用 Wasm 平仓
-        result = engineRef.current.close_position(exitPrice);
+        // 调用 Wasm 平仓 (支持按 symbol 或 exitPrice 平仓)
+        if (typeof symbolOrPrice === 'string') {
+          // 按 symbol 平仓
+          result = engineRef.current.close_position_by_symbol(
+            symbolOrPrice,
+            exitPrice,
+          );
+        } else {
+          // 向后兼容: 传入 exitPrice
+          result = engineRef.current.close_position(symbolOrPrice);
+        }
 
         // 同步状态
         const state = engineRef.current.get_trading_state();
