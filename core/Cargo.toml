@@ -19,5 +19,15 @@ js-sys = "0.3"
 
 [profile.release]
 # 优化 wasm 体积
-opt-level = "s"
-lto = true
+opt-level = "z"        # 最小体积优先
+lto = true              # 链接时优化
+codegen-units = 1       # 单代码单元，更好的优化
+strip = true            # 移除调试符号
+panic = "abort"         # 不需要 unwind 代码
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "engine_bench"
+harness = false

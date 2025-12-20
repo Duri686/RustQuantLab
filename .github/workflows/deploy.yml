@@ -51,43 +51,50 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # ===== 4. Install wasm-pack =====
+      # ===== 4. Run Rust Tests =====
+      - name: 🧪 Run Rust tests
+        run: |
+          cd core
+          cargo test --lib --release
+          cd ..
+
+      # ===== 5. Install wasm-pack =====
       - name: 📦 Install wasm-pack
         run: cargo install wasm-pack --locked || true
 
-      # ===== 5. Setup Node.js =====
+      # ===== 6. Setup Node.js =====
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      # ===== 6. Install npm dependencies =====
+      # ===== 7. Install npm dependencies =====
       - name: 📦 Install npm dependencies
         run: npm ci
 
-      # ===== 7. Build Rust → WebAssembly =====
+      # ===== 8. Build Rust → WebAssembly =====
       - name: 🔨 Build Rust to WebAssembly
         run: |
           cd core
           wasm-pack build --target web --out-dir pkg --release
           cd ..
 
-      # ===== 8. Build Frontend (Vite) =====
+      # ===== 9. Build Frontend (Vite) =====
       - name: 🏗️ Build frontend
         run: npx vite build --base=/RustQuantLab/
 
-      # ===== 9. Setup GitHub Pages =====
+      # ===== 10. Setup GitHub Pages =====
       - name: 📄 Setup Pages
         uses: actions/configure-pages@v4
 
-      # ===== 10. Upload artifact =====
+      # ===== 11. Upload artifact =====
       - name: 📤 Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
-      # ===== 11. Deploy to GitHub Pages =====
+      # ===== 12. Deploy to GitHub Pages =====
       - name: 🚀 Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

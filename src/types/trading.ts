@@ -52,16 +52,25 @@ export interface Position {
 
   /** 盈亏百分比 (相对于保证金) */
   pnlPercentage: number;
+
+  /** 交易对符号 (如 "BTCUSDT") */
+  symbol?: string;
+
+  /** 保证金模式 */
+  marginMode?: 'Cross' | 'Isolated';
 }
 
 // ============================================================================
-// 风险评估类型
+// 核心类型定义
 // ============================================================================
 
 /**
- * 风险评估等级
- *
- * 与 Rust `RiskLevel` 枚举对应
+ * 保证金模式
+ */
+export type MarginMode = 'cross' | 'isolated';
+
+/**
+ * 风险等级
  */
 export type RiskLevel = 'Safe' | 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -131,11 +140,38 @@ export interface LiquidationResult {
  */
 export interface PositionOpenedEvent {
   type: 'positionOpened';
+  symbol: string;
   side: string;
   size: number;
   entryPrice: number;
   leverage: number;
   liquidationPrice: number;
+  marginMode: string;
+}
+
+/**
+ * 仓位合并事件 (加仓)
+ */
+export interface PositionMergedEvent {
+  type: 'positionMerged';
+  symbol: string;
+  side: string;
+  addedSize: number;
+  newSize: number;
+  oldEntryPrice: number;
+  newEntryPrice: number;
+}
+
+/**
+ * 仓位减少事件 (部分平仓)
+ */
+export interface PositionReducedEvent {
+  type: 'positionReduced';
+  symbol: string;
+  side: string;
+  closedSize: number;
+  remainingSize: number;
+  realizedPnl: number;
 }
 
 /**
@@ -143,6 +179,7 @@ export interface PositionOpenedEvent {
  */
 export interface PositionClosedEvent {
   type: 'positionClosed';
+  symbol: string;
   side: string;
   size: number;
   entryPrice: number;
@@ -155,6 +192,7 @@ export interface PositionClosedEvent {
  */
 export interface LiquidatedEvent {
   type: 'liquidated';
+  symbol: string;
   side: string;
   size: number;
   entryPrice: number;
@@ -167,10 +205,21 @@ export interface LiquidatedEvent {
  */
 export interface MarginWarningEvent {
   type: 'marginWarning';
+  symbol: string;
   riskLevel: string;
   marginRatio: number;
   liquidationPrice: number;
   distancePct: number;
+}
+
+/**
+ * 账户风险预警事件 (全仓模式)
+ */
+export interface AccountRiskWarningEvent {
+  type: 'accountRiskWarning';
+  accountEquity: number;
+  totalMaintenanceMargin: number;
+  riskLevel: string;
 }
 
 /**
@@ -180,9 +229,12 @@ export interface MarginWarningEvent {
  */
 export type EngineEvent =
   | PositionOpenedEvent
+  | PositionMergedEvent
+  | PositionReducedEvent
   | PositionClosedEvent
   | LiquidatedEvent
-  | MarginWarningEvent;
+  | MarginWarningEvent
+  | AccountRiskWarningEvent;
 
 // ============================================================================
 // 交易状态类型
@@ -201,13 +253,19 @@ export interface TradingState {
   /** 可用余额 (未被仓位占用的保证金) */
   availableBalance: number;
 
+  /** 账户权益 (全仓模式: balance + sum(unrealized_pnl)) */
+  accountEquity: number;
+
   /** 当前杠杆设置 */
   leverage: number;
 
   /** 当前市场价格 */
   currentPrice: number;
 
-  /** 活跃仓位 (单仓位模式) */
+  /** 所有活跃仓位 (多仓位模式) */
+  positions: Position[];
+
+  /** 主仓位 (向后兼容，通常是 BTCUSDT) */
   position: Position | null;
 
   /** 最新风险评估结果 */
@@ -227,6 +285,9 @@ export interface TradingState {
  * 传递给 Rust `MarketEngine.open_position()` 方法
  */
 export interface OpenPositionRequest {
+  /** 交易对符号 (如 "BTCUSDT", 默认 "BTCUSDT") */
+  symbol?: string;
+
   /** 仓位方向: "long" 或 "short" */
   side: string;
 
@@ -235,6 +296,12 @@ export interface OpenPositionRequest {
 
   /** 可选: 指定开仓价格 (默认使用当前市价) */
   price?: number;
+
+  /** 可选: 杠杆倍数 (默认使用引擎当前杠杆) */
+  leverage?: number;
+
+  /** 保证金模式 (默认 Cross) */
+  marginMode?: MarginMode;
 }
 
 /**

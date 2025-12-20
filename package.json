@@ -9,7 +9,10 @@
         "build": "npm run build:wasm && vite build",
         "preview": "vite preview",
         "lint": "eslint src --max-warnings 0",
-        "lint:fix": "eslint src --fix"
+        "lint:fix": "eslint src --fix",
+        "test:rust": "cd core && cargo test --lib",
+        "bench": "cd core && cargo bench --bench engine_bench",
+        "docs:rust": "cd core && cargo doc --open"
     },
     "dependencies": {
         "echarts": "^6.0.0",

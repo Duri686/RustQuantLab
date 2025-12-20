@@ -33,19 +33,29 @@ mod engine;
 /// 风控与强平引擎
 pub mod risk;
 
+/// 交易模块 (仓位管理)
+pub mod trading;
+
 // ============================================================================
 // 公共导出
 // ============================================================================
 
-// 重新导出核心类型供外部使用
+// WASM 绑定的主入口点
+// 注意: 其他类型通过 serde 自动序列化到 JS，无需显式导出
 pub use engine::MarketEngine;
+
+// 以下导出仅供 Rust 侧集成测试使用 (不会编译进 WASM)
+#[cfg(not(target_arch = "wasm32"))]
 pub use models::{
     AnalysisResult, BollResult, Candle, CandleHistory, IndicatorHistory, MacdResult, OrderBook, 
     SimOrder, SimOrderResult, SimOrderSide, Timeframe,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use risk::{
     LiquidationResult, MarginTier, PositionSide, RiskCalculator, RiskConfig, RiskLevel,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use trading::{MarginMode, OpenPositionParams, Position, PositionManager, TradeAction, TradeResult};
 
 // ============================================================================
 // Wasm 初始化
