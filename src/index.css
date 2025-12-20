@@ -124,3 +124,42 @@ body {
 .animate-pulse-neon {
   animation: pulse-neon 2s ease-in-out infinite;
 }
+
+/* ============================================
+   Mobile-First 响应式工具类
+   ============================================ */
+
+/* 隐藏滚动条 (用于工具栏横向滚动) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS Safe Area 支持 */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* 触控优化 - 最小点击区域 44px */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ============================================
+   自定义断点扩展 (Tailwind v4)
+   ============================================ */
+
+/* 3xl 断点: 2560px+ (4K/超宽屏) */
+@custom-media --3xl (width >= 2560px);
+
+/* 使用示例: @media (--3xl) { ... } */
+/* Tailwind v4 会自动识别 3xl: 前缀 */

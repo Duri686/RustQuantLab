@@ -3,6 +3,30 @@
  * 统一管理所有接口和类型
  */
 
+// 导入 Wasm 类型以在本文件内使用
+import type {
+  WasmTimeframe as _WasmTimeframe,
+  WasmCandleHistory as _WasmCandleHistory,
+} from './wasm';
+
+// 重新导出 Wasm 类型
+export type {
+  WasmOrderBook,
+  WasmBollResult,
+  WasmMacdResult,
+  WasmAnalysisResult,
+  WasmMarketEngine,
+  WasmMarketEngineConstructor,
+  WasmModule,
+  // K 线相关类型
+  WasmTimeframe,
+  WasmCandle,
+  WasmCandleHistory,
+} from './wasm';
+
+// 重导出时间周期常量
+export { TIMEFRAMES } from './wasm';
+
 /* ============================================
    订单簿相关类型
    ============================================ */
@@ -12,7 +36,7 @@
  * 用于模拟交易所 WebSocket 推送的行情数据
  */
 export interface OrderBook {
-  /** 交易对符号，如 "BBB-AAA" */
+  /** 交易对符号，如 "BTC-USDT" */
   symbol: string;
   /** 数据时间戳（毫秒） */
   timestamp: number;
@@ -63,16 +87,102 @@ export interface WorkerDataMessage {
    ============================================ */
 
 /**
+ * 布林带结果
+ */
+export interface BollResult {
+  upper: number;
+  mid: number;
+  lower: number;
+}
+
+/**
+ * MACD 结果
+ */
+export interface MacdResult {
+  dif: number;
+  dea: number;
+  hist: number;
+}
+
+/**
  * Rust MarketEngine 分析结果
  * 由 Wasm on_tick 方法返回
  */
 export interface AnalysisResult {
-  /** 买卖价差 (Ask[0] - Bid[0]) */
+  /** 买卖价差 */
   spread: number;
-  /** 5 周期简单移动平均线，数据不足时为 null */
-  sma5: number | null;
   /** 当前历史价格数量 */
   historyLength: number;
+
+  // Simple Moving Averages
+  sma5: number | null;
+  ma7: number | null;
+  ma25: number | null;
+  ma99: number | null;
+
+  // Exponential Moving Averages
+  ema7: number | null;
+  ema25: number | null;
+
+  // Bollinger Bands
+  boll: BollResult | null;
+
+  // MACD
+  macd: MacdResult | null;
+
+  // RSI
+  rsi14: number | null;
+
+  // Volume MA
+  volMa5: number | null;
+}
+
+/**
+ * 当前实时指标值 (单个数值，用于当前 K 线)
+ */
+export interface CurrentIndicators {
+  sma5: number | null;
+  ma7: number | null;
+  ma25: number | null;
+  ma99: number | null;
+  ema7: number | null;
+  ema25: number | null;
+  rsi14: number | null;
+  bollUpper: number | null;
+  bollMid: number | null;
+  bollLower: number | null;
+  macdDif: number | null;
+  macdDea: number | null;
+  macdHist: number | null;
+  volMa5: number | null;
+}
+
+/**
+ * 指标数据历史 (与 K 线数组同步)
+ * 严格对齐 WasmAnalysisResult 字段命名 (camelCase)
+ */
+export interface IndicatorData {
+  /** SMA(5) 历史 */
+  sma5: (number | null)[];
+  ma7: (number | null)[];
+  ma25: (number | null)[];
+  ma99: (number | null)[];
+  ema7: (number | null)[];
+  ema25: (number | null)[];
+  rsi14: (number | null)[];
+  /** 布林带上轨历史 (从 boll.upper 提取) */
+  bollUpper: (number | null)[];
+  /** 布林带中轨历史 (从 boll.mid 提取) */
+  bollMid: (number | null)[];
+  /** 布林带下轨历史 (从 boll.lower 提取) */
+  bollLower: (number | null)[];
+  /** MACD DIF 历史 (从 macd.dif 提取) */
+  macdDif: (number | null)[];
+  /** MACD DEA 历史 (从 macd.dea 提取) */
+  macdDea: (number | null)[];
+  /** MACD 柱状图历史 (从 macd.hist 提取) */
+  macdHist: (number | null)[];
+  volMa5: (number | null)[];
 }
 
 /**
@@ -83,6 +193,16 @@ export interface MarketEngineInstance {
   history_length: () => number;
   clear_history: () => void;
   free: () => void;
+
+  // K 线相关方法
+  set_timeframe: (timeframe: _WasmTimeframe) => boolean;
+  get_timeframe: () => _WasmTimeframe;
+  get_candles: (timeframe: _WasmTimeframe) => _WasmCandleHistory;
+  get_active_candles: () => _WasmCandleHistory;
+  get_candle_count: (timeframe: _WasmTimeframe) => number;
+
+  // 模拟交易方法
+  submit_order: (order: SimOrder) => SimOrderResult;
 }
 
 /**
@@ -92,12 +212,7 @@ export interface MarketEngineConstructor {
   new (): MarketEngineInstance;
 }
 
-/**
- * Wasm 模块类型
- */
-export interface WasmModule {
-  MarketEngine: MarketEngineConstructor;
-}
+// WasmModule 已从 ./wasm 导出
 
 /* ============================================
    K 线图表相关类型
@@ -106,6 +221,7 @@ export interface WasmModule {
 /**
  * K 线蜡烛图数据结构
  * 由 Tick 数据每秒聚合生成
+ * 均线字段严格对齐 Rust Wasm 输出 (弃用 ma5/ma10/ma20/ma30)
  */
 export interface Candle {
   /** 时间戳（秒级精度） */
@@ -122,14 +238,14 @@ export interface Candle {
   close: number;
   /** 成交量 */
   volume: number;
-  /** MA5 均线值 */
-  ma5: number | null;
-  /** MA10 均线值 */
-  ma10: number | null;
-  /** MA20 均线值 */
-  ma20: number | null;
-  /** MA30 均线值 */
-  ma30: number | null;
+  /** SMA(5) 均线值 - 新 Rust 字段 */
+  sma5: number | null;
+  /** MA(7) 均线值 */
+  ma7: number | null;
+  /** MA(25) 均线值 */
+  ma25: number | null;
+  /** MA(99) 均线值 */
+  ma99: number | null;
 }
 
 /* ============================================
@@ -148,6 +264,12 @@ export interface TradingEngineState {
   candleHistory: Candle[];
   /** 当前正在形成的 K 线 */
   currentLiveCandle: Candle | null;
+  /** 指标数据历史 (与 candleHistory 同步) */
+  indicatorData: IndicatorData;
+  /** 当前实时指标值 (用于 currentLiveCandle) */
+  currentIndicators: CurrentIndicators;
+  /** 当前时间周期 */
+  currentTimeframe: _WasmTimeframe | null;
   /** 数据流是否运行中 */
   isRunning: boolean;
   /** Wasm 是否就绪 */
@@ -160,8 +282,26 @@ export interface TradingEngineState {
   priceTrend: 'up' | 'down' | 'neutral';
   /** 价格颜色 CSS 类 */
   priceColorClass: string;
+  /** 可用余额 (USDT) */
+  availableBalance: number;
+  /** 订单记录列表 */
+  orders: OrderRecord[];
   /** 切换数据流开关 */
   toggleFeed: () => void;
+  /** 切换时间周期 */
+  setTimeframe?: (timeframe: _WasmTimeframe) => boolean;
+  /** 提交模拟订单 */
+  submitOrder?: (order: {
+    side: 'buy' | 'sell';
+    price: number;
+    size: number;
+    leverage: number;
+    marginMode: MarginMode;
+  }) => SimOrderResult | null;
+  /** 平仓操作 */
+  closeOrder?: (orderId: string, currentPrice: number) => boolean;
+  /** 追加保证金（仅逐仓模式） */
+  addMargin?: (orderId: string, amount: number) => boolean;
 }
 
 /* ============================================
@@ -218,4 +358,90 @@ export interface OrderBookProps {
   priceColorClass?: string;
   /** 时间戳 */
   timestamp?: number;
+}
+
+/* ============================================
+   模拟交易相关类型
+   ============================================ */
+
+/**
+ * 模拟订单方向
+ */
+export type SimOrderSide = 'buy' | 'sell';
+
+/**
+ * 模拟订单输入
+ * 传递给 Rust MarketEngine.submit_order
+ */
+export interface SimOrder {
+  /** 订单方向 */
+  side: 'Buy' | 'Sell';
+  /** 委托价格 */
+  price: number;
+  /** 委托数量 */
+  size: number;
+  /** 杠杆倍数 */
+  leverage: number;
+}
+
+/**
+ * 模拟订单执行结果
+ * 从 Rust MarketEngine.submit_order 返回
+ */
+export interface SimOrderResult {
+  /** 是否成功执行 */
+  success: boolean;
+  /** 执行价格 */
+  executedPrice: number;
+  /** 价格影响（正数涨/负数跌） */
+  priceImpact: number;
+  /** 执行成交量 */
+  executedVolume: number;
+  /** 订单方向 */
+  side: string;
+  /** 消息/错误信息 */
+  message: string;
+}
+
+/** 保证金模式 */
+export type MarginMode = 'cross' | 'isolated';
+
+/**
+ * 订单记录（前端维护）
+ */
+export interface OrderRecord {
+  /** 订单 ID */
+  id: string;
+  /** 订单方向 */
+  side: 'buy' | 'sell';
+  /** 委托价格 */
+  price: number;
+  /** 委托数量 */
+  size: number;
+  /** 杠杆倍数 */
+  leverage: number;
+  /** 执行价格 */
+  executedPrice: number;
+  /** 保证金 */
+  margin: number;
+  /** 保证金模式 */
+  marginMode: MarginMode;
+  /** 价格影响 */
+  priceImpact: number;
+  /** 时间戳 */
+  timestamp: number;
+  /** 盈亏 (实时计算) */
+  pnl?: number;
+  /** 是否已平仓 */
+  closed?: boolean;
+  /** 平仓价格 */
+  closePrice?: number;
+  /** 平仓时间 */
+  closeTimestamp?: number;
+  /** 实现盈亏 (平仓后固定) */
+  realizedPnl?: number;
+  /** 爆仓价格 (逐仓模式) */
+  liquidationPrice: number;
+  /** 是否爆仓 */
+  liquidated?: boolean;
 }

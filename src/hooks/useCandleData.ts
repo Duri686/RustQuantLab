@@ -1,81 +1,133 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Candle, OrderBook } from '../types/index';
+/**
+ * useCandleData Hook - K 线数据聚合
+ * 将高频 Tick 数据聚合为 K 线数据
+ *
+ * 支持两种模式：
+ * 1. 前端聚合模式 (useRustCandles=false)
+ * 2. Rust Wasm 聚合模式 (useRustCandles=true)
+ *
+ * @module hooks/useCandleData
+ */
+
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { Candle, OrderBook, IndicatorData } from '../types/index';
+import type {
+  WasmAnalysisResult,
+  WasmCandleHistory,
+  WasmTimeframe,
+} from '../types/wasm';
+
+// 从拆分模块导入
+import {
+  MAX_CANDLE_HISTORY,
+  CANDLE_INTERVAL_MS,
+  type PendingCandle,
+  type PendingIndicators,
+  createEmptyPendingIndicators,
+  convertWasmCandle,
+  buildLiveCandle,
+} from './candle/candleUtils';
+
+import { useIndicatorHistory } from './candle/useIndicatorHistory';
+
+// 重新导出类型供外部使用
+export type { PendingIndicators } from './candle/candleUtils';
+
+// ============================================
+// Hook 类型定义
+// ============================================
 
 /**
- * 计算简单移动平均线 (SMA)
- * @param data - 收盘价数组
- * @param period - 周期
- * @returns SMA 值，数据不足时返回 null
+ * useCandleData Hook 配置参数
  */
-function calculateSMA(data: number[], period: number): number | null {
-  if (data.length < period) return null;
-  const slice = data.slice(-period);
-  const sum = slice.reduce((acc, val) => acc + val, 0);
-  return sum / period;
+export interface UseCandleDataOptions {
+  /** 最新的 Tick 数据（来自 Worker） */
+  latestTick: OrderBook | null;
+  /** 最新的 Rust 分析结果 */
+  analysisResult: WasmAnalysisResult | null;
+  /** Rust 返回的 K 线历史数据 */
+  rustCandleHistory?: WasmCandleHistory | null;
+  /** 是否使用 Rust K 线数据 @default false */
+  useRustCandles?: boolean;
 }
 
 /**
- * 待处理 K 线（正在聚合中）
+ * useCandleData Hook 返回值
  */
-interface PendingCandle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  tickCount: number;
+export interface UseCandleDataReturn {
+  /** 已完成的 K 线历史 */
+  candleHistory: Candle[];
+  /** 当前正在形成的实时 K 线 */
+  currentLiveCandle: Candle | null;
+  /** 指标数据历史 (与 candleHistory 同步) */
+  indicatorData: IndicatorData;
+  /** 当前实时指标值 */
+  currentIndicators: PendingIndicators;
+  /** 当前时间周期 (仅 Rust 模式有效) */
+  currentTimeframe: WasmTimeframe | null;
 }
 
-/** K 线历史最大长度 */
-const MAX_CANDLE_HISTORY = 120;
-/** MA 周期配置 */
-const MA_PERIODS = [5, 10, 20, 30] as const;
-/** K 线周期（毫秒） */
-const CANDLE_INTERVAL_MS = 1000;
+// ============================================
+// Hook 实现
+// ============================================
 
 /**
  * useCandleData Hook
- * 将高频 Tick 数据聚合为 1 秒 K 线数据
- *
- * @param latestTick - 最新的 Tick 数据（来自 Worker/Rust）
- * @returns { candleHistory, currentLiveCandle } - K 线历史 + 当前实时 K 线
  */
-export function useCandleData(latestTick: OrderBook | null) {
-  // K 线历史数组
+export function useCandleData(
+  options: UseCandleDataOptions,
+): UseCandleDataReturn {
+  const {
+    latestTick,
+    analysisResult,
+    rustCandleHistory,
+    useRustCandles = false,
+  } = options;
+
+  // ========== 前端聚合模式状态 ==========
+
+  /** K 线历史数组 */
   const [candleHistory, setCandleHistory] = useState<Candle[]>([]);
 
-  // 当前正在聚合的 K 线 (ref 避免频繁触发渲染)
+  /** 当前正在聚合的 K 线 */
   const pendingCandleRef = useRef<PendingCandle | null>(null);
 
-  // 收盘价历史，用于计算 MA
-  const closePricesRef = useRef<number[]>([]);
+  /** 当前周期内的指标数据 */
+  const pendingIndicatorsRef = useRef<PendingIndicators>(
+    createEmptyPendingIndicators(),
+  );
 
-  // 定时器 ID
+  /** 定时器 ID */
   const timerRef = useRef<number | null>(null);
 
-  // 上一次 K 线完成的时间戳
-  const lastCandleTimeRef = useRef<number>(0);
+  // ========== 使用指标历史 Hook ==========
+
+  const { indicatorData, currentIndicators, appendIndicators } =
+    useIndicatorHistory({
+      useRustCandles,
+      rustCandleHistory,
+      analysisResult,
+    });
+
+  // 同步 pendingIndicatorsRef (供 buildLiveCandle 使用)
+  useEffect(() => {
+    if (analysisResult) {
+      pendingIndicatorsRef.current = currentIndicators;
+    }
+  }, [analysisResult, currentIndicators]);
+
+  // ========== 定时器回调: 完成 K 线 ==========
 
   /**
    * 完成当前 K 线，推入历史
    */
   const finalizePendingCandle = useCallback(() => {
     const pending = pendingCandleRef.current;
+    const indicators = pendingIndicatorsRef.current;
+
     if (!pending || pending.tickCount === 0) return null;
 
-    // 更新收盘价历史
-    closePricesRef.current.push(pending.close);
-    if (closePricesRef.current.length > MAX_CANDLE_HISTORY) {
-      closePricesRef.current.shift();
-    }
-
-    // 计算所有 MA 周期
-    const ma5 = calculateSMA(closePricesRef.current, MA_PERIODS[0]);
-    const ma10 = calculateSMA(closePricesRef.current, MA_PERIODS[1]);
-    const ma20 = calculateSMA(closePricesRef.current, MA_PERIODS[2]);
-    const ma30 = calculateSMA(closePricesRef.current, MA_PERIODS[3]);
-
+    // 构建最终 K 线
     const finalCandle: Candle = {
       time: pending.time,
       timeStr: new Date(pending.time).toLocaleTimeString(),
@@ -84,10 +136,10 @@ export function useCandleData(latestTick: OrderBook | null) {
       low: pending.low,
       close: pending.close,
       volume: pending.volume,
-      ma5,
-      ma10,
-      ma20,
-      ma30,
+      sma5: indicators.sma5,
+      ma7: indicators.ma7,
+      ma25: indicators.ma25,
+      ma99: indicators.ma99,
     };
 
     return finalCandle;
@@ -97,37 +149,38 @@ export function useCandleData(latestTick: OrderBook | null) {
    * 定时器回调：每秒将 pending K 线推入历史
    */
   const onIntervalTick = useCallback(() => {
-    const finalized = finalizePendingCandle();
+    const finalCandle = finalizePendingCandle();
 
-    if (finalized) {
+    if (finalCandle) {
+      // 更新 K 线历史
       setCandleHistory((prev) => {
-        const newHistory = [...prev, finalized];
-        // 限制历史长度
-        if (newHistory.length > MAX_CANDLE_HISTORY) {
-          return newHistory.slice(-MAX_CANDLE_HISTORY);
-        }
-        return newHistory;
+        const newHistory = [...prev, finalCandle];
+        return newHistory.length > MAX_CANDLE_HISTORY
+          ? newHistory.slice(-MAX_CANDLE_HISTORY)
+          : newHistory;
       });
 
-      // 重置 pending K 线，Open = 上一根 Close
+      // 追加指标历史
+      appendIndicators();
+
+      // 重置 pending K 线
       pendingCandleRef.current = {
         time: Date.now(),
-        open: finalized.close,
-        high: finalized.close,
-        low: finalized.close,
-        close: finalized.close,
+        open: finalCandle.close,
+        high: finalCandle.close,
+        low: finalCandle.close,
+        close: finalCandle.close,
         volume: 0,
         tickCount: 0,
       };
-      lastCandleTimeRef.current = finalized.time;
     }
-  }, [finalizePendingCandle]);
+  }, [finalizePendingCandle, appendIndicators]);
 
-  /**
-   * 启动定时器
-   */
+  // ========== 定时器管理 ==========
+
   useEffect(() => {
-    // 启动 1 秒定时器
+    if (useRustCandles) return; // Rust 模式不使用本地定时器
+
     timerRef.current = window.setInterval(onIntervalTick, CANDLE_INTERVAL_MS);
 
     return () => {
@@ -136,18 +189,17 @@ export function useCandleData(latestTick: OrderBook | null) {
         timerRef.current = null;
       }
     };
-  }, [onIntervalTick]);
+  }, [onIntervalTick, useRustCandles]);
 
-  /**
-   * 处理新 Tick 数据
-   */
+  // ========== 处理 Tick 数据 ==========
+
   useEffect(() => {
-    if (!latestTick) return;
+    if (!latestTick || useRustCandles) return;
 
     const price = latestTick.price;
     const now = Date.now();
 
-    // 估算成交量：买卖盘最优档位的平均量
+    // 估算成交量
     const bidVol = latestTick.bids[0]?.[1] ?? 0;
     const askVol = latestTick.asks[0]?.[1] ?? 0;
     const tickVolume = (bidVol + askVol) / 2;
@@ -164,7 +216,7 @@ export function useCandleData(latestTick: OrderBook | null) {
         tickCount: 1,
       };
     } else {
-      // 更新 pending K 线的 High/Low/Close/Volume
+      // 更新 pending K 线
       const pending = pendingCandleRef.current;
       pending.high = Math.max(pending.high, price);
       pending.low = Math.min(pending.low, price);
@@ -172,41 +224,70 @@ export function useCandleData(latestTick: OrderBook | null) {
       pending.volume += tickVolume;
       pending.tickCount += 1;
     }
-  }, [latestTick]);
+  }, [latestTick, useRustCandles]);
 
-  /**
-   * 构建当前实时 K 线（用于图表显示未完成的 K 线）
-   */
-  const currentLiveCandle: Candle | null = (() => {
+  // ========== Rust 模式: K 线转换 ==========
+
+  /** 将 Rust K 线历史转换为前端格式 */
+  const rustConvertedCandles = useMemo((): Candle[] => {
+    if (!useRustCandles || !rustCandleHistory) return [];
+    return rustCandleHistory.candles.map(convertWasmCandle);
+  }, [useRustCandles, rustCandleHistory]);
+
+  /** Rust 模式下的当前实时 K 线 */
+  const rustCurrentCandle = useMemo((): Candle | null => {
+    if (!useRustCandles || !rustCandleHistory?.currentCandle) return null;
+    return convertWasmCandle(rustCandleHistory.currentCandle);
+  }, [useRustCandles, rustCandleHistory]);
+
+  /** 当前时间周期 */
+  const currentTimeframe = useMemo((): WasmTimeframe | null => {
+    if (!useRustCandles || !rustCandleHistory) return null;
+    return rustCandleHistory.timeframe;
+  }, [useRustCandles, rustCandleHistory]);
+
+  // ========== 构建实时 K 线 ==========
+
+  const currentLiveCandle: Candle | null = useMemo(() => {
     const pending = pendingCandleRef.current;
     if (!pending || pending.tickCount === 0) return null;
+    return buildLiveCandle(pending, pendingIndicatorsRef.current);
+  }, [latestTick]); // 依赖 latestTick 触发更新
 
-    // 临时计算 MA（包含当前未完成的 close）
-    const tempClosePrices = [...closePricesRef.current, pending.close];
-    const ma5 = calculateSMA(tempClosePrices, MA_PERIODS[0]);
-    const ma10 = calculateSMA(tempClosePrices, MA_PERIODS[1]);
-    const ma20 = calculateSMA(tempClosePrices, MA_PERIODS[2]);
-    const ma30 = calculateSMA(tempClosePrices, MA_PERIODS[3]);
+  // ========== Rust 模式: 指标数据 ==========
 
+  const finalIndicatorData = useMemo((): IndicatorData => {
+    if (!useRustCandles || !rustCandleHistory?.indicators) {
+      return indicatorData;
+    }
+
+    // 直接使用 Rust 计算的指标历史
+    const rustIndicators = rustCandleHistory.indicators;
     return {
-      time: pending.time,
-      timeStr: new Date(pending.time).toLocaleTimeString(),
-      open: pending.open,
-      high: pending.high,
-      low: pending.low,
-      close: pending.close,
-      volume: pending.volume,
-      ma5,
-      ma10,
-      ma20,
-      ma30,
+      sma5: [],
+      ma7: rustIndicators.ma7,
+      ma25: rustIndicators.ma25,
+      ma99: rustIndicators.ma99,
+      ema7: rustIndicators.ema7,
+      ema25: rustIndicators.ema25,
+      rsi14: rustIndicators.rsi14,
+      bollUpper: rustIndicators.bollUpper,
+      bollMid: rustIndicators.bollMid,
+      bollLower: rustIndicators.bollLower,
+      macdDif: rustIndicators.macdDif,
+      macdDea: rustIndicators.macdDea,
+      macdHist: rustIndicators.macdHist,
+      volMa5: [],
     };
-  })();
+  }, [useRustCandles, rustCandleHistory, indicatorData]);
+
+  // ========== 返回值 ==========
 
   return {
-    /** 已完成的 K 线历史 */
-    candleHistory,
-    /** 当前正在形成的实时 K 线 */
-    currentLiveCandle,
+    candleHistory: useRustCandles ? rustConvertedCandles : candleHistory,
+    currentLiveCandle: useRustCandles ? rustCurrentCandle : currentLiveCandle,
+    indicatorData: finalIndicatorData,
+    currentIndicators,
+    currentTimeframe,
   };
 }

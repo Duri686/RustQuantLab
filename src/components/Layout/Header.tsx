@@ -41,18 +41,18 @@ function Header({
   isRunning,
   onToggle,
   price,
-  symbol = 'BBB-AAA',
+  symbol = 'BTC-USDT',
   priceTrend = 'neutral',
   priceColorClass = 'text-white',
 }: HeaderProps) {
   return (
-    <header className="h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-4 flex items-center justify-between">
-      {/* Logo */}
-      <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-md bg-[#1e2026] border border-[#2b2f36] flex items-center justify-center">
-          <span className="text-base">🦀</span>
+    <header className="h-11 md:h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-2 md:px-4 flex items-center justify-between">
+      {/* Logo - 移动端仅显示图标 */}
+      <div className="flex items-center gap-2 md:gap-3">
+        <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-[#1e2026] border border-[#2b2f36] flex items-center justify-center">
+          <span className="text-sm md:text-base">🦀</span>
         </div>
-        <div className="hidden sm:block">
+        <div className="hidden md:block">
           <h1 className="text-sm font-semibold tracking-tight text-white">
             RustQuantLab
           </h1>
@@ -62,28 +62,28 @@ function Header({
         </div>
       </div>
 
-      {/* Center: Market Symbol */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-mono font-semibold text-gray-300">
+      {/* Center: Market Symbol + Price (clamp 流体字体) */}
+      <div className="flex items-center gap-1.5 md:gap-2">
+        <span className="text-[11px] md:text-sm font-mono font-semibold text-gray-300 truncate max-w-[80px] md:max-w-none">
           {symbol}
         </span>
         <span
-          className={`text-sm font-mono font-bold tabular-nums ${priceColorClass}`}
+          className={`text-[clamp(12px,3vw,14px)] md:text-sm font-mono font-bold tabular-nums ${priceColorClass}`}
         >
           ${price?.toFixed(2) ?? '--'}
         </span>
         {priceTrend === 'up' && (
-          <span className="text-[#0ECB81] text-xs">▲</span>
+          <span className="text-[#0ECB81] text-[10px] md:text-xs">▲</span>
         )}
         {priceTrend === 'down' && (
-          <span className="text-[#F6465D] text-xs">▼</span>
+          <span className="text-[#F6465D] text-[10px] md:text-xs">▼</span>
         )}
       </div>
 
       {/* Right: Status & Controls */}
-      <div className="flex items-center gap-3">
-        {/* Live 指示器 */}
-        <div className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+      <div className="flex items-center gap-2 md:gap-3">
+        {/* Live 指示器 - 移动端简化为圆点 */}
+        <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
           <span
             className={`w-1.5 h-1.5 rounded-full ${
               isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
@@ -101,7 +101,7 @@ function Header({
         {/* 播放/暂停按钮 */}
         <button
           onClick={onToggle}
-          className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+          className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
             isRunning
               ? 'bg-[#1e2026] hover:bg-[#2b2f36] text-[#F0B90B] border border-[#2b2f36]'
               : 'bg-[#0ECB81] hover:bg-[#0bb375] text-black'
@@ -109,9 +109,9 @@ function Header({
           title={isRunning ? '暂停数据流' : '启动数据流'}
         >
           {isRunning ? (
-            <PauseIcon className="w-4 h-4" />
+            <PauseIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
           ) : (
-            <PlayIcon className="w-4 h-4" />
+            <PlayIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
           )}
         </button>
       </div>

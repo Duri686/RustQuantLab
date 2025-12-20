@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import type { OrderBookProps } from '../../types/index';
 
 /* ============================================
@@ -130,7 +130,7 @@ function OrderRow({
   const total = price * amount;
 
   return (
-    <div className="relative h-5 grid grid-cols-[1fr_1fr_1fr] items-center px-2 hover:bg-white/5 cursor-pointer group">
+    <div className="relative h-[18px] md:h-5 grid grid-cols-[1fr_1fr_1fr] items-center px-1.5 md:px-2 hover:bg-white/5 cursor-pointer group">
       {/* 深度背景条 */}
       <div
         className="absolute top-0.5 bottom-0.5 right-0 pointer-events-none"
@@ -143,7 +143,7 @@ function OrderRow({
 
       {/* 价格列 - 左对齐 */}
       <span
-        className="relative z-10 font-mono text-[11px] tabular-nums text-left"
+        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-left"
         style={{ color: isBid ? COLORS.bidGreen : COLORS.askRed }}
       >
         {price.toFixed(pricePrecision)}
@@ -151,7 +151,7 @@ function OrderRow({
 
       {/* 数量列 - 右对齐 */}
       <span
-        className="relative z-10 font-mono text-[11px] tabular-nums text-right"
+        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right"
         style={{ color: COLORS.textGray }}
       >
         {amount.toFixed(5)}
@@ -159,7 +159,7 @@ function OrderRow({
 
       {/* 总量列 - 右对齐，移动端隐藏 */}
       <span
-        className="relative z-10 font-mono text-[11px] tabular-nums text-right hidden lg:block"
+        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right hidden lg:block"
         style={{ color: COLORS.textGray }}
       >
         {total.toFixed(2)}
@@ -175,12 +175,29 @@ function OrderRow({
 /** 小数精度选项 */
 const PRECISION_OPTIONS = [0.01, 0.1, 1, 10] as const;
 
+/** 订单簿显示行数配置 */
+const VISIBLE_ROWS_MOBILE = 5;
+const VISIBLE_ROWS_DESKTOP = 50;
+
 /**
- * 订单簿组件
- * 严格匹配 Binance 专业视图风格
+ * 自定义 Hook: 检测是否为移动端视口
+ * 断点: 768px (md breakpoint)
  */
-/** 订单簿显示行数（支持滚动，显示全部层级） */
-const VISIBLE_ROWS = 50;
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // 初始化检测
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+
+    // 监听窗口大小变化
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+}
 
 function OrderBook({
   bids = [],
@@ -190,6 +207,11 @@ function OrderBook({
 }: OrderBookProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('both');
   const [precisionIndex, setPrecisionIndex] = useState(0);
+  const isMobile = useIsMobile();
+
+  // 响应式行数：移动端 5 行，桌面端 50 行
+  const visibleRows = isMobile ? VISIBLE_ROWS_MOBILE : VISIBLE_ROWS_DESKTOP;
+
   const pricePrecision =
     PRECISION_OPTIONS[precisionIndex] === 0.01
       ? 2
@@ -199,17 +221,18 @@ function OrderBook({
 
   /**
    * 计算累计量和最大累计量
+   * 响应式：移动端显示 5 行，桌面端显示 50 行
    */
   const { processedBids, processedAsks, maxCumulativeVolume } = useMemo(() => {
     // 处理买单（降序，累计从上到下）
     let bidCumulative = 0;
-    const processedBids = bids.slice(0, VISIBLE_ROWS).map(([p, q]) => {
+    const processedBids = bids.slice(0, visibleRows).map(([p, q]) => {
       bidCumulative += q;
       return { price: p, amount: q, cumulative: bidCumulative };
     });
 
     // 处理卖单（升序显示，但累计从下到上）
-    const asksSlice = asks.slice(0, VISIBLE_ROWS);
+    const asksSlice = asks.slice(0, visibleRows);
     let askCumulative = 0;
     const processedAsks = asksSlice
       .map(([p, q]) => ({ price: p, amount: q, cumulative: 0 }))
@@ -227,7 +250,7 @@ function OrderBook({
       processedAsks,
       maxCumulativeVolume: maxCumulative,
     };
-  }, [bids, asks]);
+  }, [bids, asks, visibleRows]);
 
   /**
    * 获取价格趋势颜色
@@ -248,15 +271,18 @@ function OrderBook({
   return (
     <div className="bg-terminal-bg flex flex-col h-full overflow-hidden">
       {/* ========== 工具栏 ========== */}
-      <div className="shrink-0 h-9 px-3 flex items-center justify-between border-b border-[#2b2f36]">
+      <div className="shrink-0 h-8 md:h-9 px-2 md:px-3 flex items-center justify-between border-b border-[#2b2f36]">
         {/* 小数精度选择器 */}
         <button
           onClick={cyclePrecision}
-          className="flex items-center gap-1.5 text-[11px] font-mono text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5"
+          className="flex items-center gap-1 md:gap-1.5 text-[10px] md:text-[11px] font-mono text-gray-400 hover:text-white transition-colors px-1.5 md:px-2 py-1 rounded hover:bg-white/5"
         >
           <DecimalsIcon />
           <span>{PRECISION_OPTIONS[precisionIndex].toFixed(2)}</span>
-          <svg viewBox="0 0 12 12" className="w-3 h-3 opacity-50">
+          <svg
+            viewBox="0 0 12 12"
+            className="w-2.5 h-2.5 md:w-3 md:h-3 opacity-50"
+          >
             <path
               d="M3 5l3 3 3-3"
               fill="none"
@@ -290,15 +316,16 @@ function OrderBook({
       </div>
 
       {/* ========== 表头 ========== */}
-      <div className="shrink-0 h-6 grid grid-cols-[1fr_1fr_1fr] px-2 items-center text-[10px] text-gray-500 border-b border-[#2b2f36] bg-[#0d0d0d]">
+      <div className="shrink-0 h-5 md:h-6 grid grid-cols-[1fr_1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[#2b2f36] bg-[#0d0d0d]">
         <span className="text-left">Price</span>
         <span className="text-right">Amount</span>
         <span className="text-right hidden lg:block">Total</span>
       </div>
 
       {/* ========== 卖单区域 ========== */}
+      {/* 移动端固定高度 (5行 x 18px = 90px)，桌面端 flex-1 */}
       {(viewMode === 'both' || viewMode === 'asks') && (
-        <div className="flex-1 overflow-y-auto flex flex-col justify-end min-h-0">
+        <div className="h-[90px] md:flex-1 md:h-auto overflow-y-auto flex flex-col justify-end min-h-0">
           {processedAsks.map((ask, idx) => (
             <OrderRow
               key={`ask-${idx}`}
@@ -314,26 +341,26 @@ function OrderBook({
       )}
 
       {/* ========== 中间价格 Ticker (Sticky) ========== */}
-      <div className="shrink-0 h-10 px-3 bg-[#131722] flex items-center gap-2 border-y border-[#2b2f36]">
-        {/* 当前价格 */}
+      <div className="shrink-0 h-8 md:h-10 px-2 md:px-3 bg-[#131722] flex items-center gap-1.5 md:gap-2 border-y border-[#2b2f36]">
+        {/* 当前价格 - 使用 clamp 流体字体 */}
         <span
-          className="font-mono text-lg font-semibold tabular-nums flex items-center gap-1"
+          className="font-mono text-[clamp(14px,4vw,18px)] md:text-lg font-semibold tabular-nums flex items-center gap-1"
           style={{ color: priceColor }}
         >
           {price?.toFixed(2) ?? '-.--'}
           {priceTrend === 'up' && (
-            <svg viewBox="0 0 12 12" className="w-3 h-3">
+            <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 md:w-3 md:h-3">
               <path d="M6 2l4 8H2z" fill={COLORS.bidGreen} />
             </svg>
           )}
           {priceTrend === 'down' && (
-            <svg viewBox="0 0 12 12" className="w-3 h-3">
+            <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 md:w-3 md:h-3">
               <path d="M6 10l4-8H2z" fill={COLORS.askRed} />
             </svg>
           )}
         </span>
         {/* 美元等值 */}
-        <span className="font-mono text-xs text-gray-500 tabular-nums">
+        <span className="font-mono text-[10px] md:text-xs text-gray-500 tabular-nums">
           ≈ $
           {price?.toLocaleString('en-US', {
             minimumFractionDigits: 2,
@@ -343,8 +370,9 @@ function OrderBook({
       </div>
 
       {/* ========== 买单区域 ========== */}
+      {/* 移动端固定高度 (5行 x 18px = 90px)，桌面端 flex-1 */}
       {(viewMode === 'both' || viewMode === 'bids') && (
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="h-[90px] md:flex-1 md:h-auto overflow-y-auto min-h-0">
           {processedBids.map((bid, idx) => (
             <OrderRow
               key={`bid-${idx}`}

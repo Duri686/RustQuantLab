@@ -11,7 +11,7 @@ import type {
 } from '../types/index';
 
 // 配置常量
-const SYMBOL = 'BBB-AAA';
+const SYMBOL = 'BTC-USDT';
 const BASE_PRICE = 40000.0;
 const PRICE_CHANGE_PERCENT = 0.005; // 每次变动幅度 ±0.5%
 const LEVELS = 50; // 订单簿深度（50 层买卖单）

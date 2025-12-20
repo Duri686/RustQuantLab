@@ -19,6 +19,7 @@ interface StatCellProps {
 /**
  * 高密度指标单元格
  * 紧凑布局：上方小标签，下方大数字
+ * 移动端使用更小的字体和间距
  */
 function StatCell({
   label,
@@ -27,19 +28,21 @@ function StatCell({
   suffix,
 }: StatCellProps) {
   return (
-    <div className="flex flex-col justify-center px-4 py-1 h-full">
-      <span className="text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-1">
+    <div className="flex flex-col justify-center px-2 md:px-4 py-1 h-full">
+      <span className="text-[8px] md:text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-0.5 md:mb-1">
         {label}
       </span>
-      <div className="flex items-baseline gap-1">
+      <div className="flex items-baseline gap-0.5 md:gap-1">
         <span
-          className={`text-base font-bold font-mono tabular-nums leading-none ${colorClass}`}
+          className={`text-[clamp(12px,3vw,16px)] md:text-base font-bold font-mono tabular-nums leading-none ${colorClass}`}
           style={{ textShadow: '0 0 8px currentColor' }}
         >
           {value}
         </span>
         {suffix && (
-          <span className="text-[9px] text-gray-600 font-mono">{suffix}</span>
+          <span className="text-[8px] md:text-[9px] text-gray-600 font-mono">
+            {suffix}
+          </span>
         )}
       </div>
     </div>
@@ -61,27 +64,26 @@ function StatsPanel({
   candleCount,
   isRunning,
 }: StatsPanelProps) {
-  // DEBUG: 检查 Rust 返回的字段名（开发时启用）
-  // console.log('Rust Analysis:', analysisResult);
-
   /**
-   * 获取 SMA5 显示值
-   * 兼容 sma5 和 sma_5 两种命名（Rust serde 可能输出不同格式）
+   * 格式化 SMA5 显示值
+   * 严格使用 WasmAnalysisResult.sma5 字段 (camelCase)
    */
-  const getSma5Value = (): string => {
+  const formatSma5 = (): string => {
     if (!analysisResult) return '--';
-    // 优先尝试 camelCase (sma5)，再尝试 snake_case (sma_5)
-    // Rust serde rename_all="camelCase" 会把 sma_5 转成 sma5
-    const result = analysisResult as unknown as Record<string, unknown>;
-    const sma5 = result.sma5 ?? result.sma_5;
+    const { sma5 } = analysisResult;
     if (sma5 == null) {
-      // 数据不足时显示计算中
       return isRunning ? 'Calc...' : '--';
     }
-    return `$${(sma5 as number).toFixed(2)}`;
+    return `$${sma5.toFixed(2)}`;
   };
   return (
-    <div className="shrink-0 h-16 bg-[#0d0d0d] border-t border-[#2b2f36] grid grid-cols-4 divide-x divide-[#2b2f36]">
+    <div
+      className="
+        shrink-0 h-auto md:h-16 bg-[#0d0d0d] border-t border-[#2b2f36]
+        grid grid-cols-2 md:grid-cols-4
+        divide-x divide-[#2b2f36]
+      "
+    >
       {/* Last Price */}
       <StatCell
         label="Last Price"
@@ -99,32 +101,32 @@ function StatsPanel({
       {/* SMA5 */}
       <StatCell
         label="SMA (5)"
-        value={getSma5Value()}
+        value={formatSma5()}
         colorClass="text-[#00B8D9]"
       />
 
-      {/* Candles / Status */}
-      <div className="flex items-center justify-between px-4">
+      {/* Candles / Status - 移动端简化 */}
+      <div className="flex items-center justify-between px-2 md:px-4 py-1 md:py-0">
         <div className="flex flex-col justify-center h-full">
-          <span className="text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-1">
+          <span className="text-[8px] md:text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-0.5 md:mb-1">
             Candles
           </span>
           <span
-            className="text-base font-bold font-mono tabular-nums leading-none text-[#E040FB]"
+            className="text-[clamp(12px,3vw,16px)] md:text-base font-bold font-mono tabular-nums leading-none text-[#E040FB]"
             style={{ textShadow: '0 0 8px #E040FB' }}
           >
             {candleCount}
           </span>
         </div>
         {/* 状态指示器 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 md:gap-1.5">
           <span
             className={`w-1.5 h-1.5 rounded-full ${
               isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
             }`}
           />
           <span
-            className={`text-[10px] font-mono ${
+            className={`text-[9px] md:text-[10px] font-mono ${
               isRunning ? 'text-[#0ECB81]' : 'text-gray-500'
             }`}
           >

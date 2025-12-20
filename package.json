@@ -8,21 +8,29 @@
         "dev": "npm run build:wasm && vite",
         "build": "npm run build:wasm && vite build",
         "preview": "vite preview",
-        "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+        "lint": "eslint src --max-warnings 0",
+        "lint:fix": "eslint src --fix"
     },
     "dependencies": {
         "echarts": "^6.0.0",
         "echarts-for-react": "^3.0.5",
+        "lucide-react": "^0.562.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1"
     },
     "devDependencies": {
+        "@eslint/js": "^9.17.0",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^18.3.12",
         "@types/react-dom": "^18.3.1",
         "@vitejs/plugin-react": "^4.3.4",
+        "eslint": "^9.17.0",
+        "eslint-plugin-react-hooks": "^5.1.0",
+        "eslint-plugin-react-refresh": "^0.4.16",
+        "globals": "^15.14.0",
         "tailwindcss": "^4.0.0",
         "typescript": "^5.6.3",
+        "typescript-eslint": "^8.18.1",
         "vite": "^5.4.11",
         "vite-plugin-top-level-await": "^1.4.4",
         "vite-plugin-wasm": "^3.3.0"
