@@ -6,12 +6,14 @@
 //! - `models`: 数据结构定义
 //! - `indicators`: 纯数学计算函数 (无状态)
 //! - `engine`: 有状态的市场分析引擎
+//! - `risk`: 风控与强平引擎
 //!
 //! ## 架构角色
 //! 本模块作为 **Logic Layer (The Brain)**，负责:
 //! - 技术指标计算: SMA, EMA, BOLL, MACD, RSI
 //! - 数据清洗与预处理
 //! - 订单预校验
+//! - 风控与强平逻辑 (P0)
 
 use wasm_bindgen::prelude::*;
 
@@ -28,6 +30,9 @@ pub mod indicators;
 /// 市场分析引擎 (有状态)
 mod engine;
 
+/// 风控与强平引擎
+pub mod risk;
+
 // ============================================================================
 // 公共导出
 // ============================================================================
@@ -37,6 +42,9 @@ pub use engine::MarketEngine;
 pub use models::{
     AnalysisResult, BollResult, Candle, CandleHistory, IndicatorHistory, MacdResult, OrderBook, 
     SimOrder, SimOrderResult, SimOrderSide, Timeframe,
+};
+pub use risk::{
+    LiquidationResult, MarginTier, PositionSide, RiskCalculator, RiskConfig, RiskLevel,
 };
 
 // ============================================================================

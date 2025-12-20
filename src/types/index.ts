@@ -27,6 +27,32 @@ export type {
 // 重导出时间周期常量
 export { TIMEFRAMES } from './wasm';
 
+// 重新导出交易类型
+export type {
+  Position,
+  PositionSide,
+  RiskLevel,
+  LiquidationResult,
+  EngineEvent,
+  PositionOpenedEvent,
+  PositionClosedEvent,
+  LiquidatedEvent,
+  MarginWarningEvent,
+  TradingState as WasmTradingState,
+  OpenPositionRequest,
+  OpenPositionResult,
+  ClosePositionResult,
+  UseTradingStateReturn,
+} from './trading';
+
+export {
+  RISK_LEVEL_CONFIG,
+  isPositionOpenedEvent,
+  isPositionClosedEvent,
+  isLiquidatedEvent,
+  isMarginWarningEvent,
+} from './trading';
+
 /* ============================================
    订单簿相关类型
    ============================================ */

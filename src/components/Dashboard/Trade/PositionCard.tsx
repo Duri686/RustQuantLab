@@ -1,17 +1,31 @@
-import { memo, useMemo } from 'react';
-import type { OrderRecord } from '../../../types';
+import { memo } from 'react';
+import type {
+  Position,
+  LiquidationResult,
+  RiskLevel,
+} from '../../../types/trading';
 
 /* ============================================
    Types & Constants
    ============================================ */
 
-interface PositionCardProps {
-  order: OrderRecord;
-  symbol: string;
+/**
+ * WasmPositionCard Props
+ *
+ * 使用 Wasm 引擎计算的 Position 和 LiquidationResult
+ * 🔴 所有盈亏、强平价均由 Rust 计算，前端仅展示
+ */
+export interface WasmPositionCardProps {
+  /** Wasm Position 对象 */
+  position: Position;
+  /** Wasm 风险评估结果 */
+  riskAssessment: LiquidationResult | null;
+  /** 交易对符号 */
+  symbol?: string;
+  /** 当前市场价格 */
   currentPrice: number;
-  availableBalance: number;
+  /** 平仓回调 */
   onClose?: () => void;
-  onAddMargin?: (amount: number) => void;
 }
 
 const COLORS = {
@@ -20,116 +34,59 @@ const COLORS = {
   warning: '#f0b90b',
 } as const;
 
+/** 风险等级颜色映射 */
+const RISK_COLORS: Record<RiskLevel, string> = {
+  Safe: '#0ecb81',
+  Low: '#3b82f6',
+  Medium: '#f0b90b',
+  High: '#f97316',
+  Critical: '#f6465d',
+};
+
 /* ============================================
-   Main Component - Micro-Compact Design
+   Main Component - Wasm-Powered Position Card
    ============================================ */
 
-function PositionCard({
-  order,
-  symbol,
+/**
+ * WasmPositionCard
+ *
+ * 🧠 Brain Transplant: 所有计算逻辑已迁移至 Rust Wasm
+ * - PnL: position.unrealizedPnl (Rust 计算)
+ * - Liq Price: riskAssessment.liquidationPrice (Rust 计算)
+ * - Margin Ratio: riskAssessment.marginRatio (Rust 计算)
+ */
+function WasmPositionCard({
+  position,
+  riskAssessment,
+  symbol = 'BTC',
   currentPrice,
-  availableBalance,
   onClose,
-  onAddMargin,
-}: PositionCardProps) {
-  const isClosed = order.closed;
-  const isLong = order.side === 'buy';
+}: WasmPositionCardProps) {
+  const isLong = position.side === 'Long';
+  const isProfit = position.unrealizedPnl >= 0;
 
-  // 计算盈亏
-  const { pnlValue, pnlPercent, isProfit } = useMemo(() => {
-    if (isClosed) {
-      const realizedPnl = order.realizedPnl ?? 0;
-      const pct = (realizedPnl / order.margin) * 100;
-      return {
-        pnlValue: realizedPnl,
-        pnlPercent: pct,
-        isProfit: realizedPnl >= 0,
-      };
-    }
-    const pct = isLong
-      ? ((currentPrice - order.executedPrice) / order.executedPrice) *
-        100 *
-        order.leverage
-      : ((order.executedPrice - currentPrice) / order.executedPrice) *
-        100 *
-        order.leverage;
-    const value = (order.margin * pct) / 100;
-    return { pnlValue: value, pnlPercent: pct, isProfit: value >= 0 };
-  }, [isClosed, isLong, currentPrice, order]);
+  // 🔴 直接使用 Wasm 计算的值，无本地计算
+  const pnlValue = position.unrealizedPnl;
+  const pnlPercent = position.pnlPercentage;
+  const liquidationPrice =
+    riskAssessment?.liquidationPrice ?? position.liquidationPrice;
+  const marginRatio = riskAssessment?.marginRatio ?? 0;
+  const riskLevel = riskAssessment?.riskLevel ?? 'Safe';
+  const distanceToLiq = riskAssessment?.distanceToLiquidationPct ?? 100;
 
-  // 爆仓价预警
-  const isLiqNear = useMemo(() => {
-    if (isClosed) return false;
-    return (
-      Math.abs((currentPrice - order.liquidationPrice) / currentPrice) < 0.05
-    );
-  }, [isClosed, currentPrice, order.liquidationPrice]);
+  // 风险预警：距离强平 < 10%
+  const isLiqNear = distanceToLiq < 10;
+  const isCritical = riskLevel === 'Critical' || riskLevel === 'High';
 
-  const borderColor = order.liquidated
-    ? COLORS.short
-    : isLong
-    ? COLORS.long
-    : COLORS.short;
+  const borderColor = isLong ? COLORS.long : COLORS.short;
   const pnlColor = isProfit ? COLORS.long : COLORS.short;
+  const riskColor = RISK_COLORS[riskLevel];
 
-  // ==================== 爆仓卡片 ====================
-  if (order.liquidated) {
-    return (
-      <div
-        className="p-2 rounded bg-[#161a25] border-l-2 opacity-70"
-        style={{ borderLeftColor: COLORS.short }}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-gray-400">
-              {symbol}USDT
-            </span>
-            <span className="px-1 py-px text-[9px] font-medium rounded bg-[#f6465d]/20 text-[#f6465d]">
-              LIQUIDATED
-            </span>
-          </div>
-          <span className="text-xs font-mono tabular-nums text-[#f6465d]">
-            {pnlValue.toFixed(2)}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  // ==================== 已平仓卡片 ====================
-  if (isClosed) {
-    return (
-      <div
-        className="p-2 rounded bg-[#161a25] border-l-2 opacity-50"
-        style={{ borderLeftColor: '#3b3f46' }}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-gray-500">
-              {symbol}USDT
-            </span>
-            <span className="text-[10px] text-gray-600">{order.leverage}x</span>
-          </div>
-          <span
-            className="text-xs font-medium font-mono tabular-nums"
-            style={{ color: pnlColor, opacity: 0.7 }}
-          >
-            {isProfit ? '+' : ''}
-            {pnlValue.toFixed(2)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between mt-1 text-[10px] text-gray-600 font-mono tabular-nums">
-          <span>Entry {order.executedPrice.toFixed(2)}</span>
-          <span>Close {order.closePrice?.toFixed(2)}</span>
-        </div>
-      </div>
-    );
-  }
-
-  // ==================== 持仓中卡片 (Micro-Compact) ====================
   return (
     <div
-      className="p-2.5 rounded bg-[#161a25] border-l-2 hover:bg-[#1c2030] transition-colors"
+      className={`p-2.5 rounded bg-[#161a25] border-l-2 hover:bg-[#1c2030] transition-colors ${
+        isCritical ? 'animate-pulse' : ''
+      }`}
       style={{ borderLeftColor: borderColor }}
     >
       {/* Row 1: Symbol & PNL */}
@@ -162,64 +119,38 @@ function PositionCard({
           {isLong ? 'Long' : 'Short'}
         </span>
         <span className="text-[10px] text-gray-500 font-mono">
-          {order.leverage}x
+          {position.leverage}x
         </span>
+        {/* 风险等级 Badge */}
         <span
-          className="text-[10px] px-1 py-px rounded"
+          className="text-[10px] px-1 py-px rounded font-medium"
           style={{
-            backgroundColor:
-              order.marginMode === 'cross'
-                ? 'rgba(59,130,246,0.1)'
-                : 'rgba(240,185,11,0.1)',
-            color: order.marginMode === 'cross' ? '#3b82f6' : '#f0b90b',
+            backgroundColor: `${riskColor}20`,
+            color: riskColor,
           }}
         >
-          {order.marginMode === 'cross' ? 'Cross' : 'Isolated'}
+          {riskLevel}
         </span>
       </div>
 
-      {/* Row 3: Data Grid */}
+      {/* Row 3: Data Grid - All values from Wasm */}
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] mb-2">
         <div className="flex justify-between">
           <span className="text-gray-500">Size</span>
           <span className="text-gray-300 font-mono tabular-nums">
-            {order.size.toFixed(4)}
+            {position.size.toFixed(4)}
           </span>
         </div>
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between">
           <span className="text-gray-500">Margin</span>
-          <div className="flex items-center gap-1">
-            <span className="text-gray-300 font-mono tabular-nums">
-              {order.margin.toFixed(2)}
-            </span>
-            {/* +Margin: 仅 Isolated 模式显示 */}
-            {order.marginMode === 'isolated' && onAddMargin && (
-              <button
-                onClick={() => {
-                  const amt = order.margin * 0.1;
-                  if (amt <= availableBalance) onAddMargin(amt);
-                }}
-                disabled={order.margin * 0.1 > availableBalance}
-                title="追加 10% 保证金"
-                className="w-4 h-4 flex items-center justify-center bg-blue-500/30 hover:bg-blue-500/50 text-white rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <svg
-                  className="w-2.5 h-2.5"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M6 2v8M2 6h8" strokeLinecap="round" />
-                </svg>
-              </button>
-            )}
-          </div>
+          <span className="text-gray-300 font-mono tabular-nums">
+            {position.margin.toFixed(2)}
+          </span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Entry</span>
           <span className="text-gray-300 font-mono tabular-nums">
-            {order.executedPrice.toFixed(2)}
+            {position.entryPrice.toFixed(2)}
           </span>
         </div>
         <div className="flex justify-between">
@@ -228,32 +159,81 @@ function PositionCard({
             {currentPrice.toFixed(2)}
           </span>
         </div>
-        <div className="flex justify-between col-span-2">
+
+        {/* 🔴 P0 Feature: Liq Price from Rust */}
+        <div className="flex justify-between">
           <span className="text-gray-500">Liq. Price</span>
           <span
             className="font-mono tabular-nums"
-            style={{ color: isLiqNear ? '#f6465d' : '#848e9c' }}
+            style={{ color: isLiqNear ? COLORS.short : '#848e9c' }}
           >
-            {order.liquidationPrice.toFixed(2)}
-            {isLiqNear && <span className="ml-1 text-[#f6465d]">⚠</span>}
+            {liquidationPrice.toFixed(2)}
+            {isLiqNear && <span className="ml-1">⚠</span>}
+          </span>
+        </div>
+
+        {/* Margin Ratio from Rust */}
+        <div className="flex justify-between">
+          <span className="text-gray-500">Margin Ratio</span>
+          <span className="font-mono tabular-nums" style={{ color: riskColor }}>
+            {marginRatio.toFixed(2)}x
           </span>
         </div>
       </div>
 
-      {/* Row 4: Actions (TP/SL + Close only) */}
-      <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-[#252a36]">
-        <button className="h-6 px-2 text-[10px] text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors">
-          TP/SL
-        </button>
+      {/* Risk Warning Banner */}
+      {isCritical && riskAssessment?.warningMessage && (
+        <div className="mb-2 px-2 py-1 rounded bg-[#f6465d]/10 border border-[#f6465d]/30">
+          <span className="text-[10px] text-[#f6465d]">
+            ⚠️ {riskAssessment.warningMessage}
+          </span>
+        </div>
+      )}
+
+      {/* Row 4: Actions */}
+      <div className="flex items-center justify-between pt-1.5 border-t border-[#252a36]">
+        <span className="text-[9px] text-gray-600 font-mono">
+          距强平 {distanceToLiq.toFixed(1)}%
+        </span>
         <button
           onClick={() => onClose?.()}
-          className="h-6 px-2 text-[10px] text-gray-400 bg-[#252a36] hover:bg-[#f6465d]/20 hover:text-[#f6465d] rounded transition-colors"
+          className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[#252a36] hover:bg-[#f6465d]/20 hover:text-[#f6465d] rounded transition-colors"
         >
-          Close
+          Close Position
         </button>
       </div>
     </div>
   );
 }
 
-export default memo(PositionCard);
+/* ============================================
+   Empty State Component
+   ============================================ */
+
+export function EmptyPositionState() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8">
+      <div className="w-12 h-12 rounded-full bg-[#1e2026] flex items-center justify-center">
+        <svg
+          className="w-6 h-6 text-gray-600"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+          />
+        </svg>
+      </div>
+      <span className="text-xs text-gray-600">No active position</span>
+      <span className="text-[10px] text-gray-700">
+        Open a Long or Short to start trading
+      </span>
+    </div>
+  );
+}
+
+export default memo(WasmPositionCard);

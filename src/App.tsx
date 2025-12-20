@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTradingEngine } from './hooks/useTradingEngine';
+import { useTradingState } from './hooks/useTradingState';
 import type {
   Timeframe,
   Indicator,
@@ -30,6 +31,7 @@ const SUB_INDICATORS = ['VOL', 'MACD', 'RSI'] as const;
    ============================================ */
 
 function App() {
+  // ========== Market Data Hook (图表、指标) ==========
   const {
     latestData,
     analysisResult,
@@ -42,14 +44,30 @@ function App() {
     error,
     priceTrend,
     priceColorClass,
-    availableBalance,
-    orders,
     toggleFeed,
     setTimeframe,
-    submitOrder,
-    closeOrder,
-    addMargin,
   } = useTradingEngine(100);
+
+  // ========== Trading State Hook (Wasm 交易引擎) ==========
+  const {
+    wasmReady,
+    tradingState,
+    position,
+    riskAssessment,
+    hasPosition,
+    onTick,
+    placeOrder,
+    closePosition,
+    setLeverage,
+  } = useTradingState();
+
+  // ========== 连接数据流到 Wasm 交易引擎 ==========
+  // 每次价格更新时调用 onTick 同步状态
+  useEffect(() => {
+    if (wasmReady && latestData?.price) {
+      onTick(latestData.price);
+    }
+  }, [wasmReady, latestData?.price, onTick]);
 
   // ========== 图表引用 ==========
   const chartRef = useRef<KLineChartHandle>(null);
@@ -265,71 +283,38 @@ function App() {
           </section>
 
           {/* ========== 交易表单区域 (仅平板/桌面端显示) ========== */}
+          {/* 🔴 使用 Wasm 交易状态 */}
           <section className="hidden xl:block h-full min-h-0 border-l border-[#2b2f36]">
             <TradeForm
               symbol="BTC"
               currentPrice={latestData?.price ?? 40000}
-              availableBalance={availableBalance}
-              orders={orders}
-              onCloseOrder={(orderId) =>
-                closeOrder?.(orderId, latestData?.price ?? 40000)
-              }
-              onAddMargin={(orderId, amount) => addMargin?.(orderId, amount)}
-              onSubmit={(order) => {
-                // 提交订单到 Rust 引擎，模拟市场影响
-                const result = submitOrder?.({
-                  side: order.side,
-                  price: order.price,
-                  size: order.size,
-                  leverage: order.leverage,
-                  marginMode:
-                    order.marginMode === 'Cross' ? 'cross' : 'isolated',
-                });
-                if (result) {
-                  console.log(
-                    `✅ 订单执行成功: ${result.side.toUpperCase()} ${
-                      order.size
-                    } BTC @ ${result.executedPrice.toFixed(2)}`,
-                    `\n   价格影响: ${
-                      result.priceImpact >= 0 ? '+' : ''
-                    }${result.priceImpact.toFixed(2)} USDT`,
-                    `\n   成交量: ${result.executedVolume.toFixed(6)} BTC`,
-                  );
-                }
-              }}
+              // Wasm Trading State
+              balance={tradingState?.balance ?? 10000}
+              availableBalance={tradingState?.availableBalance ?? 10000}
+              currentLeverage={tradingState?.leverage ?? 10}
+              position={position}
+              riskAssessment={riskAssessment}
+              hasPosition={hasPosition}
+              // Wasm Actions
+              onPlaceOrder={placeOrder}
+              onClosePosition={closePosition}
+              onSetLeverage={setLeverage}
             />
           </section>
         </div>
       </main>
 
       {/* ========== 移动端 Sticky 底部交易栏 ========== */}
+      {/* 🔴 使用 Wasm placeOrder */}
       <MobileTradebar
         currentPrice={latestData?.price ?? 40000}
         onBuy={() => {
-          // 移动端快速买入：市价单，固定数量，逐仓模式
-          const result = submitOrder?.({
-            side: 'buy',
-            price: latestData?.price ?? 40000,
-            size: 0.01,
-            leverage: 10,
-            marginMode: 'isolated',
-          });
-          if (result) {
-            console.log(`📱 快速买入: ${result.executedPrice.toFixed(2)} USDT`);
-          }
+          // 移动端快速买入：市价单，固定数量
+          placeOrder('LONG', 0.01, tradingState?.leverage ?? 10);
         }}
         onSell={() => {
-          // 移动端快速卖出：市价单，固定数量，逐仓模式
-          const result = submitOrder?.({
-            side: 'sell',
-            price: latestData?.price ?? 40000,
-            size: 0.01,
-            leverage: 10,
-            marginMode: 'isolated',
-          });
-          if (result) {
-            console.log(`📱 快速卖出: ${result.executedPrice.toFixed(2)} USDT`);
-          }
+          // 移动端快速卖出：市价单，固定数量
+          placeOrder('SHORT', 0.01, tradingState?.leverage ?? 10);
         }}
       />
     </div>

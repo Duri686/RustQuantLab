@@ -1,0 +1,514 @@
+/**
+ * @fileoverview 交易状态管理 Hook
+ *
+ * 与 Rust Wasm 交易引擎集成，管理仓位、风控和事件。
+ *
+ * ## 核心功能
+ * - 状态同步: 每 Tick 调用 `onTick()` 更新价格并同步状态
+ * - 事件消费: 自动处理 `EngineEvent` 并触发 Toast 通知
+ * - 风险监控: 实时更新风险评估和预警
+ *
+ * @see core/src/engine.rs - Rust 交易引擎实现
+ * @module hooks/useTradingState
+ */
+
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useToast } from '../components/Toast';
+import type {
+  TradingState,
+  Position,
+  LiquidationResult,
+  EngineEvent,
+  OpenPositionRequest,
+  OpenPositionResult,
+  ClosePositionResult,
+  UseTradingStateReturn,
+} from '../types/trading';
+import {
+  isPositionOpenedEvent,
+  isPositionClosedEvent,
+  isLiquidatedEvent,
+  isMarginWarningEvent,
+  RISK_LEVEL_CONFIG,
+} from '../types/trading';
+
+// ============================================================================
+// Wasm 接口类型 (扩展现有 WasmMarketEngine)
+// ============================================================================
+
+/**
+ * 扩展的 Wasm MarketEngine 接口 (包含交易方法)
+ */
+interface TradingWasmEngine {
+  // 交易状态方法
+  get_trading_state(): TradingState;
+  open_position(request: OpenPositionRequest): OpenPositionResult;
+  close_position(exitPrice?: number): ClosePositionResult;
+  set_leverage(leverage: number): boolean;
+  get_leverage(): number;
+  get_balance(): number;
+  reset_balance(initialBalance?: number): void;
+  has_position(): boolean;
+  pending_event_count(): number;
+}
+
+// ============================================================================
+// 模块级单例 (复用现有 Wasm 初始化逻辑)
+// ============================================================================
+
+interface WasmTradingSingleton {
+  engine: TradingWasmEngine | null;
+  initPromise: Promise<TradingWasmEngine> | null;
+  isInitializing: boolean;
+}
+
+const wasmTradingSingleton: WasmTradingSingleton = {
+  engine: null,
+  initPromise: null,
+  isInitializing: false,
+};
+
+/**
+ * 初始化交易 Wasm 引擎 (单例模式)
+ */
+async function initTradingEngine(): Promise<TradingWasmEngine> {
+  if (wasmTradingSingleton.engine) {
+    return wasmTradingSingleton.engine;
+  }
+
+  if (wasmTradingSingleton.initPromise) {
+    return wasmTradingSingleton.initPromise;
+  }
+
+  wasmTradingSingleton.isInitializing = true;
+  wasmTradingSingleton.initPromise = (async () => {
+    try {
+      const wasm = await import('../../core/pkg/quant_core');
+      if (typeof wasm.default === 'function') {
+        await wasm.default();
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const wasmMod = wasm as any;
+      const engine = new wasmMod.MarketEngine() as TradingWasmEngine;
+
+      wasmTradingSingleton.engine = engine;
+      // eslint-disable-next-line no-console
+      console.log('[TradingState] Wasm 交易引擎初始化成功');
+
+      return engine;
+    } catch (err) {
+      wasmTradingSingleton.initPromise = null;
+      throw err;
+    } finally {
+      wasmTradingSingleton.isInitializing = false;
+    }
+  })();
+
+  return wasmTradingSingleton.initPromise;
+}
+
+// ============================================================================
+// 事件处理类型
+// ============================================================================
+
+/**
+ * Toast 接口 (匹配项目 useToast)
+ */
+interface ToastHandler {
+  success: (message: string, duration?: number) => void;
+  error: (message: string, duration?: number) => void;
+  warning: (message: string, duration?: number) => void;
+  info: (message: string, duration?: number) => void;
+}
+
+/**
+ * 安全格式化数字
+ */
+function safeToFixed(value: number | undefined, digits: number): string {
+  if (value === undefined || value === null || isNaN(value)) {
+    return '0.00';
+  }
+  return value.toFixed(digits);
+}
+
+/**
+ * 处理引擎事件并触发 Toast 通知
+ *
+ * 🔴 注意: Rust serde 可能序列化为 snake_case 或 camelCase
+ * 需要兼容两种格式
+ */
+function handleEngineEvents(events: EngineEvent[], toast: ToastHandler): void {
+  for (const event of events) {
+    // Debug: 打印原始事件结构
+    // eslint-disable-next-line no-console
+    console.log('[TradingState] Event received:', event);
+
+    // 兼容 snake_case 和 camelCase (Rust serde)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const e = event as any;
+
+    if (isPositionOpenedEvent(event) || e.type === 'positionOpened') {
+      const side = e.side ?? 'UNKNOWN';
+      const size = e.size ?? e.position_size ?? 0;
+      const entryPrice = e.entryPrice ?? e.entry_price ?? 0;
+      toast.success(
+        `开仓成功: ${side} ${safeToFixed(size, 4)} BTC @ ${safeToFixed(
+          entryPrice,
+          2,
+        )}`,
+      );
+    } else if (isPositionClosedEvent(event) || e.type === 'positionClosed') {
+      const realizedPnl = e.realizedPnl ?? e.realized_pnl ?? 0;
+      const pnlSign = realizedPnl >= 0 ? '+' : '';
+      toast.success(
+        `平仓成功: 盈亏 ${pnlSign}${safeToFixed(realizedPnl, 2)} USDT`,
+      );
+    } else if (isLiquidatedEvent(event) || e.type === 'liquidated') {
+      const side = e.side ?? 'UNKNOWN';
+      const size = e.size ?? 0;
+      const lostMargin = e.lostMargin ?? e.lost_margin ?? 0;
+      toast.error(
+        `⚠️ 强制平仓: ${side} ${safeToFixed(size, 4)} BTC，损失 ${safeToFixed(
+          lostMargin,
+          2,
+        )} USDT`,
+        8000,
+      );
+    } else if (isMarginWarningEvent(event) || e.type === 'marginWarning') {
+      const riskLevel = e.riskLevel ?? e.risk_level ?? 'Unknown';
+      const marginRatio = e.marginRatio ?? e.margin_ratio ?? 0;
+      const config =
+        RISK_LEVEL_CONFIG[riskLevel as keyof typeof RISK_LEVEL_CONFIG];
+      toast.warning(
+        `风险预警 [${config?.label || riskLevel}]: 保证金率 ${safeToFixed(
+          marginRatio,
+          2,
+        )}x`,
+        5000,
+      );
+    } else {
+      // 未知事件类型，记录日志
+      console.warn('[TradingState] Unknown event type:', e.type, event);
+    }
+  }
+}
+
+// ============================================================================
+// Hook 实现
+// ============================================================================
+
+/**
+ * useTradingState Hook
+ *
+ * 管理与 Rust Wasm 交易引擎的交互。
+ *
+ * @example
+ * ```tsx
+ * const {
+ *   tradingState,
+ *   position,
+ *   hasPosition,
+ *   onTick,
+ *   placeOrder,
+ *   closePosition,
+ * } = useTradingState();
+ *
+ * // 每 Tick 更新
+ * useEffect(() => {
+ *   if (latestPrice) onTick(latestPrice);
+ * }, [latestPrice, onTick]);
+ *
+ * // 开仓
+ * const handleBuy = () => placeOrder('LONG', 0.1, 10);
+ * ```
+ */
+export function useTradingState(): UseTradingStateReturn {
+  // ========== Toast ==========
+  const toast = useToast();
+
+  // ========== Wasm 状态 ==========
+  const [wasmReady, setWasmReady] = useState(false);
+  const engineRef = useRef<TradingWasmEngine | null>(null);
+  const engineAlive = useRef(false);
+
+  // ========== 交易状态 ==========
+  const [tradingState, setTradingState] = useState<TradingState | null>(null);
+  const [lastEvents, setLastEvents] = useState<EngineEvent[]>([]);
+
+  // ========== 并发控制 ==========
+  const isProcessingRef = useRef(false);
+
+  // ========== 初始化 Wasm ==========
+  useEffect(() => {
+    let aborted = false;
+
+    const init = async () => {
+      try {
+        const engine = await initTradingEngine();
+        if (aborted) return;
+
+        engineRef.current = engine;
+        engineAlive.current = true;
+        setWasmReady(true);
+
+        // 获取初始状态
+        try {
+          const state = engine.get_trading_state();
+          setTradingState(state);
+        } catch {
+          // 初始状态获取失败不阻塞
+        }
+      } catch (err) {
+        console.error('[TradingState] Wasm 初始化失败:', err);
+      }
+    };
+
+    init();
+
+    return () => {
+      aborted = true;
+      engineAlive.current = false;
+      engineRef.current = null;
+    };
+  }, []);
+
+  // ========== 便捷访问 ==========
+  const position: Position | null = tradingState?.position ?? null;
+  const riskAssessment: LiquidationResult | null =
+    tradingState?.riskAssessment ?? null;
+  const hasPosition = position !== null;
+
+  // ========== onTick: 价格更新 + 状态同步 ==========
+  const onTick = useCallback(
+    (_currentPrice: number) => {
+      if (!engineAlive.current || !engineRef.current) return;
+      if (isProcessingRef.current) return;
+
+      isProcessingRef.current = true;
+
+      try {
+        // 注意: on_tick 在 Rust 端已经内部调用 update_price
+        // 这里直接获取最新状态即可
+        const state = engineRef.current.get_trading_state();
+        setTradingState(state);
+
+        // 处理事件 (单独 try-catch 防止事件处理错误影响状态更新)
+        if (state.pendingEvents && state.pendingEvents.length > 0) {
+          try {
+            handleEngineEvents(state.pendingEvents, toast);
+          } catch (eventErr) {
+            console.error('[TradingState] 事件处理错误:', eventErr);
+          }
+          setLastEvents(state.pendingEvents);
+        }
+      } catch (err) {
+        // 静默处理，避免日志刷屏
+        if (engineAlive.current) {
+          console.error('[TradingState] onTick 错误:', err);
+        }
+      } finally {
+        isProcessingRef.current = false;
+      }
+    },
+    [toast],
+  );
+
+  // ========== placeOrder: 开仓 ==========
+  const placeOrder = useCallback(
+    (
+      side: 'LONG' | 'SHORT',
+      size: number,
+      leverage?: number,
+    ): OpenPositionResult | null => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[TradingState] 引擎未就绪');
+        return null;
+      }
+
+      if (isProcessingRef.current) {
+        console.warn('[TradingState] 引擎正忙');
+        return null;
+      }
+
+      isProcessingRef.current = true;
+
+      let result: OpenPositionResult | null = null;
+
+      try {
+        // 设置杠杆 (如果指定)
+        if (leverage !== undefined) {
+          engineRef.current.set_leverage(leverage);
+        }
+
+        // 构建开仓请求
+        const request: OpenPositionRequest = {
+          side: side.toLowerCase(),
+          size,
+        };
+
+        // 调用 Wasm 开仓
+        result = engineRef.current.open_position(request);
+
+        // 同步状态
+        const state = engineRef.current.get_trading_state();
+        setTradingState(state);
+
+        // 处理事件 (单独 try-catch 防止事件处理错误影响结果)
+        if (state.pendingEvents && state.pendingEvents.length > 0) {
+          try {
+            handleEngineEvents(state.pendingEvents, toast);
+          } catch (eventErr) {
+            console.error('[TradingState] 事件处理错误:', eventErr);
+            // 事件处理错误不影响开仓结果
+          }
+          setLastEvents(state.pendingEvents);
+        }
+
+        // Wasm 返回失败时显示错误
+        if (!result.success) {
+          toast.error(`开仓失败: ${result.message}`);
+        }
+
+        return result;
+      } catch (err) {
+        console.error('[TradingState] 开仓失败:', err);
+        // 只有在 result 为空时才显示错误（真正的开仓失败）
+        if (!result) {
+          toast.error(
+            `开仓失败: ${err instanceof Error ? err.message : '未知错误'}`,
+          );
+        }
+        return result;
+      } finally {
+        isProcessingRef.current = false;
+      }
+    },
+    [toast],
+  );
+
+  // ========== closePosition: 平仓 ==========
+  const closePosition = useCallback(
+    (exitPrice?: number): ClosePositionResult | null => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[TradingState] 引擎未就绪');
+        return null;
+      }
+
+      if (isProcessingRef.current) {
+        console.warn('[TradingState] 引擎正忙');
+        return null;
+      }
+
+      isProcessingRef.current = true;
+
+      let result: ClosePositionResult | null = null;
+
+      try {
+        // 调用 Wasm 平仓
+        result = engineRef.current.close_position(exitPrice);
+
+        // 同步状态
+        const state = engineRef.current.get_trading_state();
+        setTradingState(state);
+
+        // 处理事件 (单独 try-catch)
+        if (state.pendingEvents && state.pendingEvents.length > 0) {
+          try {
+            handleEngineEvents(state.pendingEvents, toast);
+          } catch (eventErr) {
+            console.error('[TradingState] 事件处理错误:', eventErr);
+          }
+          setLastEvents(state.pendingEvents);
+        }
+
+        // Wasm 返回失败时显示错误
+        if (!result.success) {
+          toast.error(`平仓失败: ${result.message}`);
+        }
+
+        return result;
+      } catch (err) {
+        console.error('[TradingState] 平仓失败:', err);
+        if (!result) {
+          toast.error(
+            `平仓失败: ${err instanceof Error ? err.message : '未知错误'}`,
+          );
+        }
+        return result;
+      } finally {
+        isProcessingRef.current = false;
+      }
+    },
+    [toast],
+  );
+
+  // ========== setLeverage: 设置杠杆 ==========
+  const setLeverage = useCallback(
+    (leverage: number): boolean => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[TradingState] 引擎未就绪');
+        return false;
+      }
+
+      try {
+        const success = engineRef.current.set_leverage(leverage);
+        if (success) {
+          // 同步状态
+          const state = engineRef.current.get_trading_state();
+          setTradingState(state);
+          toast.success(`杠杆已设置为 ${leverage}x`);
+        } else {
+          toast.error('无法修改杠杆: 持仓期间不能修改杠杆');
+        }
+        return success;
+      } catch (err) {
+        console.error('[TradingState] 设置杠杆失败:', err);
+        return false;
+      }
+    },
+    [toast],
+  );
+
+  // ========== resetAccount: 重置账户 ==========
+  const resetAccount = useCallback(
+    (initialBalance?: number): void => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[TradingState] 引擎未就绪');
+        return;
+      }
+
+      try {
+        engineRef.current.reset_balance(initialBalance);
+
+        // 同步状态
+        const state = engineRef.current.get_trading_state();
+        setTradingState(state);
+
+        toast.success(`账户已重置，余额: ${state.balance.toFixed(2)} USDT`);
+      } catch (err) {
+        console.error('[TradingState] 重置账户失败:', err);
+      }
+    },
+    [toast],
+  );
+
+  return {
+    // 状态
+    wasmReady,
+    tradingState,
+    position,
+    riskAssessment,
+    hasPosition,
+    lastEvents,
+
+    // 操作方法
+    onTick,
+    placeOrder,
+    closePosition,
+    setLeverage,
+    resetAccount,
+  };
+}
+
+export default useTradingState;
