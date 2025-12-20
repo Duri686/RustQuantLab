@@ -3,7 +3,10 @@
 //! 测试 MarketEngine 的完整交易流程和各组件协调工作。
 
 use super::*;
-use crate::trading::{DEFAULT_INITIAL_BALANCE, DEFAULT_LEVERAGE, OrderType};
+use super::market_engine::MarketEngine;
+use crate::models::OrderBook;
+use crate::risk::PositionSide;
+use crate::trading::{DEFAULT_INITIAL_BALANCE, DEFAULT_LEVERAGE, MarginMode, OrderType};
 
 /// 测试辅助: 创建开仓请求
 fn make_open_request(side: &str, size: f64) -> OpenPositionRequest {
@@ -27,14 +30,13 @@ fn make_open_request(side: &str, size: f64) -> OpenPositionRequest {
 fn test_engine_new() {
     let engine = MarketEngine::new();
     assert_eq!(engine.history_length(), 0);
-    assert_eq!(engine.max_history_size, MAX_HISTORY_SIZE);
 }
 
 #[test]
 fn test_engine_push_price() {
     let mut engine = MarketEngine::new();
-    engine.push_price(100.0);
-    engine.push_price(200.0);
+    engine.tick_data.push_price(100.0);
+    engine.tick_data.push_price(200.0);
     assert_eq!(engine.history_length(), 2);
     assert_eq!(engine.prices(), &[100.0, 200.0]);
 }
@@ -42,16 +44,15 @@ fn test_engine_push_price() {
 #[test]
 fn test_engine_max_capacity() {
     let mut engine = MarketEngine::new();
-    engine.max_history_size = 100;
 
-    // 插入 200 个数据点，触发批量清理 (阈值 50)
-    for i in 1..=200 {
-        engine.push_price(i as f64);
+    // 插入 1200 个数据点，触发批量清理 (最大容量 1000, 阈值 50)
+    for i in 1..=1200 {
+        engine.tick_data.push_price(i as f64);
     }
 
-    // 批量清理后应该保持在 max_history_size + threshold 范围内
-    assert!(engine.history_length() <= engine.max_history_size + BATCH_CLEANUP_THRESHOLD);
-    assert!(engine.history_length() >= engine.max_history_size);
+    // 批量清理后应该保持在合理范围内
+    assert!(engine.history_length() <= 1050); // max_size + threshold
+    assert!(engine.history_length() >= 1000); // 至少 max_size
 }
 
 #[test]
@@ -72,7 +73,7 @@ fn test_engine_estimate_volume() {
         bids: vec![(99.0, 10.0)],
         asks: vec![(101.0, 20.0)],
     };
-    assert_eq!(engine.estimate_volume(&order_book), 15.0);
+    assert_eq!(engine.tick_data.estimate_volume(&order_book), 15.0);
 }
 
 #[test]
