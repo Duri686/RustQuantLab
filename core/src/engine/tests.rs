@@ -3,7 +3,7 @@
 //! 测试 MarketEngine 的完整交易流程和各组件协调工作。
 
 use super::*;
-use crate::trading::{DEFAULT_INITIAL_BALANCE, DEFAULT_LEVERAGE};
+use crate::trading::{DEFAULT_INITIAL_BALANCE, DEFAULT_LEVERAGE, OrderType};
 
 /// 测试辅助: 创建开仓请求
 fn make_open_request(side: &str, size: f64) -> OpenPositionRequest {
@@ -12,8 +12,10 @@ fn make_open_request(side: &str, size: f64) -> OpenPositionRequest {
         side: side.to_string(),
         size,
         price: None,
+        current_price: None,
         leverage: None,
         margin_mode: MarginMode::Cross,
+        order_type: OrderType::Market,
     }
 }
 
@@ -157,8 +159,8 @@ fn test_open_position_insufficient_margin() {
 }
 
 #[test]
-fn test_one_way_mode_netting() {
-    // One-Way Mode: 反向订单执行 Netting (减仓)
+fn test_hedge_mode_independent_positions() {
+    // Hedge Mode: 多空仓位独立存在，不执行 Netting
     let mut engine = MarketEngine::with_prices(vec![50_000.0])
         .with_balance(10_000.0)
         .with_current_price(50_000.0);
@@ -166,16 +168,25 @@ fn test_one_way_mode_netting() {
     // 开多仓 0.1 BTC
     let req1 = make_open_request("long", 0.1);
     engine.open_position_internal(req1);
-    assert_eq!(engine.get_test_position().unwrap().size, 0.1);
+    
+    let long_pos = engine.position_manager.get("BTCUSDT_Long").unwrap();
+    assert_eq!(long_pos.size, 0.1);
 
-    // 反向订单 0.05 BTC → 应该减仓到 0.05 BTC (Netting)
+    // 开空仓 0.05 BTC → Hedge Mode 下创建独立的空头仓位
     let req2 = make_open_request("short", 0.05);
     let result = engine.open_position_internal(req2);
-    assert!(result.success, "One-Way Mode 应该允许反向订单 (Netting)");
+    assert!(result.success, "Hedge Mode 应该允许开反向仓位");
     
-    // 验证仓位被减少
-    let pos = engine.get_test_position().unwrap();
-    assert!((pos.size - 0.05).abs() < 1e-10, "仓位应该减少到 0.05");
+    // 验证多头仓位不变
+    let long_pos = engine.position_manager.get("BTCUSDT_Long").unwrap();
+    assert!((long_pos.size - 0.1).abs() < 1e-10, "多头仓位应该保持不变");
+    
+    // 验证空头仓位被创建
+    let short_pos = engine.position_manager.get("BTCUSDT_Short").unwrap();
+    assert!((short_pos.size - 0.05).abs() < 1e-10, "空头仓位应该被创建");
+    
+    // 总共有两个仓位
+    assert_eq!(engine.position_manager.len(), 2);
 }
 
 #[test]
@@ -212,8 +223,8 @@ fn test_close_position() {
     let req = make_open_request("long", 0.1);
     engine.open_position_internal(req);
 
-    // 价格上涨后平仓
-    let result = engine.close_position_internal("BTCUSDT", 51_000.0, None, false);
+    // 价格上涨后平仓 (Hedge Mode: 使用 position_key)
+    let result = engine.close_position_internal("BTCUSDT_Long", 51_000.0, None, false);
     assert!(result.success);
     
     // 盈利 = (51000 - 50000) * 0.1 = 100 USDT

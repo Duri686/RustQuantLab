@@ -22,8 +22,11 @@ import type {
   OpenPositionRequest,
   OpenPositionResult,
   ClosePositionResult,
+  CancelOrderResult,
   UseTradingStateReturn,
   MarginMode,
+  OrderType,
+  PendingOrder,
 } from '../types/trading';
 import {
   isPositionOpenedEvent,
@@ -58,6 +61,10 @@ interface TradingWasmEngine {
   reset_balance(initialBalance?: number): void;
   has_position(): boolean;
   pending_event_count(): number;
+  // 挂单管理方法
+  pending_order_count(): number;
+  cancel_order(orderId: string): CancelOrderResult;
+  cancel_all_orders(): CancelOrderResult;
 }
 
 // ============================================================================
@@ -139,6 +146,29 @@ function handleEngineEvents(events: EngineEvent[], toast: ToastHandler): void {
         )}x`,
         5000,
       );
+    } else if (e.type === 'limitOrderCreated') {
+      const side = e.side ?? 'UNKNOWN';
+      const size = e.size ?? 0;
+      const limitPrice = e.limitPrice ?? e.limit_price ?? 0;
+      toast.info(
+        `限价单已创建: ${side} ${safeToFixed(size, 4)} @ ${safeToFixed(
+          limitPrice,
+          2,
+        )}`,
+      );
+    } else if (e.type === 'limitOrderFilled') {
+      const side = e.side ?? 'UNKNOWN';
+      const size = e.size ?? 0;
+      const fillPrice = e.fillPrice ?? e.fill_price ?? 0;
+      toast.success(
+        `限价单已成交: ${side} ${safeToFixed(size, 4)} @ ${safeToFixed(
+          fillPrice,
+          2,
+        )}`,
+      );
+    } else if (e.type === 'limitOrderCancelled') {
+      const releasedMargin = e.releasedMargin ?? e.released_margin ?? 0;
+      toast.info(`挂单已取消，解冻 ${safeToFixed(releasedMargin, 2)} USDT`);
     } else {
       // 未知事件类型，记录日志
       console.warn('[TradingState] Unknown event type:', e.type, event);
@@ -293,6 +323,9 @@ export function useTradingState(): UseTradingStateReturn {
       size: number,
       leverage?: number,
       marginMode?: MarginMode,
+      orderType?: OrderType,
+      price?: number,
+      currentPrice?: number,
     ): OpenPositionResult | null => {
       if (!engineAlive.current || !engineRef.current) {
         console.warn('[TradingState] 引擎未就绪');
@@ -319,6 +352,9 @@ export function useTradingState(): UseTradingStateReturn {
           side: side.toLowerCase(),
           size,
           marginMode: marginMode ?? 'cross',
+          orderType: orderType ?? 'market',
+          price: orderType === 'limit' ? price : undefined,
+          currentPrice: orderType === 'limit' ? currentPrice : undefined,
         };
 
         // 调用 Wasm 开仓
@@ -479,6 +515,46 @@ export function useTradingState(): UseTradingStateReturn {
     [toast],
   );
 
+  // ========== cancelOrder: 取消挂单 ==========
+  const cancelOrder = useCallback(
+    (orderId: string): CancelOrderResult | null => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[TradingState] 引擎未就绪');
+        return null;
+      }
+
+      try {
+        const result = engineRef.current.cancel_order(orderId);
+
+        // 同步状态
+        const state = engineRef.current.get_trading_state();
+        setTradingState(state);
+
+        // 处理事件
+        if (state.pendingEvents && state.pendingEvents.length > 0) {
+          try {
+            handleEngineEvents(state.pendingEvents, toast);
+          } catch (eventErr) {
+            console.error('[TradingState] 事件处理错误:', eventErr);
+          }
+          setLastEvents(state.pendingEvents);
+        }
+
+        return result;
+      } catch (err) {
+        console.error('[TradingState] 取消挂单失败:', err);
+        toast.error(
+          `取消挂单失败: ${err instanceof Error ? err.message : '未知错误'}`,
+        );
+        return null;
+      }
+    },
+    [toast],
+  );
+
+  // ========== 挂单列表便捷访问 ==========
+  const pendingOrders: PendingOrder[] = tradingState?.pendingOrders ?? [];
+
   return {
     // 状态
     wasmReady,
@@ -487,6 +563,7 @@ export function useTradingState(): UseTradingStateReturn {
     riskAssessment,
     hasPosition,
     lastEvents,
+    pendingOrders,
 
     // 操作方法
     onTick,
@@ -494,6 +571,7 @@ export function useTradingState(): UseTradingStateReturn {
     closePosition,
     setLeverage,
     resetAccount,
+    cancelOrder,
   };
 }
 

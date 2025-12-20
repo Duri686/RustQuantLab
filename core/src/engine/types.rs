@@ -33,7 +33,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::risk::LiquidationResult;
-use crate::trading::{MarginMode, Position};
+use crate::trading::{MarginMode, OrderType, PendingOrder, Position};
 
 // ============================================================================
 // 引擎事件
@@ -127,6 +127,32 @@ pub enum EngineEvent {
         total_maintenance_margin: f64,
         risk_level: String,
     },
+    /// 限价单已创建
+    #[serde(rename_all = "camelCase")]
+    LimitOrderCreated {
+        order_id: String,
+        symbol: String,
+        side: String,
+        size: f64,
+        limit_price: f64,
+        leverage: u8,
+    },
+    /// 限价单已触发成交
+    #[serde(rename_all = "camelCase")]
+    LimitOrderFilled {
+        order_id: String,
+        symbol: String,
+        side: String,
+        size: f64,
+        fill_price: f64,
+    },
+    /// 限价单已取消
+    #[serde(rename_all = "camelCase")]
+    LimitOrderCancelled {
+        order_id: String,
+        symbol: String,
+        released_margin: f64,
+    },
 }
 
 // ============================================================================
@@ -159,6 +185,8 @@ pub struct TradingState {
     pub risk_assessment: Option<LiquidationResult>,
     /// 待处理事件队列
     pub pending_events: Vec<EngineEvent>,
+    /// 活跃挂单列表
+    pub pending_orders: Vec<PendingOrder>,
 }
 
 // ============================================================================
@@ -178,11 +206,16 @@ pub struct OpenPositionRequest {
     pub size: f64,
     /// 可选: 指定开仓价格 (默认使用当前市价)
     pub price: Option<f64>,
+    /// 当前市场价格 (限价单必填，用于确定触发方向)
+    pub current_price: Option<f64>,
     /// 可选: 杠杆倍数 (默认使用引擎当前杠杆)
     pub leverage: Option<u8>,
     /// 保证金模式 (默认 Cross)
     #[serde(default)]
     pub margin_mode: MarginMode,
+    /// 订单类型 (默认 Market)
+    #[serde(default)]
+    pub order_type: OrderType,
 }
 
 fn default_symbol() -> String {
@@ -210,4 +243,29 @@ pub struct ClosePositionResult {
     pub realized_pnl: f64,
     pub exit_price: f64,
     pub new_balance: f64,
+}
+
+/// 挂单创建结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaceOrderResult {
+    pub success: bool,
+    pub message: String,
+    /// 市价单: 返回仓位; 限价单: 返回挂单 ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<Position>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+}
+
+/// 取消挂单结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelOrderResult {
+    pub success: bool,
+    pub message: String,
+    /// 解冻的保证金
+    pub released_margin: f64,
 }

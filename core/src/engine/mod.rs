@@ -24,6 +24,7 @@ mod tests;
 // 重新导出公共类型
 pub use types::{
     ClosePositionResult, EngineEvent, OpenPositionRequest, OpenPositionResult, TradingState,
+    PlaceOrderResult, CancelOrderResult,
 };
 
 use std::collections::HashMap;
@@ -34,7 +35,7 @@ use crate::models::{
     AnalysisResult, CandleHistory, OrderBook, SimOrder, SimOrderResult, SimOrderSide, Timeframe,
 };
 use crate::risk::{LiquidationResult, RiskConfig};
-use crate::trading::{Position, PositionManager, TradingAccount};
+use crate::trading::{OrderType, PendingOrderManager, Position, PositionManager, TradingAccount};
 
 // 测试模块需要的额外导入
 #[cfg(test)]
@@ -108,6 +109,9 @@ pub struct MarketEngine {
     /// 仓位管理器 (封装多仓位 CRUD 和 One-Way Mode 逻辑)
     position_manager: PositionManager,
 
+    /// 挂单管理器 (限价单队列)
+    pending_order_manager: PendingOrderManager,
+
     /// 最新风险评估结果 (当前选中仓位)
     risk_assessment: Option<LiquidationResult>,
 
@@ -135,6 +139,7 @@ impl MarketEngine {
             current_price: 0.0,
             symbol_prices: HashMap::new(),
             position_manager: PositionManager::new(),
+            pending_order_manager: PendingOrderManager::new(),
             risk_assessment: None,
             pending_events: Vec::new(),
         }
@@ -303,6 +308,7 @@ impl MarketEngine {
             position: primary_position,
             risk_assessment: self.risk_assessment.clone(),
             pending_events: events,
+            pending_orders: self.pending_order_manager.to_vec(),
         };
 
         serde_wasm_bindgen::to_value(&state)
@@ -331,6 +337,7 @@ impl MarketEngine {
     pub fn reset_balance(&mut self, initial_balance: Option<f64>) {
         self.account.reset(initial_balance);
         self.position_manager.clear();
+        self.pending_order_manager.clear();
         self.symbol_prices.clear();
         self.risk_assessment = None;
         self.pending_events.clear();
@@ -412,6 +419,30 @@ impl MarketEngine {
     pub fn pending_event_count(&self) -> usize {
         self.pending_events.len()
     }
+
+    /// 获取活跃挂单数量
+    pub fn pending_order_count(&self) -> usize {
+        self.pending_order_manager.active_count()
+    }
+
+    /// 取消挂单
+    pub fn cancel_order(&mut self, order_id: &str) -> Result<JsValue, JsValue> {
+        let result = self.cancel_order_internal(order_id);
+        serde_wasm_bindgen::to_value(&result)
+            .map_err(|e| JsValue::from_str(&format!("序列化取消结果失败: {}", e)))
+    }
+
+    /// 取消所有挂单
+    pub fn cancel_all_orders(&mut self) -> Result<JsValue, JsValue> {
+        let total_released = self.pending_order_manager.cancel_all();
+        let result = CancelOrderResult {
+            success: true,
+            message: format!("已取消所有挂单，解冻保证金 {:.2} USDT", total_released),
+            released_margin: total_released,
+        };
+        serde_wasm_bindgen::to_value(&result)
+            .map_err(|e| JsValue::from_str(&format!("序列化取消结果失败: {}", e)))
+    }
 }
 
 // ============================================================================
@@ -467,6 +498,16 @@ impl MarketEngine {
 
     /// 更新价格并执行风险检查
     fn update_price(&mut self, price: f64) {
+        // 1. 检查挂单触发
+        let timestamp = self.get_timestamp();
+        let triggered_orders = self.pending_order_manager.check_triggers(price, timestamp);
+        
+        // 执行触发的挂单
+        for order in triggered_orders {
+            self.execute_triggered_order(order, price);
+        }
+
+        // 2. 更新仓位 PnL 和风险检查
         let positions_to_liquidate = TradingExecutor::update_price(
             price,
             &mut self.current_price,
@@ -478,7 +519,7 @@ impl MarketEngine {
             &mut self.pending_events,
         );
 
-        // 执行强平
+        // 3. 执行强平
         // position_key 是 "BTCUSDT_Long" 格式，需要提取 display_symbol 来获取价格
         for position_key in positions_to_liquidate {
             // 从 position_key 提取 display_symbol (如 "BTCUSDT_Long" -> "BTCUSDT")
@@ -490,20 +531,205 @@ impl MarketEngine {
         }
     }
 
-    /// 开仓内部实现
-    fn open_position_internal(&mut self, req: OpenPositionRequest) -> OpenPositionResult {
-        // 提前获取时间戳，避免借用冲突
+    /// 执行触发的挂单
+    fn execute_triggered_order(&mut self, order: crate::trading::PendingOrder, fill_price: f64) {
+        use crate::risk::PositionSide;
+        use crate::trading::MarginMode;
+
+        // 发送挂单成交事件
+        self.pending_events.push(EngineEvent::LimitOrderFilled {
+            order_id: order.id.clone(),
+            symbol: order.symbol.clone(),
+            side: format!("{:?}", order.side),
+            size: order.size,
+            fill_price,
+        });
+
+        // 构建开仓请求 (挂单触发后以市价执行)
+        let req = OpenPositionRequest {
+            symbol: order.symbol,
+            side: match order.side {
+                PositionSide::Long => "long".to_string(),
+                PositionSide::Short => "short".to_string(),
+            },
+            size: order.size,
+            price: Some(fill_price),
+            current_price: None, // 市价单不需要
+            leverage: Some(order.leverage),
+            margin_mode: order.margin_mode,
+            order_type: OrderType::Market,
+        };
+
+        // 执行开仓
         let timestamp = self.get_timestamp();
-        TradingExecutor::open_position(
+        let _ = TradingExecutor::open_position(
             req,
-            self.current_price,
+            fill_price,
             &mut self.position_manager,
             &mut self.account,
             &self.risk_config,
             &mut self.pending_events,
             &mut self.risk_assessment,
             || timestamp,
-        )
+        );
+    }
+
+    /// 开仓内部实现 (支持市价单和限价单)
+    fn open_position_internal(&mut self, req: OpenPositionRequest) -> OpenPositionResult {
+        use crate::risk::PositionSide;
+        use crate::trading::PendingOrder;
+
+        // 市价单: 立即执行
+        if req.order_type == OrderType::Market {
+            let timestamp = self.get_timestamp();
+            return TradingExecutor::open_position(
+                req,
+                self.current_price,
+                &mut self.position_manager,
+                &mut self.account,
+                &self.risk_config,
+                &mut self.pending_events,
+                &mut self.risk_assessment,
+                || timestamp,
+            );
+        }
+
+        // 限价单: 创建挂单
+        let limit_price = match req.price {
+            Some(p) if p > 0.0 => p,
+            _ => {
+                return OpenPositionResult {
+                    success: false,
+                    message: "限价单必须指定价格".to_string(),
+                    position: None,
+                    error_code: Some("LIMIT_PRICE_REQUIRED".to_string()),
+                };
+            }
+        };
+
+        // 解析方向
+        let order_side = match req.side.to_lowercase().as_str() {
+            "long" | "buy" => PositionSide::Long,
+            "short" | "sell" => PositionSide::Short,
+            _ => {
+                return OpenPositionResult {
+                    success: false,
+                    message: format!("无效的仓位方向: {}", req.side),
+                    position: None,
+                    error_code: Some("INVALID_SIDE".to_string()),
+                };
+            }
+        };
+
+        let leverage = req.leverage.unwrap_or(self.account.leverage());
+
+        // 计算需要冻结的保证金
+        let notional_value = req.size * limit_price;
+        let imr = self.risk_config.get_initial_margin_rate(notional_value);
+        let frozen_margin = notional_value * imr;
+
+        // 检查可用余额 (考虑已冻结保证金)
+        let available = self.account.calculate_available_balance(&self.position_manager)
+            - self.pending_order_manager.total_frozen_margin();
+        if frozen_margin > available {
+            return OpenPositionResult {
+                success: false,
+                message: format!("可用余额不足: 需要 {:.2} USDT, 可用 {:.2} USDT", frozen_margin, available),
+                position: None,
+                error_code: Some("INSUFFICIENT_MARGIN".to_string()),
+            };
+        }
+
+        // 获取当前市场价格 (优先使用引擎内部价格，它通过 onTick 实时更新)
+        let market_price = if self.current_price > 0.0 {
+            self.current_price
+        } else {
+            req.current_price.unwrap_or(0.0)
+        };
+        
+        if market_price <= 0.0 {
+            return OpenPositionResult {
+                success: false,
+                message: "限价单需要有效的当前市场价格，请确保已有 tick 数据".to_string(),
+                position: None,
+                error_code: Some("INVALID_MARKET_PRICE".to_string()),
+            };
+        }
+
+        // 检查限价是否等于市价 (无意义的挂单)
+        if (limit_price - market_price).abs() < 0.01 {
+            return OpenPositionResult {
+                success: false,
+                message: "限价不能等于当前市价，请使用市价单".to_string(),
+                position: None,
+                error_code: Some("LIMIT_EQUALS_MARKET".to_string()),
+            };
+        }
+
+        // 创建挂单 (传入当前价格以确定触发方向)
+        let timestamp = self.get_timestamp();
+        let order_id = self.pending_order_manager.create_order(
+            req.symbol.clone(),
+            order_side,
+            req.size,
+            limit_price,
+            market_price,  // 当前市场价格，用于确定触发方向
+            leverage,
+            req.margin_mode,
+            frozen_margin,
+            timestamp,
+        );
+
+        // 获取触发方向用于返回信息
+        let trigger_dir = if limit_price > market_price { "等涨" } else { "等跌" };
+
+        // 发送事件
+        self.pending_events.push(EngineEvent::LimitOrderCreated {
+            order_id: order_id.clone(),
+            symbol: req.symbol.clone(),
+            side: format!("{:?}", order_side),
+            size: req.size,
+            limit_price,
+            leverage,
+        });
+
+        OpenPositionResult {
+            success: true,
+            message: format!(
+                "限价单已创建: {:?} {:.4} {} @ {:.2} [{}，当前价{:.2}]",
+                order_side, req.size, req.symbol, limit_price, trigger_dir, market_price
+            ),
+            position: None,
+            error_code: None,
+        }
+    }
+
+    /// 取消挂单内部实现
+    fn cancel_order_internal(&mut self, order_id: &str) -> CancelOrderResult {
+        // 获取订单信息用于事件
+        let symbol = self.pending_order_manager.get(order_id)
+            .map(|o| o.symbol.clone())
+            .unwrap_or_default();
+
+        match self.pending_order_manager.cancel_order(order_id) {
+            Some(released) => {
+                self.pending_events.push(EngineEvent::LimitOrderCancelled {
+                    order_id: order_id.to_string(),
+                    symbol,
+                    released_margin: released,
+                });
+                CancelOrderResult {
+                    success: true,
+                    message: format!("挂单已取消，解冻保证金 {:.2} USDT", released),
+                    released_margin: released,
+                }
+            }
+            None => CancelOrderResult {
+                success: false,
+                message: format!("挂单不存在: {}", order_id),
+                released_margin: 0.0,
+            },
+        }
     }
 
     /// 平仓内部实现
@@ -572,6 +798,7 @@ impl MarketEngine {
             current_price,
             symbol_prices: HashMap::new(),
             position_manager: PositionManager::new(),
+            pending_order_manager: PendingOrderManager::new(),
             risk_assessment: None,
             pending_events: Vec::new(),
         }
@@ -605,9 +832,11 @@ impl MarketEngine {
         &self.volume_history
     }
 
-    /// 测试辅助：获取仓位引用 (BTCUSDT)
+    /// 测试辅助：获取仓位引用 (BTCUSDT_Long 或 BTCUSDT_Short)
     pub fn get_test_position(&self) -> Option<&Position> {
-        self.position_manager.get("BTCUSDT")
+        // Hedge Mode: 先尝试多头，再尝试空头
+        self.position_manager.get("BTCUSDT_Long")
+            .or_else(|| self.position_manager.get("BTCUSDT_Short"))
     }
     
     /// 测试辅助：获取 PositionManager 引用

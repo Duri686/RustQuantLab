@@ -7,6 +7,8 @@ import type {
   LiquidationResult,
   OpenPositionResult,
   MarginMode,
+  OrderType as OrderTypeEnum,
+  PendingOrder,
 } from '../../../types/trading';
 
 /* ============================================
@@ -67,12 +69,15 @@ export interface TradeFormProps {
 
   // ========== Wasm Actions ==========
 
-  /** 开仓回调 (调用 Wasm placeOrder) */
+  /** 开仓回调 (调用 Wasm placeOrder，支持市价单和限价单) */
   onPlaceOrder?: (
     side: 'LONG' | 'SHORT',
     size: number,
     leverage: number,
     marginMode?: MarginMode,
+    orderType?: OrderTypeEnum,
+    price?: number,
+    currentPrice?: number,
   ) => OpenPositionResult | null;
   /** 平仓回调 (调用 Wasm closePosition) */
   onClosePosition?: (symbol?: string) => void;
@@ -80,6 +85,10 @@ export interface TradeFormProps {
   onSetLeverage?: (leverage: number) => boolean;
   /** 设置保证金模式回调 */
   onSetMarginMode?: (mode: MarginMode) => void;
+  /** 活跃挂单列表 */
+  pendingOrders?: PendingOrder[];
+  /** 取消挂单回调 */
+  onCancelOrder?: (orderId: string) => void;
 }
 
 /* ============================================
@@ -152,6 +161,8 @@ function TradeForm({
   onClosePosition,
   onSetLeverage,
   onSetMarginMode,
+  pendingOrders = [],
+  onCancelOrder,
 }: TradeFormProps) {
   // Toast
   const toast = useToast();
@@ -220,7 +231,7 @@ function TradeForm({
     [maxSize],
   );
 
-  // 🔴 开仓 Handler - 调用 Wasm placeOrder
+  // 🔴 开仓 Handler - 调用 Wasm placeOrder (支持市价单和限价单)
   const handleSubmit = useCallback(
     (side: 'LONG' | 'SHORT') => {
       // 基础验证
@@ -228,11 +239,32 @@ function TradeForm({
         toast.warning('请输入下单数量');
         return;
       }
+
+      // 限价单验证
+      if (orderType === 'Limit') {
+        if (priceValue <= 0) {
+          toast.warning('限价单必须指定价格');
+          return;
+        }
+      }
       // One-Way Mode: 允许同交易对同方向加仓/反方向减仓
       // 详细验证由 Wasm 处理
 
+      // 转换订单类型为 Rust 格式 (lowercase)
+      const orderTypeForWasm: OrderTypeEnum =
+        orderType === 'Limit' ? 'limit' : 'market';
+      const priceForWasm = orderType === 'Limit' ? priceValue : undefined;
+
       // 🔴 调用 Wasm 开仓，验证由 Wasm 处理
-      const result = onPlaceOrder?.(side, sizeValue, leverage, marginMode);
+      const result = onPlaceOrder?.(
+        side,
+        sizeValue,
+        leverage,
+        marginMode,
+        orderTypeForWasm,
+        priceForWasm,
+        currentPrice, // 传递当前市场价格用于确定触发方向
+      );
 
       if (result) {
         if (result.success) {
@@ -243,7 +275,15 @@ function TradeForm({
         // Toast 由 useTradingState hook 的事件处理器触发
       }
     },
-    [onPlaceOrder, sizeValue, leverage, hasPosition, toast],
+    [
+      onPlaceOrder,
+      sizeValue,
+      leverage,
+      marginMode,
+      orderType,
+      priceValue,
+      toast,
+    ],
   );
 
   return (
@@ -486,8 +526,67 @@ function TradeForm({
           </div>
 
           {/* 🔴 Wasm Position Display - Hedge Mode 多仓位列表 */}
-          {positions.length > 0 || closedPositions.length > 0 ? (
+          {positions.length > 0 ||
+          closedPositions.length > 0 ||
+          pendingOrders.length > 0 ? (
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {/* 🔴 挂单列表 (限价单) */}
+              {pendingOrders.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 pb-1">
+                    <span className="text-[10px] text-[#FCD535]">挂单</span>
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-[#FCD535]/20 text-[#FCD535]">
+                      {pendingOrders.length}
+                    </span>
+                    <div className="flex-1 h-px bg-[#2b2f36]" />
+                  </div>
+                  {pendingOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="p-2 rounded bg-[#1e2026] border-l-2 border-[#FCD535]"
+                    >
+                      <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-400">{order.symbol}</span>
+                          <span
+                            className={
+                              order.side === 'Long'
+                                ? 'text-[#0ECB81]'
+                                : 'text-[#F6465D]'
+                            }
+                          >
+                            {order.side === 'Long' ? '多' : '空'}
+                          </span>
+                          <span className="text-gray-500">
+                            {order.leverage}x
+                          </span>
+                          <span className="px-1 rounded text-[9px] bg-[#FCD535]/20 text-[#FCD535]">
+                            {order.triggerDirection === 'above'
+                              ? '等涨'
+                              : '等跌'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => onCancelOrder?.(order.id)}
+                          className="px-1.5 py-0.5 text-[9px] rounded bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white transition-colors"
+                        >
+                          取消
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] text-gray-500 mt-1">
+                        <span>
+                          {order.size.toFixed(4)}{' '}
+                          {order.symbol.replace('USDT', '')} @{' '}
+                          {order.limitPrice.toFixed(2)}
+                        </span>
+                        <span className="text-gray-600">
+                          冻结 {order.frozenMargin.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
               {/* 活跃仓位 */}
               {positions.map((pos) => (
                 <WasmPositionCard

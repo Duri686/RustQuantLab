@@ -88,6 +88,57 @@ export interface Position {
 export type MarginMode = 'cross' | 'isolated';
 
 /**
+ * 订单类型
+ */
+export type OrderType = 'market' | 'limit';
+
+/**
+ * 挂单状态
+ */
+export type PendingOrderStatus = 'pending' | 'filled' | 'cancelled' | 'expired';
+
+/**
+ * 触发方向
+ * - above: 等待价格上涨到限价
+ * - below: 等待价格下跌到限价
+ */
+export type TriggerDirection = 'above' | 'below';
+
+/**
+ * 限价挂单
+ *
+ * 由 Rust `PendingOrder` 结构体序列化而来
+ */
+export interface PendingOrder {
+  /** 订单唯一标识 */
+  id: string;
+  /** 交易对符号 */
+  symbol: string;
+  /** 订单方向 */
+  side: PositionSide;
+  /** 订单数量 */
+  size: number;
+  /** 限价价格 */
+  limitPrice: number;
+  /** 创建时的市场价格 */
+  createdPrice: number;
+  /** 触发方向 (above: 等涨, below: 等跌) */
+  triggerDirection: TriggerDirection;
+  /** 杠杆倍数 */
+  leverage: number;
+  /** 保证金模式 */
+  marginMode: 'cross' | 'isolated';
+  /** 订单状态 */
+  status: PendingOrderStatus;
+  /** 创建时间戳 */
+  createdAt: number;
+  /** 过期时间戳 (0 = 永不过期) */
+  expiresAt: number;
+  /** 预冻结保证金 */
+  frozenMargin: number;
+}
+
+/**
  * 风险等级
  */
 export type RiskLevel = 'Safe' | 'Low' | 'Medium' | 'High' | 'Critical';
@@ -241,6 +292,41 @@ export interface AccountRiskWarningEvent {
 }
 
 /**
+ * 限价单已创建事件
+ */
+export interface LimitOrderCreatedEvent {
+  type: 'limitOrderCreated';
+  orderId: string;
+  symbol: string;
+  side: string;
+  size: number;
+  limitPrice: number;
+  leverage: number;
+}
+
+/**
+ * 限价单已成交事件
+ */
+export interface LimitOrderFilledEvent {
+  type: 'limitOrderFilled';
+  orderId: string;
+  symbol: string;
+  side: string;
+  size: number;
+  fillPrice: number;
+}
+
+/**
+ * 限价单已取消事件
+ */
+export interface LimitOrderCancelledEvent {
+  type: 'limitOrderCancelled';
+  orderId: string;
+  symbol: string;
+  releasedMargin: number;
+}
+
+/**
  * 引擎事件联合类型
  *
  * 与 Rust `EngineEvent` 枚举对应 (tagged union)
@@ -252,7 +338,10 @@ export type EngineEvent =
   | PositionClosedEvent
   | LiquidatedEvent
   | MarginWarningEvent
-  | AccountRiskWarningEvent;
+  | AccountRiskWarningEvent
+  | LimitOrderCreatedEvent
+  | LimitOrderFilledEvent
+  | LimitOrderCancelledEvent;
 
 // ============================================================================
 // 交易状态类型
@@ -294,6 +383,9 @@ export interface TradingState {
 
   /** 待处理事件队列 (消费后自动清空) */
   pendingEvents: EngineEvent[];
+
+  /** 活跃挂单列表 */
+  pendingOrders: PendingOrder[];
 }
 
 // ============================================================================
@@ -315,14 +407,20 @@ export interface OpenPositionRequest {
   /** 仓位大小 (BTC) */
   size: number;
 
-  /** 可选: 指定开仓价格 (默认使用当前市价) */
+  /** 可选: 指定开仓价格 (市价单时可不传，限价单必传) */
   price?: number;
+
+  /** 当前市场价格 (限价单必填，用于确定触发方向) */
+  currentPrice?: number;
 
   /** 可选: 杠杆倍数 (默认使用引擎当前杠杆) */
   leverage?: number;
 
   /** 保证金模式 (默认 Cross) */
   marginMode?: MarginMode;
+
+  /** 订单类型 (默认 Market) */
+  orderType?: OrderType;
 }
 
 /**
@@ -366,6 +464,20 @@ export interface ClosePositionResult {
   newBalance: number;
 }
 
+/**
+ * 取消挂单结果
+ */
+export interface CancelOrderResult {
+  /** 是否成功 */
+  success: boolean;
+
+  /** 操作消息 */
+  message: string;
+
+  /** 解冻的保证金 */
+  releasedMargin: number;
+}
+
 // ============================================================================
 // Hook 返回类型
 // ============================================================================
@@ -405,17 +517,23 @@ export interface UseTradingStateReturn {
   onTick: (currentPrice: number) => void;
 
   /**
-   * 开仓
+   * 开仓 (支持市价单和限价单)
    * @param side - 仓位方向 ('LONG' | 'SHORT')
    * @param size - 仓位大小 (BTC)
    * @param leverage - 杠杆倍数 (可选，使用当前设置)
    * @param marginMode - 保证金模式 (可选，默认 'cross')
+   * @param orderType - 订单类型 (可选，默认 'market')
+   * @param price - 限价价格 (限价单必填)
+   * @param currentPrice - 当前市场价格 (限价单必填，用于确定触发方向)
    */
   placeOrder: (
     side: 'LONG' | 'SHORT',
     size: number,
     leverage?: number,
     marginMode?: MarginMode,
+    orderType?: OrderType,
+    price?: number,
+    currentPrice?: number,
   ) => OpenPositionResult | null;
 
   /**
@@ -439,6 +557,15 @@ export interface UseTradingStateReturn {
    * @param initialBalance - 可选的初始余额
    */
   resetAccount: (initialBalance?: number) => void;
+
+  /**
+   * 取消挂单
+   * @param orderId - 挂单 ID
+   */
+  cancelOrder: (orderId: string) => CancelOrderResult | null;
+
+  /** 活跃挂单列表 (便捷访问) */
+  pendingOrders: PendingOrder[];
 }
 
 // ============================================================================

@@ -55,10 +55,12 @@ function App() {
     position,
     riskAssessment,
     hasPosition,
+    pendingOrders,
     onTick,
     placeOrder,
     closePosition,
     setLeverage,
+    cancelOrder,
   } = useTradingState();
 
   // ========== 连接数据流到 Wasm 交易引擎 ==========
@@ -297,10 +299,12 @@ function App() {
               closedPositions={tradingState?.closedPositions ?? []}
               riskAssessment={riskAssessment}
               hasPosition={hasPosition}
+              pendingOrders={pendingOrders}
               // Wasm Actions
               onPlaceOrder={placeOrder}
               onClosePosition={(positionId) => closePosition(positionId)}
               onSetLeverage={setLeverage}
+              onCancelOrder={cancelOrder}
             />
           </section>
         </div>

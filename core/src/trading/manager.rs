@@ -455,8 +455,10 @@ mod tests {
         let result = result.unwrap();
         assert!(matches!(result.action, TradeAction::Closed { .. }));
 
-        // 仓位应该被移除
-        assert!(!manager.contains("BTCUSDT"));
+        // 注: apply_trade 不再自动删除仓位，由调用者决定
+        // 仓位 size 应该变为 0
+        let pos = manager.get("BTCUSDT").unwrap();
+        assert!(pos.is_closed());
     }
 
     #[test]
