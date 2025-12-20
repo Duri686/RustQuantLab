@@ -221,6 +221,11 @@ export function useTradingState(): UseTradingStateReturn {
   // ========== 并发控制 ==========
   const isProcessingRef = useRef(false);
 
+  // ========== Toast 防抖控制 ==========
+  const leverageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
   // ========== 使用共享 Wasm 引擎 ==========
   // 不再独立初始化，复用 useTradingEngine 的引擎实例
   useEffect(() => {
@@ -267,6 +272,8 @@ export function useTradingState(): UseTradingStateReturn {
       aborted = true;
       engineAlive.current = false;
       if (checkInterval) clearInterval(checkInterval);
+      if (leverageToastTimerRef.current)
+        clearTimeout(leverageToastTimerRef.current);
       engineRef.current = null;
     };
   }, []);
@@ -479,7 +486,14 @@ export function useTradingState(): UseTradingStateReturn {
           // 同步状态
           const state = engineRef.current.get_trading_state();
           setTradingState(state);
-          toast.success(`杠杆已设置为 ${leverage}x`);
+          // 防抖 Toast：滑动过程中只在停止后显示一次
+          if (leverageToastTimerRef.current) {
+            clearTimeout(leverageToastTimerRef.current);
+          }
+          leverageToastTimerRef.current = setTimeout(() => {
+            toast.success(`杠杆已设置为 ${leverage}x`);
+            leverageToastTimerRef.current = null;
+          }, 300);
         } else {
           toast.error('无法修改杠杆: 持仓期间不能修改杠杆');
         }
