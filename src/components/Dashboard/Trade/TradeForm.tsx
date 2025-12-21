@@ -46,7 +46,7 @@ export interface TradeFormProps {
   /** Current market price */
   currentPrice?: number;
 
-  // ========== Wasm Trading State (from useTradingState) ==========
+  // ========== Wasm Trading State (from useWasmEngine) ==========
 
   /** 钱包余额 (来自 Wasm) */
   balance?: number;
@@ -54,7 +54,7 @@ export interface TradeFormProps {
   availableBalance?: number;
   /** 当前杠杆 (来自 Wasm) */
   currentLeverage?: number;
-  /** 当前仓位 (来自 Wasm，向后兼容) */
+  /** 当前仓位 (来自 Wasm) */
   position?: Position | null;
   /** 所有活跃仓位 (多仓位模式) */
   positions?: Position[];
@@ -151,7 +151,7 @@ function TradeForm({
   balance = 10000,
   availableBalance = 10000,
   currentLeverage = 10,
-  position: _position = null, // 向后兼容，使用 positions 替代
+  position: _position = null, // 单仓位场景，使用 positions 替代
   positions = [],
   closedPositions = [],
   riskAssessment = null,
@@ -272,7 +272,7 @@ function TradeForm({
           setSize('');
           setSizePercent(null);
         }
-        // Toast 由 useTradingState hook 的事件处理器触发
+        // Toast 由 useWasmEngine hook 的事件处理器触发
       }
     },
     [

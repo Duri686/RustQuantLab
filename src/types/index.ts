@@ -42,7 +42,6 @@ export type {
   OpenPositionRequest,
   OpenPositionResult,
   ClosePositionResult,
-  UseTradingStateReturn,
 } from './trading';
 
 export {
