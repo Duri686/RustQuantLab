@@ -1,0 +1,13 @@
+# Pre-commit Hook: 本地测试必须通过才能提交
+
+echo "🧪 Running Rust tests..."
+cd core && cargo test --lib --release
+RUST_EXIT=$?
+cd ..
+
+if [ $RUST_EXIT -ne 0 ]; then
+  echo "❌ Rust tests failed! Commit aborted."
+  exit 1
+fi
+
+echo "✅ All tests passed!"
