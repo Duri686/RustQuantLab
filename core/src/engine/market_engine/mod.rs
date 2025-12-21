@@ -11,7 +11,7 @@ mod trade_executor;  // 交易执行
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
-use crate::models::{OrderBook, SimOrder, Timeframe};
+use crate::models::{Candle, OrderBook, SimOrder, Timeframe};
 use crate::risk::{LiquidationResult, RiskConfig};
 use crate::trading::{PendingOrderManager, PositionManager, TradingAccount};
 
@@ -134,6 +134,61 @@ impl MarketEngine {
             .and_then(|tf| self.candle_cache.get(&tf))
             .map(|c| c.history.len())
             .unwrap_or(0)
+    }
+
+    /// 加载历史 K 线数据
+    ///
+    /// 将外部生成的历史 K 线加载到指定时间周期，后续实时 tick 会继续在此基础上聚合
+    ///
+    /// @param timeframe_str - 时间周期字符串 ("1s", "1m", "1H" 等)
+    /// @param candles_js - K 线数组 (JS 格式)
+    /// @returns 加载的 K 线数量
+    pub fn load_history_candles(&mut self, timeframe_str: &str, candles_js: JsValue) -> Result<usize, JsValue> {
+        // 解析时间周期
+        let tf = Timeframe::from_str(timeframe_str)
+            .ok_or_else(|| JsValue::from_str(&format!("无效的时间周期: {}", timeframe_str)))?;
+
+        // 解析 K 线数据
+        let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析历史 K 线失败")?;
+        let count = candles.len();
+
+        // 获取或创建缓存，加载历史数据
+        let cache = self.candle_cache.entry(tf).or_insert_with(CandleCache::new);
+        cache.load_history(candles);
+
+        // 同步当前价格状态（使用最后一根 K 线的收盘价）
+        if let Some(last_candle) = cache.history.last() {
+            self.current_price = last_candle.close;
+            self.tick_data.push_price(last_candle.close);
+        }
+
+        Ok(count)
+    }
+
+    /// 加载 1m K 线数据并聚合到所有周期
+    ///
+    /// 接收 1m K 线数据，自动聚合到 5m/15m/1H/4H/1D
+    /// 返回各周期加载的 K 线数量
+    ///
+    /// @param candles_js - 1m K 线数组 (JS 格式)
+    /// @returns 各周期加载的 K 线数量
+    pub fn load_history_1m_and_aggregate(&mut self, candles_js: JsValue) -> Result<JsValue, JsValue> {
+        let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析 1m K 线失败")?;
+
+        if candles.is_empty() {
+            return Err(JsValue::from_str("历史 K 线数据为空"));
+        }
+
+        // 同步当前价格状态（使用最后一根 K 线的收盘价）
+        if let Some(last_candle) = candles.last() {
+            self.current_price = last_candle.close;
+            self.tick_data.push_price(last_candle.close);
+        }
+
+        // 聚合到所有周期
+        let results = CandleAggregator::aggregate_history_from_1m(&mut self.candle_cache, candles);
+
+        to_js!(results)
     }
 
     /// 提交模拟订单

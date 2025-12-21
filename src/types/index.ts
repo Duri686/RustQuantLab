@@ -84,6 +84,8 @@ export interface WorkerStartMessage {
   type: 'START';
   payload: {
     interval: number;
+    /** 起始价格 (可选，用于从历史数据结束价继续) */
+    startPrice?: number;
   };
 }
 
@@ -117,6 +119,7 @@ export type WorkerMessage =
 
 /**
  * 历史 K 线数据 (由 Worker 生成)
+ * 结构与 Rust Candle 对齐，支持直接加载到引擎
  */
 export interface HistoryCandle {
   /** K 线开始时间戳 (毫秒) */
@@ -131,6 +134,8 @@ export interface HistoryCandle {
   close: number;
   /** 成交量 */
   volume: number;
+  /** 该周期内 tick 数量 (处来初始化为 1) */
+  tickCount: number;
 }
 
 /**
@@ -275,11 +280,19 @@ export interface MarketEngineInstance {
   get_candles: (timeframe: _WasmTimeframe) => _WasmCandleHistory;
   get_active_candles: () => _WasmCandleHistory;
   get_candle_count: (timeframe: _WasmTimeframe) => number;
+  /** 加载历史 K 线数据到指定时间周期 */
+  load_history_candles: (
+    timeframe: _WasmTimeframe,
+    candles: HistoryCandle[],
+  ) => number;
+  /** 加载 1m K 线并自动聚合到所有高周期 (5m/15m/1H/4H/1D) */
+  load_history_1m_and_aggregate: (
+    candles: HistoryCandle[],
+  ) => [string, number][];
 
   // 模拟交易方法
   submit_order: (order: SimOrder) => SimOrderResult;
 }
-
 /**
  * MarketEngine 构造函数类型
  */

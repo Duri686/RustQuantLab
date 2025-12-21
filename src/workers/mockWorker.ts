@@ -157,12 +157,17 @@ function scheduleNextTick(): void {
 /**
  * 开始生成数据
  * @param _interval - 保留参数（兼容旧 API），实际使用动态延迟
+ * @param startPrice - 可选起始价格，用于从历史数据继续
  */
-function startGeneration(_interval: number): void {
+function startGeneration(_interval: number, startPrice?: number): void {
   stopGeneration();
 
-  // 重置状态
-  currentPrice = BASE_PRICE;
+  // 重置状态（如果提供了起始价格则使用，否则用默认值）
+  if (startPrice !== undefined && startPrice > 0) {
+    currentPrice = startPrice;
+  } else {
+    currentPrice = BASE_PRICE;
+  }
   burstMode = false;
   burstTicksRemaining = 0;
   isRunning = true;
@@ -203,14 +208,45 @@ function alignTimestamp(timestamp: number, intervalMs: number): number {
   return Math.floor(timestamp / intervalMs) * intervalMs;
 }
 
+// ============================================================================
+// 市场状态机类型定义
+// ============================================================================
+
+/** 市场阶段 */
+type MarketPhase = 'BULL_RUN' | 'BEAR_RUN' | 'CONSOLIDATION';
+
+/** 市场情绪 */
+type MarketSentiment = 'PANIC' | 'FOMO' | 'CALM' | 'EUPHORIA' | 'CAPITULATION';
+
+/** 量价模式 */
+type VolumePattern =
+  | 'SHRINK_UP' // 缩量上涨 - 健康上涨，惜售
+  | 'SHRINK_DOWN' // 缩量下跌 - 动能衰竭
+  | 'EXPAND_UP' // 放量上涨 - FOMO突破
+  | 'EXPAND_DOWN' // 放量下跌 - 恐慌抛售
+  | 'SHRINK_FLAT'; // 缩量横盘 - 观望
+
+/** 市场状态 */
+interface MarketState {
+  phase: MarketPhase;
+  sentiment: MarketSentiment;
+  phaseProgress: number; // 当前阶段进度 0-1
+  phaseDuration: number; // 阶段持续 K 线数
+  phaseCounter: number; // 阶段计数器
+  momentum: number; // 动量 -1 到 1
+  avgVolume: number; // 平均成交量基准
+  currentPrice: number; // 当前价格（用于均值回归）
+  basePrice: number; // 基准价格（均值回归目标）
+}
+
 /**
  * 生成历史 K 线数据
  *
  * 算法特点：
- * 1. 使用随机游走生成连续的价格序列
- * 2. 模拟市场的“波动率周期” - 周期性的高/低波动
- * 3. 模拟“趋势” - 简单的上升/下降势头
- * 4. 成交量与波动率正相关 (大跌大涨量大)
+ * 1. 市场阶段状态机：单边上涨、单边下跌、横盘震荡
+ * 2. 情绪模拟：恐慌(Panic)、FOMO、平静(Calm)、狂热(Euphoria)、投降(Capitulation)
+ * 3. 量价关系：缩量上涨、缩量下跌、放量上涨、放量下跌、缩量横盘
+ * 4. 真实 K 线形态：长上影、长下影、十字星、大阳线、大阴线
  *
  * @param timeframeSeconds - 时间周期 (秒)
  * @param count - K 线数量
@@ -222,89 +258,396 @@ function generateHistoricalCandles(
 ): HistoryCandle[] {
   const intervalMs = timeframeSeconds * 1000;
   const now = Date.now();
-
-  // 将当前时间对齐到周期边界，作为最后一根 K 线的结束时间
   const alignedNow = alignTimestamp(now, intervalMs);
-
-  // 从最新往回计算起始时间
   const startTime = alignedNow - count * intervalMs;
 
   const candles: HistoryCandle[] = [];
   let price = BASE_PRICE;
 
-  // 趋势状态
-  let trendDirection = Math.random() > 0.5 ? 1 : -1; // 1 = 上升, -1 = 下降
-  let trendStrength = 0.0005; // 趋势强度
-  let trendDuration = Math.floor(Math.random() * 48) + 12; // 趋势持续 12-60 根 K 线
-  let trendCounter = 0;
-
-  // 波动率状态
-  const volatility = 0.005; // 基础波动率 0.5%
-  let volatilityCycleTicks = 0;
-  const VOLATILITY_CYCLE_LENGTH = 72; // 波动率周期 (~3天 for 1H)
+  // 初始化市场状态
+  const state: MarketState = {
+    phase: 'CONSOLIDATION',
+    sentiment: 'CALM',
+    phaseProgress: 0,
+    phaseDuration: 60 + Math.floor(Math.random() * 120), // 60-180 根 K 线
+    phaseCounter: 0,
+    momentum: 0,
+    avgVolume: 2000,
+    currentPrice: BASE_PRICE,
+    basePrice: BASE_PRICE,
+  };
 
   for (let i = 0; i < count; i++) {
     const candleTime = startTime + i * intervalMs;
 
-    // 更新趋势
-    trendCounter++;
-    if (trendCounter >= trendDuration) {
-      // 切换趋势方向
-      trendDirection = Math.random() > 0.5 ? 1 : -1;
-      trendStrength = 0.0002 + Math.random() * 0.0008; // 0.02% - 0.1%
-      trendDuration = Math.floor(Math.random() * 48) + 12;
-      trendCounter = 0;
-    }
+    // 更新市场状态
+    updateMarketState(state, price);
 
-    // 更新波动率周期 (正弦波模拟)
-    volatilityCycleTicks++;
-    const volatilityMultiplier =
-      1 +
-      0.5 *
-        Math.sin(
-          (volatilityCycleTicks / VOLATILITY_CYCLE_LENGTH) * Math.PI * 2,
-        );
-    const currentVolatility = volatility * volatilityMultiplier;
+    // 更新当前价格到状态
+    state.currentPrice = price;
 
-    // 随机游走 + 趋势偏移
-    const randomChange = (Math.random() - 0.5) * 2 * currentVolatility;
-    const trendChange = trendDirection * trendStrength;
-    const totalChange = randomChange + trendChange;
-
-    // 计算 OHLC
-    const open = price;
-    const changePercent = totalChange;
-    const close = open * (1 + changePercent);
-
-    // 影子线波动 (K 线内部波动)
-    const shadowRange = Math.abs(close - open) * (0.5 + Math.random() * 1.5);
-    const high = Math.max(open, close) + shadowRange * Math.random();
-    const low = Math.min(open, close) - shadowRange * Math.random();
-
-    // 成交量与波动率正相关
-    const baseVolume = 100 + Math.random() * 400;
-    const volatilityBoost = currentVolatility / volatility;
-    const volume = baseVolume * volatilityBoost * (0.8 + Math.random() * 0.4);
-
-    candles.push({
-      time: candleTime,
-      open: Math.round(open * 100) / 100,
-      high: Math.round(high * 100) / 100,
-      low: Math.round(low * 100) / 100,
-      close: Math.round(close * 100) / 100,
-      volume: Math.round(volume * 100) / 100,
-    });
+    // 根据市场状态生成 K 线
+    const candle = generateCandleFromState(state, price, candleTime);
+    candles.push(candle);
 
     // 下一根 K 线的开盘价 = 当前收盘价
-    price = close;
+    price = candle.close;
   }
 
-  // 同步全局价格状态，让实时数据从历史结束价继续
+  // 同步全局价格状态
   if (candles.length > 0) {
     currentPrice = candles[candles.length - 1].close;
   }
 
   return candles;
+}
+
+/**
+ * 更新市场状态机
+ */
+function updateMarketState(state: MarketState, _price: number): void {
+  state.phaseCounter++;
+  state.phaseProgress = state.phaseCounter / state.phaseDuration;
+
+  // 阶段结束，切换到新阶段
+  if (state.phaseCounter >= state.phaseDuration) {
+    transitionPhase(state);
+  }
+
+  // 随机情绪事件（5% 概率触发极端情绪）
+  if (Math.random() < 0.05) {
+    triggerSentimentEvent(state);
+  }
+
+  // 情绪自然衰减回归平静
+  if (state.sentiment !== 'CALM' && Math.random() < 0.1) {
+    state.sentiment = 'CALM';
+  }
+
+  // 更新动量（平滑过渡）
+  const targetMomentum = getTargetMomentum(state);
+  state.momentum = state.momentum * 0.9 + targetMomentum * 0.1;
+}
+
+/**
+ * 阶段转换逻辑
+ */
+function transitionPhase(state: MarketState): void {
+  const rand = Math.random();
+  const prevPhase = state.phase;
+
+  // 基于当前阶段的转换概率
+  if (prevPhase === 'CONSOLIDATION') {
+    // 横盘后：40% 上涨，40% 下跌，20% 继续横盘
+    if (rand < 0.4) state.phase = 'BULL_RUN';
+    else if (rand < 0.8) state.phase = 'BEAR_RUN';
+    else state.phase = 'CONSOLIDATION';
+  } else if (prevPhase === 'BULL_RUN') {
+    // 上涨后：30% 继续涨，40% 横盘，30% 下跌
+    if (rand < 0.3) state.phase = 'BULL_RUN';
+    else if (rand < 0.7) state.phase = 'CONSOLIDATION';
+    else state.phase = 'BEAR_RUN';
+  } else {
+    // 下跌后：30% 继续跌，40% 横盘，30% 上涨
+    if (rand < 0.3) state.phase = 'BEAR_RUN';
+    else if (rand < 0.7) state.phase = 'CONSOLIDATION';
+    else state.phase = 'BULL_RUN';
+  }
+
+  // 重置阶段计数器
+  state.phaseCounter = 0;
+  state.phaseDuration = getPhaseDuration(state.phase);
+}
+
+/**
+ * 获取阶段持续时间
+ */
+function getPhaseDuration(phase: MarketPhase): number {
+  switch (phase) {
+    case 'BULL_RUN':
+      return 30 + Math.floor(Math.random() * 90); // 30-120 根
+    case 'BEAR_RUN':
+      return 20 + Math.floor(Math.random() * 60); // 20-80 根（熊市通常更短更急）
+    case 'CONSOLIDATION':
+      return 60 + Math.floor(Math.random() * 120); // 60-180 根
+  }
+}
+
+/**
+ * 触发情绪事件
+ */
+function triggerSentimentEvent(state: MarketState): void {
+  const rand = Math.random();
+
+  if (state.phase === 'BULL_RUN') {
+    // 牛市中：可能触发 FOMO 或 狂热
+    state.sentiment = rand < 0.6 ? 'FOMO' : 'EUPHORIA';
+  } else if (state.phase === 'BEAR_RUN') {
+    // 熊市中：可能触发 恐慌 或 投降
+    state.sentiment = rand < 0.6 ? 'PANIC' : 'CAPITULATION';
+  } else {
+    // 横盘中：偶尔小恐慌或小FOMO
+    state.sentiment = rand < 0.5 ? 'PANIC' : 'FOMO';
+  }
+}
+
+/**
+ * 获取目标动量
+ */
+function getTargetMomentum(state: MarketState): number {
+  let base = 0;
+
+  // 基于阶段的基础动量
+  switch (state.phase) {
+    case 'BULL_RUN':
+      base = 0.3 + Math.random() * 0.4; // 0.3-0.7
+      break;
+    case 'BEAR_RUN':
+      base = -0.3 - Math.random() * 0.4; // -0.3 到 -0.7
+      break;
+    case 'CONSOLIDATION':
+      base = (Math.random() - 0.5) * 0.2; // -0.1 到 0.1
+      break;
+  }
+
+  // 情绪修正
+  switch (state.sentiment) {
+    case 'FOMO':
+      base += 0.3;
+      break;
+    case 'EUPHORIA':
+      base += 0.5;
+      break;
+    case 'PANIC':
+      base -= 0.3;
+      break;
+    case 'CAPITULATION':
+      base -= 0.5;
+      break;
+  }
+
+  return Math.max(-1, Math.min(1, base));
+}
+
+/**
+ * 根据市场状态生成 K 线
+ */
+function generateCandleFromState(
+  state: MarketState,
+  openPrice: number,
+  time: number,
+): HistoryCandle {
+  // 确定量价模式
+  const volumePattern = determineVolumePattern(state);
+
+  // 计算价格变动
+  const { changePercent, volatility } = calculatePriceChange(
+    state,
+    volumePattern,
+  );
+
+  const open = openPrice;
+  const close = open * (1 + changePercent);
+
+  // 生成 K 线形态
+  const { high, low } = generateCandleShape(
+    open,
+    close,
+    volatility,
+    state.sentiment,
+  );
+
+  // 生成成交量
+  const volume = generateVolume(state, volumePattern, Math.abs(changePercent));
+
+  return {
+    time,
+    open: Math.round(open * 100) / 100,
+    high: Math.round(high * 100) / 100,
+    low: Math.round(low * 100) / 100,
+    close: Math.round(close * 100) / 100,
+    volume: Math.round(volume * 100) / 100,
+    tickCount: 1,
+  };
+}
+
+/**
+ * 确定量价模式
+ */
+function determineVolumePattern(state: MarketState): VolumePattern {
+  const { phase, sentiment, phaseProgress } = state;
+
+  // 极端情绪时的量价模式
+  if (sentiment === 'PANIC' || sentiment === 'CAPITULATION') {
+    return 'EXPAND_DOWN'; // 恐慌放量下跌
+  }
+  if (sentiment === 'FOMO' || sentiment === 'EUPHORIA') {
+    return 'EXPAND_UP'; // FOMO放量上涨
+  }
+
+  // 基于阶段和进度的量价模式
+  if (phase === 'BULL_RUN') {
+    // 牛市初期：放量启动，中期：缩量上涨（健康），末期：放量冲顶
+    if (phaseProgress < 0.2) return 'EXPAND_UP';
+    if (phaseProgress < 0.8) return 'SHRINK_UP';
+    return 'EXPAND_UP';
+  }
+
+  if (phase === 'BEAR_RUN') {
+    // 熊市初期：放量下跌，中期：缩量阴跌，末期：放量恐慌
+    if (phaseProgress < 0.2) return 'EXPAND_DOWN';
+    if (phaseProgress < 0.8) return 'SHRINK_DOWN';
+    return 'EXPAND_DOWN';
+  }
+
+  // 横盘：缩量震荡
+  return 'SHRINK_FLAT';
+}
+
+/**
+ * 计算价格变动
+ */
+function calculatePriceChange(
+  state: MarketState,
+  pattern: VolumePattern,
+): { changePercent: number; volatility: number } {
+  const { momentum, sentiment, currentPrice, basePrice } = state;
+
+  // 基础波动率（降低到 0.1%，更符合 1m K 线）
+  let volatility = 0.001;
+
+  // 根据情绪调整波动率
+  switch (sentiment) {
+    case 'PANIC':
+    case 'CAPITULATION':
+      volatility *= 2.5; // 恐慌时波动放大
+      break;
+    case 'FOMO':
+    case 'EUPHORIA':
+      volatility *= 2; // FOMO 时波动放大
+      break;
+  }
+
+  // 根据量价模式调整
+  if (pattern === 'SHRINK_FLAT') {
+    volatility *= 0.5; // 横盘时波动减小
+  }
+
+  // 计算变动：动量 + 随机
+  const randomComponent = (Math.random() - 0.5) * 2 * volatility;
+  const momentumComponent = momentum * volatility * 0.3;
+  let changePercent = randomComponent + momentumComponent;
+
+  // 均值回归：价格偏离基准越远，回归力越强
+  const deviation = (currentPrice - basePrice) / basePrice; // 偏离百分比
+  const maxDeviation = 0.5; // 最大允许偏离 50%
+  if (Math.abs(deviation) > 0.1) {
+    // 偏离超过 10% 时开始回归
+    const reversionStrength =
+      Math.min(Math.abs(deviation) / maxDeviation, 1) * 0.002;
+    changePercent -= deviation > 0 ? reversionStrength : -reversionStrength;
+  }
+
+  // 极端情绪时强制方向（但受均值回归限制）
+  if (sentiment === 'PANIC' || sentiment === 'CAPITULATION') {
+    changePercent = -Math.abs(changePercent) - volatility * 0.3;
+  } else if (sentiment === 'FOMO' || sentiment === 'EUPHORIA') {
+    changePercent = Math.abs(changePercent) + volatility * 0.3;
+  }
+
+  // 限制单根 K 线最大变动幅度
+  const maxChange = 0.02; // 单根最大 2%
+  changePercent = Math.max(-maxChange, Math.min(maxChange, changePercent));
+
+  return { changePercent, volatility };
+}
+
+/**
+ * 生成 K 线形态（上下影线）
+ */
+function generateCandleShape(
+  open: number,
+  close: number,
+  volatility: number,
+  sentiment: MarketSentiment,
+): { high: number; low: number } {
+  const body = Math.abs(close - open);
+  const minShadow = open * volatility * 0.2;
+  const baseRange = Math.max(body, minShadow);
+
+  let upperShadowRatio = 0.3 + Math.random() * 0.7; // 上影线比例
+  let lowerShadowRatio = 0.3 + Math.random() * 0.7; // 下影线比例
+
+  // 根据情绪调整影线形态
+  if (sentiment === 'PANIC') {
+    // 恐慌：长上影（冲高回落）或长下影后继续跌
+    upperShadowRatio *= 1.5;
+    lowerShadowRatio *= 0.5;
+  } else if (sentiment === 'FOMO') {
+    // FOMO：长下影（探底回升）
+    lowerShadowRatio *= 1.5;
+    upperShadowRatio *= 0.5;
+  } else if (sentiment === 'CAPITULATION') {
+    // 投降：极长下影（恐慌抛售后反弹）
+    lowerShadowRatio *= 2;
+  }
+
+  const high =
+    Math.max(open, close) + baseRange * upperShadowRatio * Math.random();
+  const low =
+    Math.min(open, close) - baseRange * lowerShadowRatio * Math.random();
+
+  return { high, low };
+}
+
+/**
+ * 生成成交量
+ */
+function generateVolume(
+  state: MarketState,
+  pattern: VolumePattern,
+  priceChangePercent: number,
+): number {
+  let baseVolume = state.avgVolume;
+  let multiplier = 1;
+
+  // 根据量价模式调整
+  switch (pattern) {
+    case 'EXPAND_UP':
+    case 'EXPAND_DOWN':
+      multiplier = 2 + Math.random() * 3; // 放量：2-5 倍
+      break;
+    case 'SHRINK_UP':
+    case 'SHRINK_DOWN':
+      multiplier = 0.3 + Math.random() * 0.4; // 缩量：0.3-0.7 倍
+      break;
+    case 'SHRINK_FLAT':
+      multiplier = 0.2 + Math.random() * 0.3; // 横盘缩量：0.2-0.5 倍
+      break;
+  }
+
+  // 极端情绪时成交量爆发
+  if (
+    state.sentiment === 'PANIC' ||
+    state.sentiment === 'CAPITULATION' ||
+    state.sentiment === 'EUPHORIA'
+  ) {
+    multiplier *= 1.5 + Math.random();
+  }
+
+  // 价格变动幅度影响成交量
+  const priceImpact = 1 + Math.pow(priceChangePercent / 0.003, 1.2);
+
+  // 随机大单（3% 概率）
+  const bigOrder = Math.random() < 0.03 ? 3 + Math.random() * 5 : 1;
+
+  return (
+    baseVolume *
+    multiplier *
+    priceImpact *
+    bigOrder *
+    (0.8 + Math.random() * 0.4)
+  );
 }
 
 /**
@@ -328,8 +671,9 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
   switch (type) {
     case 'START': {
-      const { interval } = event.data.payload;
-      startGeneration(interval);
+      const { interval, startPrice } = event.data.payload;
+      // 传递起始价格到 startGeneration，确保实时数据从历史最后价格继续
+      startGeneration(interval, startPrice);
       break;
     }
     case 'STOP': {

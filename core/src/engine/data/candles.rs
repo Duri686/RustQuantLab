@@ -38,6 +38,36 @@ impl CandleCache {
             current: None,
         }
     }
+
+    /// 加载历史 K 线数据
+    ///
+    /// 将外部生成的历史 K 线加载到缓存中，后续实时 tick 会继续在此基础上聚合
+    /// 最后一根 K 线设为 current，确保实时数据无缝衔接
+    pub fn load_history(&mut self, candles: Vec<Candle>) {
+        // 清空现有数据
+        self.history.clear();
+        self.current = None;
+
+        if candles.is_empty() {
+            return;
+        }
+
+        // 限制最大容量
+        let start_idx = if candles.len() > MAX_CANDLE_HISTORY {
+            candles.len() - MAX_CANDLE_HISTORY
+        } else {
+            0
+        };
+
+        let mut candles: Vec<Candle> = candles.into_iter().skip(start_idx).collect();
+
+        // 最后一根 K 线设为 current，实时 tick 会继续在此基础上更新
+        // 这确保了 24/7 市场的 K 线连续性，没有断裂
+        self.current = candles.pop();
+
+        // 其余放入历史
+        self.history.extend(candles);
+    }
 }
 
 // ============================================================================
@@ -73,6 +103,100 @@ impl CandleAggregator {
         for tf in timeframes {
             Self::update_single(candle_cache, tf, timestamp, price, volume);
         }
+    }
+
+    /// 从 1m K 线历史聚合到所有高周期
+    ///
+    /// 接收 1m K 线数据，自动聚合到 5m/15m/1H/4H/1D
+    /// 返回各周期加载的 K 线数量
+    pub fn aggregate_history_from_1m(
+        candle_cache: &mut HashMap<Timeframe, CandleCache>,
+        candles_1m: Vec<Candle>,
+    ) -> Vec<(String, usize)> {
+        let mut results = Vec::new();
+
+        // 1. 直接加载 1m 到缓存
+        let m1_count = candles_1m.len();
+        let cache_1m = candle_cache.entry(Timeframe::M1).or_insert_with(CandleCache::new);
+        cache_1m.load_history(candles_1m.clone());
+        results.push(("1m".to_string(), m1_count));
+
+        // 2. 聚合到高周期
+        let higher_timeframes = [
+            Timeframe::M5,
+            Timeframe::M15,
+            Timeframe::H1,
+            Timeframe::H4,
+            Timeframe::D1,
+        ];
+
+        for tf in higher_timeframes {
+            let aggregated = Self::aggregate_candles(&candles_1m, tf);
+            let count = aggregated.len();
+            let cache = candle_cache.entry(tf).or_insert_with(CandleCache::new);
+            cache.load_history(aggregated);
+            results.push((tf.as_str().to_string(), count));
+        }
+
+        results
+    }
+
+    /// 将低周期 K 线聚合为高周期
+    fn aggregate_candles(source: &[Candle], target_tf: Timeframe) -> Vec<Candle> {
+        if source.is_empty() {
+            return Vec::new();
+        }
+
+        let mut result: Vec<Candle> = Vec::new();
+        let mut current: Option<Candle> = None;
+
+        for candle in source {
+            // 将时间对齐到目标周期
+            let aligned_time = target_tf.align_timestamp(candle.time);
+
+            match &mut current {
+                Some(curr) if curr.time == aligned_time => {
+                    // 同一周期，合并 OHLCV
+                    curr.high = curr.high.max(candle.high);
+                    curr.low = curr.low.min(candle.low);
+                    curr.close = candle.close;
+                    curr.volume += candle.volume;
+                    curr.tick_count += candle.tick_count;
+                }
+                Some(curr) => {
+                    // 新周期，保存当前 K 线，开始新的
+                    result.push(curr.clone());
+                    *curr = Candle {
+                        time: aligned_time,
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        volume: candle.volume,
+                        tick_count: candle.tick_count,
+                    };
+                }
+                None => {
+                    // 首根 K 线
+                    current = Some(Candle {
+                        time: aligned_time,
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        volume: candle.volume,
+                        tick_count: candle.tick_count,
+                    });
+                }
+            }
+        }
+
+        // 最后一根 K 线
+        if let Some(curr) = current {
+            result.push(curr);
+        }
+
+        result
     }
 
     /// 更新指定时间周期的 K 线

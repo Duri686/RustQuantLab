@@ -15,11 +15,11 @@ import type {
  * @param interval - 数据更新间隔（毫秒），默认 100ms
  * @returns { latestData, isRunning, start, stop }
  */
-/** 默认历史 K 线数量 (30 天 * 24 小时 = 720) */
-const DEFAULT_HISTORY_COUNT = 720;
+/** 默认历史 K 线数量 (7 天 * 24 * 60 = 10080 根 1m K 线) */
+const DEFAULT_HISTORY_COUNT = 10080;
 
-/** 1H 时间周期 (秒) */
-const TIMEFRAME_1H_SECONDS = 3600;
+/** 1m 时间周期 (秒) - 作为基础粒度，Rust 会自动聚合到高周期 */
+const TIMEFRAME_1M_SECONDS = 60;
 
 export function useMockMarket(interval: number = 100) {
   const [latestData, setLatestData] = useState<OrderBook | null>(null);
@@ -64,16 +64,20 @@ export function useMockMarket(interval: number = 100) {
 
   /**
    * 启动数据生成
+   * @param startPrice - 可选，起始价格（用于从历史数据结束价继续）
    */
-  const start = useCallback(() => {
-    const worker = initWorker();
-    const message: WorkerStartMessage = {
-      type: 'START',
-      payload: { interval },
-    };
-    worker.postMessage(message);
-    setIsRunning(true);
-  }, [initWorker, interval]);
+  const start = useCallback(
+    (startPrice?: number) => {
+      const worker = initWorker();
+      const message: WorkerStartMessage = {
+        type: 'START',
+        payload: { interval, startPrice },
+      };
+      worker.postMessage(message);
+      setIsRunning(true);
+    },
+    [initWorker, interval],
+  );
 
   /**
    * 停止数据生成
@@ -88,12 +92,12 @@ export function useMockMarket(interval: number = 100) {
 
   /**
    * 请求历史 K 线数据
-   * @param timeframeSeconds - 时间周期 (秒)，默认 1H = 3600
-   * @param count - K 线数量，默认 720 (30天)
+   * @param timeframeSeconds - 时间周期 (秒)，默认 1m = 60
+   * @param count - K 线数量，默认 10080 (7天)
    */
   const requestHistory = useCallback(
     (
-      timeframeSeconds: number = TIMEFRAME_1H_SECONDS,
+      timeframeSeconds: number = TIMEFRAME_1M_SECONDS,
       count: number = DEFAULT_HISTORY_COUNT,
     ) => {
       const worker = initWorker();

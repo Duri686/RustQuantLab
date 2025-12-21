@@ -142,10 +142,6 @@ export function createBOLLSeries(indicatorData: IndicatorData): SeriesOption[] {
       smooth: true,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.BOLL_LOWER, width: 1 },
-      areaStyle: {
-        color: CHART_COLORS.BOLL_BAND,
-        origin: 'auto',
-      },
       z: 7,
     },
   ];

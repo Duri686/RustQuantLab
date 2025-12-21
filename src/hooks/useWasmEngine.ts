@@ -165,6 +165,8 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
   const prevPriceRef = useRef<number | null>(null);
   const errorCountRef = useRef(0);
   const lastProcessTimeRef = useRef(0);
+  /** 历史数据是否已加载到 Rust 引擎 */
+  const historyLoadedRef = useRef(false);
 
   // ========== 分析结果 ==========
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
@@ -307,14 +309,58 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     }
   }, [latestData, toast]);
 
-  // ========== 自动启动数据流 + 加载历史数据 ==========
+  // ========== 自动请求历史数据 ==========
   useEffect(() => {
-    if (wasmReady && !isRunning) {
-      // 先加载历史数据，再启动实时数据流
+    if (wasmReady && !historyLoadedRef.current && historyCandles.length === 0) {
+      // 先请求历史数据，等加载完成后再启动实时数据
       requestHistory();
-      start();
     }
-  }, [wasmReady, isRunning, start, requestHistory]);
+  }, [wasmReady, requestHistory, historyCandles.length]);
+
+  // ========== 加载历史数据到 Rust 引擎，然后启动实时数据 ==========
+  useEffect(() => {
+    // 条件：引擎就绪 + 历史数据已生成 + 未加载过
+    if (
+      !engineAlive.current ||
+      !engineRef.current ||
+      historyCandles.length === 0 ||
+      historyLoadedRef.current
+    ) {
+      return;
+    }
+
+    try {
+      // 加载 1m K 线并自动聚合到所有高周期 (5m/15m/1H/4H/1D)
+      const results =
+        engineRef.current.load_history_1m_and_aggregate(historyCandles);
+      historyLoadedRef.current = true;
+
+      // 获取历史数据的最后收盘价，作为实时数据的起点
+      const lastPrice = historyCandles[historyCandles.length - 1].close;
+
+      // 打印各周期加载情况
+      const summary = results
+        .map(([tf, count]) => `${tf}: ${count}`)
+        .join(', ');
+      console.log(
+        `[useWasmEngine] 历史数据已加载: ${summary}, 起始价: $${lastPrice.toFixed(
+          2,
+        )}`,
+      );
+
+      // 切换到 1H 时间周期，触发 K 线数据刷新
+      engineRef.current.set_timeframe('1H');
+      const candles = engineRef.current.get_active_candles();
+      setRustCandleHistory(candles);
+
+      // 历史数据加载完成后，启动实时数据流（传入起始价格确保衔接）
+      if (!isRunning) {
+        start(lastPrice);
+      }
+    } catch (err) {
+      console.error('[useWasmEngine] 加载历史数据失败:', err);
+    }
+  }, [historyCandles, isRunning, start]);
 
   // ========== K 线聚合 Hook ==========
   const {
