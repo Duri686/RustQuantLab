@@ -35,7 +35,7 @@ export interface LayoutConfig {
 // ============================================
 
 export const MOBILE_LAYOUT: LayoutConfig = {
-  TOP_PADDING_PCT: 3,
+  TOP_PADDING_PCT: 6, // 给 legend 留出安全距离
   BOTTOM_PADDING_PCT: 4,
   MAIN_SUB_GAP_PCT: 2,
   SUB_SUB_GAP_PCT: 1.5,
@@ -56,7 +56,7 @@ export const MOBILE_LAYOUT: LayoutConfig = {
 // ============================================
 
 export const DESKTOP_LAYOUT: LayoutConfig = {
-  TOP_PADDING_PCT: 5,
+  TOP_PADDING_PCT: 7, // 给 legend 留出安全距离
   BOTTOM_PADDING_PCT: 5,
   MAIN_SUB_GAP_PCT: 3,
   SUB_SUB_GAP_PCT: 2,

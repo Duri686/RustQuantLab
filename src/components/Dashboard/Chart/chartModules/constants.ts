@@ -114,16 +114,33 @@ export function extractChartData(candles: Candle[]): ChartData {
 /**
  * 计算价格范围（自适应 Y 轴）
  * @param candles - K 线数据数组
+ * @param extraPrices - 额外的价格数据（如 BOLL 上下轨）
  */
-export function calculatePriceRange(candles: Candle[]): {
+export function calculatePriceRange(
+  candles: Candle[],
+  extraPrices?: (number | null)[],
+): {
   min: number;
   max: number;
 } {
   if (candles.length === 0) return { min: 0, max: 100 };
+
+  // 收集所有 K 线价格
   const allPrices = candles.flatMap((c) => [c.high, c.low]);
+
+  // 添加额外价格数据（如 BOLL 上下轨）
+  if (extraPrices) {
+    extraPrices.forEach((p) => {
+      if (p !== null && p !== undefined && !isNaN(p)) {
+        allPrices.push(p);
+      }
+    });
+  }
+
   const min = Math.min(...allPrices);
   const max = Math.max(...allPrices);
-  const padding = (max - min) * 0.05 || 1;
+  // 增加 padding 到 8%，确保 BOLL 线和 legend 有足够空间
+  const padding = (max - min) * 0.08 || 1;
   return { min: min - padding, max: max + padding };
 }
 

@@ -227,23 +227,28 @@ export function buildLegendData(
 /**
  * 获取图例配置对象
  * @param legendData - 图例数据
+ * @param isMobile - 是否为移动端 (可选，默认 true)
  */
-export function getLegendConfig(legendData: LegendItem[]) {
+export function getLegendConfig(legendData: LegendItem[], isMobile = true) {
   return {
     data: legendData,
-    top: 5,
-    left: 10,
+    // 使用百分比定位，确保与 grid 的 TOP_PADDING_PCT 配合
+    top: isMobile ? '1%' : '1.5%',
+    left: isMobile ? 5 : 10,
     orient: 'horizontal' as const,
-    itemWidth: 12,
-    itemHeight: 3,
-    itemGap: 15,
+    itemWidth: isMobile ? 10 : 12,
+    itemHeight: isMobile ? 2 : 3,
+    itemGap: isMobile ? 8 : 15,
     textStyle: {
       color: '#ccc',
-      fontSize: 11,
+      fontSize: isMobile ? 9 : 11,
       fontWeight: 'bold' as const,
       fontFamily: 'monospace',
     },
     inactiveColor: '#555',
     selectedMode: true,
+    // 防止 legend 太长时换行遮挡图表
+    width: '90%',
+    type: 'scroll' as const, // 超长时支持滚动
   };
 }

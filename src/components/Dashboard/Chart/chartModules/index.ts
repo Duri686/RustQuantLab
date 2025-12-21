@@ -175,7 +175,7 @@ export function getChartOption(
 
     tooltip: getTooltipConfig(),
 
-    legend: getLegendConfig(legendData),
+    legend: getLegendConfig(legendData, isMobile),
 
     grid: grids,
     xAxis: xAxes,

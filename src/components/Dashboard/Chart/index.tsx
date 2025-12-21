@@ -137,11 +137,16 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [indicatorData, allCandles.length, currentLiveCandle?.close]);
 
-    // 计算价格范围 (Y 轴自适应)
-    const priceRange = useMemo(
-      () => calculatePriceRange(allCandles),
-      [allCandles],
-    );
+    // 计算价格范围 (Y 轴自适应，包含 BOLL 上下轨确保完整显示)
+    const priceRange = useMemo(() => {
+      // 如果启用 BOLL 指标，将上下轨数据加入价格范围计算
+      const extraPrices: (number | null)[] = [];
+      if (activeMainIndicators.includes('BOLL') && mergedIndicatorData) {
+        extraPrices.push(...mergedIndicatorData.bollUpper);
+        extraPrices.push(...mergedIndicatorData.bollLower);
+      }
+      return calculatePriceRange(allCandles, extraPrices);
+    }, [allCandles, activeMainIndicators, mergedIndicatorData]);
 
     // 计算 dataZoom 起始位置
     const dataZoomStart = useMemo(
