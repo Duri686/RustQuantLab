@@ -4,6 +4,10 @@
  */
 
 import { CHART_COLORS, INDICATOR_COLOR_MAP } from './constants';
+import type { ChartData } from './constants';
+import type { IndicatorData } from '../../../../types/index';
+import type { GridConfig } from './layout';
+import { formatVolumeValue } from './series';
 
 /**
  * Tooltip 参数类型
@@ -95,20 +99,37 @@ export function createTooltipFormatter() {
 
 /**
  * 获取 Tooltip 配置对象
+ * TradingView 风格：隐藏悬浮框内容，保留十字准线
+ * 数据显示在左上角固定 DOM 中
  */
 export function getTooltipConfig() {
   return {
+    show: true, // 必须为 true 才能显示 axisPointer
     trigger: 'axis' as const,
+    // 隐藏悬浮框内容，只保留十字准线
+    formatter: () => '',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
     axisPointer: {
-      type: 'cross' as const,
-      crossStyle: { color: CHART_COLORS.CROSSHAIR },
-      lineStyle: { color: CHART_COLORS.CROSSHAIR, type: 'dashed' as const },
+      axis: 'y' as const,
+      type: 'line' as const,
+      // 水平线样式 (价格轴 Y 方向)
+      lineStyle: {
+        color: CHART_COLORS.CROSSHAIR,
+        type: 'dashed' as const,
+        width: 1,
+      },
+      // 轴标签配置
+      label: {
+        show: true,
+        backgroundColor: CHART_COLORS.CROSSHAIR_LABEL_BG,
+        color: CHART_COLORS.CROSSHAIR_LABEL_TEXT,
+        fontSize: 11,
+        fontFamily: 'monospace',
+        padding: [4, 8],
+        borderRadius: 2,
+      },
     },
-    backgroundColor: 'rgba(20, 20, 20, 0.95)',
-    borderColor: '#333',
-    borderWidth: 1,
-    textStyle: { color: '#fff', fontSize: 12 },
-    formatter: createTooltipFormatter(),
   };
 }
 
@@ -251,4 +272,107 @@ export function getLegendConfig(legendData: LegendItem[], isMobile = true) {
     width: '90%',
     type: 'scroll' as const, // 超长时支持滚动
   };
+}
+
+/* ============================================
+   副图标题生成 (实时数据展示)
+   ============================================ */
+
+/**
+ * 副图标题配置类型
+ */
+interface SubChartTitle {
+  text: string;
+  textStyle: {
+    color: string;
+    fontSize: number;
+    fontFamily: string;
+    fontWeight: 'bold' | 'normal';
+  };
+  left: number;
+  top: string;
+}
+
+/**
+ * 生成副图左上角的实时数据标题
+ * 币安风格：在副图左上角显示指标名称和当前值
+ * @param chartData - 图表数据
+ * @param indicatorData - 指标数据
+ * @param activeSubIndicators - 激活的副图指标
+ * @param grids - Grid 配置数组
+ * @param isMobile - 是否为移动端
+ */
+export function buildSubChartTitles(
+  chartData: ChartData,
+  indicatorData: IndicatorData,
+  activeSubIndicators: string[],
+  grids: GridConfig[],
+  isMobile: boolean,
+): SubChartTitle[] {
+  const titles: SubChartTitle[] = [];
+
+  activeSubIndicators.forEach((sub, idx) => {
+    const gridIndex = idx + 1; // 副图从 index 1 开始
+    const grid = grids[gridIndex];
+    if (!grid) return;
+
+    // 获取 grid 的 top 位置
+    const gridTop = typeof grid.top === 'string' ? grid.top : `${grid.top}%`;
+
+    let titleText = '';
+    let titleColor = '#888';
+
+    switch (sub) {
+      case 'VOL': {
+        const lastVolume =
+          chartData.volumeData[chartData.volumeData.length - 1];
+        const lastVolumeValue =
+          typeof lastVolume === 'object' && 'value' in lastVolume
+            ? lastVolume.value
+            : 0;
+        const isUp =
+          lastVolume &&
+          typeof lastVolume === 'object' &&
+          lastVolume.itemStyle?.color === CHART_COLORS.UP;
+        titleText = `成交量(Volume) ${formatVolumeValue(lastVolumeValue)}`;
+        titleColor = isUp ? CHART_COLORS.UP : CHART_COLORS.DOWN;
+        break;
+      }
+      case 'MACD': {
+        const lastDif = indicatorData.macdDif[indicatorData.macdDif.length - 1];
+        const lastDea = indicatorData.macdDea[indicatorData.macdDea.length - 1];
+        const lastHist =
+          indicatorData.macdHist[indicatorData.macdHist.length - 1];
+        const difStr = lastDif !== null ? lastDif.toFixed(2) : '-';
+        const deaStr = lastDea !== null ? lastDea.toFixed(2) : '-';
+        const histStr = lastHist !== null ? lastHist.toFixed(4) : '-';
+        titleText = `MACD(12,26,9) DIF:${difStr} DEA:${deaStr} MACD:${histStr}`;
+        titleColor = '#888';
+        break;
+      }
+      case 'RSI': {
+        const lastRsi = indicatorData.rsi14[indicatorData.rsi14.length - 1];
+        const rsiStr = lastRsi !== null ? lastRsi.toFixed(2) : '-';
+        titleText = `RSI(14) ${rsiStr}`;
+        titleColor = CHART_COLORS.RSI;
+        break;
+      }
+    }
+
+    if (titleText) {
+      titles.push({
+        text: titleText,
+        textStyle: {
+          color: titleColor,
+          fontSize: isMobile ? 10 : 11,
+          fontFamily: 'monospace',
+          fontWeight: 'bold',
+        },
+        left: isMobile ? 5 : 10,
+        top: gridTop,
+      });
+    }
+  });
+
+  return titles;
 }

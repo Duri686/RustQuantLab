@@ -14,6 +14,7 @@ import {
   calculatePriceRange,
   calculateDataZoomStart,
   getChartOption,
+  CHART_COLORS,
 } from './chartConfig';
 import { useChartResize } from './useChartResize';
 import { useChartInteraction } from './useChartInteraction';
@@ -154,6 +155,11 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
       [allCandles.length],
     );
 
+    // 获取现价线参数 (使用最后一根 K 线的数据)
+    const lastCandle = allCandles[allCandles.length - 1];
+    const currentPrice = lastCandle?.close;
+    const openPrice = lastCandle?.open;
+
     // 生成 ECharts 配置 (使用合并后的指标数据)
     // 依赖 currentLiveCandle 确保每次 tick 更新时均线也实时更新
     const option = useMemo(
@@ -165,7 +171,11 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
           dataZoomStart,
           activeMainIndicators,
           activeSubIndicators,
-          { isMobile }, // xx风格: 移动端主图优先布局
+          {
+            isMobile, // 币安风格: 移动端主图优先布局
+            currentPrice, // 现价线价格
+            openPrice, // 开盘价 (判断涨跌颜色)
+          },
         ),
       [
         chartData,
@@ -175,19 +185,37 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
         activeMainIndicators,
         activeSubIndicators,
         isMobile, // 屏幕尺寸变化时重新计算布局
+        currentPrice, // 现价变化时更新现价线
+        openPrice, // 开盘价变化时更新颜色
         currentLiveCandle, // 强制在 currentCandle 变化时重新计算
       ],
+    );
+
+    const structureKey = useMemo(
+      () =>
+        JSON.stringify({
+          activeMainIndicators,
+          activeSubIndicators,
+        }),
+      [activeMainIndicators, activeSubIndicators],
     );
 
     // 监听容器尺寸变化
     useChartResize(chartRef, containerRef);
 
     // 图表交互逻辑
-    const { showReSync, handleReSync, onEvents } = useChartInteraction(
-      chartRef,
-      option,
-      allCandles.length,
-    );
+    const { showReSync, hoverDataIndex, handleReSync, onEvents } =
+      useChartInteraction(chartRef, option, allCandles.length, structureKey);
+
+    // TradingView 风格：根据 hoverDataIndex 获取当前显示的数据
+    const displayIndex =
+      hoverDataIndex !== null ? hoverDataIndex : allCandles.length - 1;
+    const displayCandle = allCandles[displayIndex];
+    const displayVolume = chartData.volumeData[displayIndex];
+    const displayVolumeValue =
+      typeof displayVolume === 'object' && 'value' in displayVolume
+        ? displayVolume.value
+        : 0;
 
     // ========== 暴露截图方法 ==========
     useImperativeHandle(
@@ -247,11 +275,116 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
       onEvents,
     };
 
+    // 格式化成交量显示
+    const formatVolume = (vol: number): string => {
+      if (vol >= 1e9) return `${(vol / 1e9).toFixed(2)}B`;
+      if (vol >= 1e6) return `${(vol / 1e6).toFixed(2)}M`;
+      if (vol >= 1e3) return `${(vol / 1e3).toFixed(2)}K`;
+      return vol.toFixed(2);
+    };
+
+    // 判断涨跌颜色
+    const isUp = displayCandle && displayCandle.close >= displayCandle.open;
+    const priceColor = isUp ? CHART_COLORS.UP : CHART_COLORS.DOWN;
+
+    // MACD 动态数据
+    const displayMacdDif = mergedIndicatorData.macdDif[displayIndex];
+    const displayMacdDea = mergedIndicatorData.macdDea[displayIndex];
+    const displayMacdHist = mergedIndicatorData.macdHist[displayIndex];
+
+    // RSI 动态数据
+    const displayRsi = mergedIndicatorData.rsi14[displayIndex];
+
+    // MACD 柱状图颜色（与图表一致）
+    const getMacdHistDisplayColor = () => {
+      if (displayMacdHist === null) return '#888';
+      const prevHist =
+        displayIndex > 0
+          ? mergedIndicatorData.macdHist[displayIndex - 1]
+          : null;
+      const isPositive = displayMacdHist >= 0;
+      const prev = prevHist ?? 0;
+
+      if (isPositive) {
+        return displayMacdHist >= prev
+          ? CHART_COLORS.UP
+          : 'rgba(14, 203, 129, 0.7)';
+      } else {
+        return displayMacdHist <= prev
+          ? CHART_COLORS.DOWN
+          : 'rgba(246, 70, 93, 0.7)';
+      }
+    };
+
     return (
       <div
         ref={containerRef}
         className="w-full h-full overflow-hidden relative"
       >
+        {/* TradingView 风格头部数据显示 */}
+        {displayCandle && (
+          <div
+            className="absolute top-1 left-1 z-10 flex flex-wrap items-center gap-x-3 gap-y-0.5
+                       text-[10px] md:text-xs font-mono pointer-events-none
+                       bg-[#161a1e]/80 backdrop-blur-sm rounded px-2 py-1"
+          >
+            {/* 时间 */}
+            <span className="text-neutral-400">
+              {chartData.times[displayIndex]}
+            </span>
+            {/* OHLC */}
+            <span className="text-neutral-500">开</span>
+            <span style={{ color: priceColor }}>
+              {displayCandle.open.toFixed(2)}
+            </span>
+            <span className="text-neutral-500">高</span>
+            <span style={{ color: priceColor }}>
+              {displayCandle.high.toFixed(2)}
+            </span>
+            <span className="text-neutral-500">低</span>
+            <span style={{ color: priceColor }}>
+              {displayCandle.low.toFixed(2)}
+            </span>
+            <span className="text-neutral-500">收</span>
+            <span style={{ color: priceColor }}>
+              {displayCandle.close.toFixed(2)}
+            </span>
+            {/* 成交量 */}
+            <span className="text-neutral-500">
+              量 {formatVolume(displayVolumeValue)}
+            </span>
+
+            {/* MACD 动态数据 (仅在启用 MACD 时显示) */}
+            {activeSubIndicators.includes('MACD') && (
+              <>
+                <span className="text-neutral-600 ml-2">|</span>
+                <span className="text-neutral-500">MACD(12,26,9)</span>
+                <span style={{ color: CHART_COLORS.MACD_DIF }}>
+                  DIF:
+                  {displayMacdDif !== null ? displayMacdDif.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.MACD_DEA }}>
+                  DEA:
+                  {displayMacdDea !== null ? displayMacdDea.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: getMacdHistDisplayColor() }}>
+                  MACD:
+                  {displayMacdHist !== null ? displayMacdHist.toFixed(4) : '-'}
+                </span>
+              </>
+            )}
+
+            {/* RSI 动态数据 (仅在启用 RSI 时显示) */}
+            {activeSubIndicators.includes('RSI') && (
+              <>
+                <span className="text-neutral-600 ml-2">|</span>
+                <span style={{ color: CHART_COLORS.RSI }}>
+                  RSI(14):{displayRsi !== null ? displayRsi.toFixed(2) : '-'}
+                </span>
+              </>
+            )}
+          </div>
+        )}
         <ReactECharts ref={chartRef} {...echartsProps} />
         <ChartOverlay visible={showReSync} onReSync={handleReSync} />
       </div>

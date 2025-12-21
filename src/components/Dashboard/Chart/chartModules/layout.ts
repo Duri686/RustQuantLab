@@ -122,11 +122,11 @@ function calculateSubChartHeights(
  */
 function createMainGrid(config: LayoutConfig, mainHeight: number): GridConfig {
   return {
-    left: 0,
+    left: config.GRID_LEFT,
     right: config.GRID_RIGHT,
     top: `${config.TOP_PADDING_PCT}%`,
     height: `${mainHeight}%`,
-    containLabel: false,
+    containLabel: false, // 禁止自适应，确保边距固定
     show: true,
     borderWidth: 0,
   };
@@ -141,11 +141,11 @@ function createSubGrid(
   height: number,
 ): GridConfig {
   return {
-    left: 0,
+    left: config.GRID_LEFT,
     right: config.GRID_RIGHT,
     top: `${top}%`,
     height: `${height}%`,
-    containLabel: false,
+    containLabel: false, // 禁止自适应，确保边距固定
     show: true,
     borderWidth: 0,
   };
@@ -189,11 +189,11 @@ export function buildDynamicGridLayout(
   // 无副图：主图占满
   if (effectiveSubCount === 0) {
     grids.push({
-      left: 0,
+      left: config.GRID_LEFT,
       right: config.GRID_RIGHT,
       top: `${config.TOP_PADDING_PCT}%`,
       bottom: `${config.BOTTOM_PADDING_PCT}%`,
-      containLabel: false,
+      containLabel: false, // 禁止自适应，确保边距固定
       show: true,
       borderWidth: 0,
     });

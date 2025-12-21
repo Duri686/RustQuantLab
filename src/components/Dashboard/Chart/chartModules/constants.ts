@@ -34,6 +34,11 @@ export const CHART_COLORS = {
   MACD_DEA: '#61C3EA',
   MACD_HIST_UP: '#0ECB81',
   MACD_HIST_DOWN: '#F6465D',
+  // MACD 柱状图进阶颜色（趋势强弱区分）
+  MACD_HIST_UP_STRONG: '#0ECB81', // 上涨动能增强 - 深绿
+  MACD_HIST_UP_WEAK: 'rgba(14, 203, 129, 0.5)', // 上涨动能减弱 - 浅绿
+  MACD_HIST_DOWN_STRONG: '#F6465D', // 下跌动能增强 - 深红
+  MACD_HIST_DOWN_WEAK: 'rgba(246, 70, 93, 0.5)', // 下跌动能减弱 - 浅红
 
   // RSI 颜色
   RSI: '#A371F7',
@@ -48,14 +53,26 @@ export const CHART_COLORS = {
 
   /** 背景色 */
   BACKGROUND: 'transparent',
-  /** 网格线颜色 */
-  GRID_LINE: 'rgba(255, 255, 255, 0.06)',
+  /** 网格线颜色 (币安风格 - 弱化不干扰 K 线) */
+  GRID_LINE: 'rgba(255, 255, 255, 0.04)',
   /** 轴标签颜色 */
   AXIS_LABEL: '#888',
   /** 轴线颜色 */
   AXIS_LINE: '#333',
   /** 十字准星颜色 */
-  CROSSHAIR: 'rgba(255, 255, 255, 0.3)',
+  CROSSHAIR: 'rgba(136, 136, 136, 0.8)',
+  /** 十字准星标签背景色 */
+  CROSSHAIR_LABEL_BG: '#363a45',
+  /** 十字准星标签文字色 */
+  CROSSHAIR_LABEL_TEXT: '#d1d4dc',
+  /** 现价线颜色 (上涨时) */
+  PRICE_LINE_UP: '#0ECB81',
+  /** 现价线颜色 (下跌时) */
+  PRICE_LINE_DOWN: '#F6465D',
+  /** 现价标签背景色 (上涨时) */
+  PRICE_LABEL_BG_UP: '#0ECB81',
+  /** 现价标签背景色 (下跌时) */
+  PRICE_LABEL_BG_DOWN: '#F6465D',
 } as const;
 
 /** 默认显示的 K 线数量 */
@@ -139,8 +156,8 @@ export function calculatePriceRange(
 
   const min = Math.min(...allPrices);
   const max = Math.max(...allPrices);
-  // 增加 padding 到 8%，确保 BOLL 线和 legend 有足够空间
-  const padding = (max - min) * 0.08 || 1;
+  // 增加 padding 到 12%，确保价格线和 BOLL 等有充足“呼吸空间”
+  const padding = (max - min) * 0.12 || 1;
   return { min: min - padding, max: max + padding };
 }
 

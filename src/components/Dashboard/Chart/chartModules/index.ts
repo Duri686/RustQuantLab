@@ -16,12 +16,7 @@ import {
 } from './constants';
 import type { ChartData } from './constants';
 
-import {
-  buildDynamicGridLayout,
-  buildDividerGraphics,
-  buildXAxes,
-  buildYAxes,
-} from './layout';
+import { buildDynamicGridLayout, buildXAxes, buildYAxes } from './layout';
 
 import {
   createCandlestickSeries,
@@ -32,8 +27,10 @@ import {
   createRSISeries,
   createVolumeSeries,
 } from './series';
+import type { PriceLineConfig } from './series';
+export type { PriceLineConfig };
 
-import { getTooltipConfig, buildLegendData, getLegendConfig } from './tooltip';
+import { getTooltipConfig, buildSubChartTitles } from './tooltip';
 
 // 重新导出常用的工具函数和类型
 export {
@@ -80,6 +77,10 @@ export interface ChartOptionConfig {
   isMobile?: boolean;
   /** 成交量叠加到主图 (节省空间，暂未实现) */
   volumeOverlay?: boolean;
+  /** 当前价格 (用于现价线) */
+  currentPrice?: number;
+  /** 当日开盘价 (用于判断涨跌颜色) */
+  openPrice?: number;
 }
 
 /**
@@ -111,28 +112,37 @@ export function getChartOption(
   const hasSubIndicator = subCount > 0;
 
   // Grid 布局：Main-Chart-First 策略 (xx风格)
-  const { grids, dividerPositions } = buildDynamicGridLayout({
+  const { grids } = buildDynamicGridLayout({
     isMobile,
     subCount,
     volumeOverlay,
   });
 
-  // 生成分隔线 graphic 元素
-  const dividerGraphics = buildDividerGraphics(dividerPositions, { isMobile });
+  // 分隔线已移除（间距为 0，不需要分隔线）
 
   // 生成轴配置 (移动端使用 inside 标签)
   const xAxes = buildXAxes(chartData, subCount, { isMobile });
-  const yAxes = buildYAxes(priceRange, subCount, { isMobile });
+  const yAxes = buildYAxes(priceRange, subCount, {
+    isMobile,
+    activeSubIndicators,
+  });
 
   // DataZoom 需要绑定所有 X 轴
   const xAxisIndices = hasSubIndicator
     ? Array.from({ length: 1 + subCount }, (_, i) => i)
     : [0];
 
+  // 现价线配置
+  const { currentPrice, openPrice } = config;
+  const priceLineConfig: PriceLineConfig | undefined =
+    currentPrice !== undefined && openPrice !== undefined
+      ? { currentPrice, openPrice }
+      : undefined;
+
   // 构建系列数据
   const series: SeriesOption[] = [
-    // K 线蜡烛图 (始终存在)
-    createCandlestickSeries(chartData.klineData),
+    // K 线蜡烛图 (始终存在) + 现价线
+    createCandlestickSeries(chartData.klineData, priceLineConfig),
   ];
 
   // 添加主图指标
@@ -164,9 +174,6 @@ export function getChartOption(
     });
   }
 
-  // 构建图例
-  const legendData = buildLegendData(activeMainIndicators, activeSubIndicators);
-
   return {
     animation: false,
     animationDuration: 0,
@@ -175,14 +182,33 @@ export function getChartOption(
 
     tooltip: getTooltipConfig(),
 
-    legend: getLegendConfig(legendData, isMobile),
+    // 全局 axisPointer 配置：负责多 Grid 间的垂直线联动，不干扰各自的 Y 轴水平线
+    axisPointer: {
+      link: [{ xAxisIndex: 'all' }],
+      triggerOn: 'mousemove|click',
+      snap: true,
+      lineStyle: {
+        color: CHART_COLORS.CROSSHAIR,
+        type: 'dashed',
+        width: 1,
+      },
+      // 不设置全局 label，避免覆盖各轴的独立配置
+    },
+
+    // legend 已移除，改用头部实时数据显示
 
     grid: grids,
     xAxis: xAxes,
     yAxis: yAxes,
 
-    // 分隔线图形元素
-    graphic: dividerGraphics,
+    // 副图标题 (实时数据显示)
+    title: buildSubChartTitles(
+      chartData,
+      safeIndicatorData,
+      activeSubIndicators,
+      grids,
+      isMobile,
+    ),
 
     dataZoom: [
       {

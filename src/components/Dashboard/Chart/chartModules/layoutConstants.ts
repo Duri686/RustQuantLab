@@ -26,7 +26,9 @@ export interface LayoutConfig {
   Y_AXIS_LABEL_INSIDE: boolean;
   /** Y 轴标签字体大小 */
   Y_AXIS_FONT_SIZE: number;
-  /** Grid 右侧边距 */
+  /** Grid 左侧边距 (固定像素值，确保多图对齐) */
+  GRID_LEFT: number;
+  /** Grid 右侧边距 (固定像素值，确保多图对齐) */
   GRID_RIGHT: number;
 }
 
@@ -35,10 +37,10 @@ export interface LayoutConfig {
 // ============================================
 
 export const MOBILE_LAYOUT: LayoutConfig = {
-  TOP_PADDING_PCT: 6, // 给 legend 留出安全距离
+  TOP_PADDING_PCT: 3, // 减少顶部留白（已移除 legend）
   BOTTOM_PADDING_PCT: 4,
-  MAIN_SUB_GAP_PCT: 2,
-  SUB_SUB_GAP_PCT: 1.5,
+  MAIN_SUB_GAP_PCT: 0, // 无间距，确保 Y 轴网格线连贯
+  SUB_SUB_GAP_PCT: 0, // 无间距
   MIN_MAIN_HEIGHT_PCT: 60,
   SUB_HEIGHT_CONFIG: {
     0: 0, // 无副图
@@ -46,9 +48,10 @@ export const MOBILE_LAYOUT: LayoutConfig = {
     2: 12, // 双副图: 主图 70%, 每个副图 12%
     3: 10, // 三副图: 主图 60%, 每个副图 10%
   },
-  Y_AXIS_LABEL_INSIDE: true,
+  Y_AXIS_LABEL_INSIDE: false,
   Y_AXIS_FONT_SIZE: 10,
-  GRID_RIGHT: 5,
+  GRID_LEFT: 10, // 固定像素值，确保多图左边界对齐
+  GRID_RIGHT: 70, // 固定像素值，确保多图右边界对齐
 };
 
 // ============================================
@@ -56,10 +59,10 @@ export const MOBILE_LAYOUT: LayoutConfig = {
 // ============================================
 
 export const DESKTOP_LAYOUT: LayoutConfig = {
-  TOP_PADDING_PCT: 7, // 给 legend 留出安全距离
+  TOP_PADDING_PCT: 4, // 减少顶部留白（已移除 legend）
   BOTTOM_PADDING_PCT: 5,
-  MAIN_SUB_GAP_PCT: 3,
-  SUB_SUB_GAP_PCT: 2,
+  MAIN_SUB_GAP_PCT: 0, // 无间距，确保 Y 轴网格线连贯
+  SUB_SUB_GAP_PCT: 0, // 无间距
   MIN_MAIN_HEIGHT_PCT: 50,
   SUB_HEIGHT_CONFIG: {
     0: 0,
@@ -69,7 +72,8 @@ export const DESKTOP_LAYOUT: LayoutConfig = {
   },
   Y_AXIS_LABEL_INSIDE: false,
   Y_AXIS_FONT_SIZE: 11,
-  GRID_RIGHT: 55,
+  GRID_LEFT: 10, // 固定像素值，确保多图左边界对齐
+  GRID_RIGHT: 80, // 固定像素值，确保多图右边界对齐
 };
 
 // ============================================

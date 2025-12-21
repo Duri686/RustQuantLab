@@ -21,6 +21,8 @@ export interface XAxisOptions {
 export interface YAxisOptions {
   /** 是否为移动端 */
   isMobile?: boolean;
+  /** 激活的副图指标列表 (用于识别 RSI 等特殊 Y 轴需求) */
+  activeSubIndicators?: string[];
 }
 
 // ============================================
@@ -52,11 +54,26 @@ export function buildXAxes(
     ...(isMobile && { rotate: 0, hideOverlap: true }),
   };
 
+  // === 统一的 splitLine 配置，确保网格线贯穿 ===
+  const unifiedSplitLine = {
+    show: true,
+    lineStyle: {
+      color: CHART_COLORS.GRID_LINE,
+      type: 'dashed' as const,
+      width: 1,
+    },
+  };
+
+  // === 统一的 boundaryGap 配置，确保柱体对齐 ===
+  // K线图和柱状图都使用 true，使数据点居中于刻度之间
+  const unifiedBoundaryGap = true;
+
   // 主图 X 轴 (只有无副图时才显示标签)
   axes.push({
     type: 'category' as const,
     data: chartData.times,
     gridIndex: 0,
+    boundaryGap: unifiedBoundaryGap,
     axisLine: {
       show: !hasSubIndicator,
       lineStyle: { color: CHART_COLORS.AXIS_LINE },
@@ -66,16 +83,36 @@ export function buildXAxes(
       show: !hasSubIndicator,
       lineStyle: { color: CHART_COLORS.AXIS_LINE },
     },
-    splitLine: { show: false },
+    // 主图 X 轴 axisPointer: 始终开启 axisPointer 并启用 snap
+    axisPointer: {
+      show: true,
+      snap: true,
+      label: hasSubIndicator
+        ? { show: false }
+        : {
+            show: true,
+            backgroundColor: 'rgba(30, 34, 45, 0.95)',
+            color: '#f0f0f0',
+            fontSize: isMobile ? 10 : 11,
+            fontFamily: 'monospace',
+            padding: [4, 8],
+            borderRadius: 3,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderWidth: 1,
+          },
+    },
+    // 垂直网格线 (统一配置，确保贯穿)
+    splitLine: unifiedSplitLine,
   });
 
-  // 副图 X 轴：只在最后一个副图显示标签
+  // 副图 X 轴：只在最后一个副图显示标签和 axisPointer
   for (let i = 0; i < subCount; i++) {
     const isLastSub = i === subCount - 1;
     axes.push({
       type: 'category' as const,
       data: chartData.times,
       gridIndex: i + 1,
+      boundaryGap: unifiedBoundaryGap, // 与主图严格一致
       axisLine: {
         show: isLastSub,
         lineStyle: { color: CHART_COLORS.AXIS_LINE },
@@ -85,7 +122,28 @@ export function buildXAxes(
         show: isLastSub,
         lineStyle: { color: CHART_COLORS.AXIS_LINE },
       },
-      splitLine: { show: false },
+      // 副图 X 轴 axisPointer: 始终开启 axisPointer 并启用 snap
+      axisPointer: {
+        show: true,
+        snap: true,
+        label: isLastSub
+          ? {
+              show: true,
+              backgroundColor: 'rgba(30, 34, 45, 0.95)',
+              color: '#f0f0f0',
+              fontSize: isMobile ? 10 : 11,
+              fontFamily: 'monospace',
+              padding: [4, 8],
+              borderRadius: 3,
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderWidth: 1,
+            }
+          : {
+              show: false,
+            },
+      },
+      // 垂直网格线 (统一配置，确保贯穿)
+      splitLine: unifiedSplitLine,
     });
   }
 
@@ -125,37 +183,75 @@ function buildMainYAxis(
       showMaxLabel: true,
       formatter,
     },
+    // 主图 Y 轴 axisPointer 配置 - 价格标签样式（参考时间标签风格）
+    axisPointer: {
+      show: true,
+      snap: true,
+      label: {
+        show: true,
+        backgroundColor: '#1e222d', // 深色背景，提高对比度
+        color: '#ffffff',
+        fontSize: isMobile ? 11 : 12,
+        fontFamily: 'monospace',
+        fontWeight: 500,
+        padding: [6, 10], // 增加内边距，提高可读性
+        borderRadius: 4,
+        formatter: (params: { value: number }) => formatter(params.value),
+      },
+    },
     splitLine: {
       show: true,
       lineStyle: {
         color: CHART_COLORS.GRID_LINE,
-        type: 'solid',
+        type: 'dashed',
         width: 1,
       },
     },
     splitArea: {
-      show: !isMobile,
-      areaStyle: {
-        color: ['rgba(255, 255, 255, 0.02)', 'transparent'],
-      },
+      show: false,
     },
   };
 }
 
 /**
- * 生成副图 Y 轴配置
+ * 副图类型枚举
  */
-function buildSubYAxis(gridIndex: number, isMobile: boolean): object {
+type SubChartType = 'VOL' | 'MACD' | 'RSI' | 'DEFAULT';
+
+/**
+ * 生成副图 Y 轴配置
+ * @param gridIndex - Grid 索引
+ * @param isMobile - 是否为移动端
+ * @param subChartType - 副图类型 (RSI 需要固定 0-100 范围)
+ */
+function buildSubYAxis(
+  gridIndex: number,
+  isMobile: boolean,
+  subChartType: SubChartType = 'DEFAULT',
+): object {
   const config = isMobile ? MOBILE_LAYOUT : DESKTOP_LAYOUT;
+
+  // RSI 特殊配置：固定 Y 轴范围 0-100
+  const isRSI = subChartType === 'RSI';
+  const rsiAxisConfig = isRSI
+    ? {
+        min: 0,
+        max: 100,
+        scale: false, // 禁用自动缩放
+        interval: isMobile ? 50 : 25, // 移动端: 0, 50, 100; 桌面端: 0, 25, 50, 75, 100
+      }
+    : {
+        scale: true,
+      };
 
   return {
     type: 'value' as const,
-    scale: true,
+    ...rsiAxisConfig,
     gridIndex,
     position: 'right' as const,
     axisLine: { show: false },
     axisTick: { show: false },
-    splitNumber: isMobile ? 2 : 3,
+    splitNumber: isRSI ? undefined : isMobile ? 2 : 3,
     axisLabel: {
       color: CHART_COLORS.AXIS_LABEL,
       fontSize: isMobile ? 8 : 9,
@@ -164,12 +260,32 @@ function buildSubYAxis(gridIndex: number, isMobile: boolean): object {
       margin: config.Y_AXIS_LABEL_INSIDE ? 1 : 4,
       showMinLabel: true,
       showMaxLabel: true,
-      formatter: formatSubChartValue,
+      formatter: isRSI ? (value: number) => `${value}` : formatSubChartValue,
+    },
+    // 副图 Y 轴 axisPointer 配置 - 与主图统一样式
+    axisPointer: {
+      show: true,
+      snap: true,
+      label: {
+        show: true,
+        backgroundColor: '#1e222d', // 深色背景，提高对比度
+        color: '#ffffff',
+        fontSize: isMobile ? 11 : 12,
+        fontFamily: 'monospace',
+        fontWeight: 500,
+        padding: [6, 10], // 增加内边距，提高可读性
+        borderRadius: 4,
+        formatter: (params: { value: number }) =>
+          isRSI
+            ? `${params.value.toFixed(1)}`
+            : formatSubChartValue(params.value),
+      },
     },
     splitLine: {
       show: true,
       lineStyle: {
         color: CHART_COLORS.GRID_LINE,
+        type: 'dashed',
         opacity: 0.5,
       },
     },
@@ -189,15 +305,16 @@ export function buildYAxes(
   subCount: number,
   options: YAxisOptions = {},
 ): object[] {
-  const { isMobile = true } = options;
+  const { isMobile = true, activeSubIndicators = [] } = options;
   const axes: object[] = [];
 
   // 主图 Y 轴
   axes.push(buildMainYAxis(priceRange, isMobile));
 
-  // 副图 Y 轴
+  // 副图 Y 轴 (根据指标类型应用不同配置)
   for (let i = 0; i < subCount; i++) {
-    axes.push(buildSubYAxis(i + 1, isMobile));
+    const subType = (activeSubIndicators[i] as SubChartType) || 'DEFAULT';
+    axes.push(buildSubYAxis(i + 1, isMobile, subType));
   }
 
   return axes;

@@ -19,17 +19,29 @@ interface DataZoomParams {
 }
 
 /**
+ * updateAxisPointer 事件参数类型
+ */
+interface AxisPointerParams {
+  dataIndex?: number;
+  seriesIndex?: number;
+  axesInfo?: Array<{ axisDim: string; value: number | string }>;
+}
+
+/**
  * 图表交互 Hook 返回值
  */
 interface ChartInteractionResult {
   /** 是否显示 Re-Sync 按钮 */
   showReSync: boolean;
+  /** 当前悬停的数据索引 (用于 TradingView 风格头部数据显示) */
+  hoverDataIndex: number | null;
   /** dataZoom 事件处理器 */
   handleDataZoom: (params: DataZoomParams) => void;
   /** Re-Sync 按钮点击处理器 */
   handleReSync: () => void;
   /** ECharts 事件监听对象 */
-  onEvents: Record<string, (params: DataZoomParams) => void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onEvents: Record<string, (params: any) => void>;
 }
 
 /**
@@ -44,6 +56,7 @@ export function useChartInteraction(
   chartRef: RefObject<ReactECharts | null>,
   option: EChartsOption,
   totalCandles: number,
+  structureKey: string,
 ): ChartInteractionResult {
   /**
    * 自动跟随最新数据标志
@@ -52,10 +65,18 @@ export function useChartInteraction(
    */
   const isAutoFollow = useRef<boolean>(true);
 
+  const lastStructureKey = useRef<string | null>(null);
+
   /**
    * 用于触发 UI 更新的 state（显示/隐藏 Re-Sync 按钮）
    */
   const [showReSync, setShowReSync] = useState<boolean>(false);
+
+  /**
+   * 当前悬停的数据索引 (用于 TradingView 风格头部数据显示)
+   * null 表示鼠标不在图表上，显示最新数据
+   */
+  const [hoverDataIndex, setHoverDataIndex] = useState<number | null>(null);
 
   /**
    * 处理 dataZoom 事件（用户拖拽/缩放时触发）
@@ -112,6 +133,14 @@ export function useChartInteraction(
     const chartInstance = chartRef.current?.getEchartsInstance();
     if (!chartInstance) return;
 
+    const isStructureChanged = lastStructureKey.current !== structureKey;
+    lastStructureKey.current = structureKey;
+
+    if (isStructureChanged) {
+      chartInstance.setOption(option, { notMerge: true, lazyUpdate: true });
+      return;
+    }
+
     if (isAutoFollow.current) {
       // 自动跟随模式：完整更新包括 dataZoom
       chartInstance.setOption(option, { notMerge: false, lazyUpdate: true });
@@ -124,7 +153,25 @@ export function useChartInteraction(
         lazyUpdate: true,
       });
     }
-  }, [chartRef, option]);
+  }, [chartRef, option, structureKey]);
+
+  /**
+   * 处理 updateAxisPointer 事件
+   * 当鼠标在图表上移动时，获取当前悬停的数据索引
+   */
+  const handleUpdateAxisPointer = useCallback((params: AxisPointerParams) => {
+    if (typeof params.dataIndex === 'number') {
+      setHoverDataIndex(params.dataIndex);
+    }
+  }, []);
+
+  /**
+   * 处理鼠标离开图表事件
+   * 重置 hoverDataIndex 为 null，显示最新数据
+   */
+  const handleGlobalOut = useCallback(() => {
+    setHoverDataIndex(null);
+  }, []);
 
   /**
    * ECharts 事件监听对象
@@ -132,12 +179,15 @@ export function useChartInteraction(
   const onEvents = useMemo(
     () => ({
       dataZoom: handleDataZoom,
+      updateAxisPointer: handleUpdateAxisPointer,
+      globalout: handleGlobalOut,
     }),
-    [handleDataZoom],
+    [handleDataZoom, handleUpdateAxisPointer, handleGlobalOut],
   );
 
   return {
     showReSync,
+    hoverDataIndex,
     handleDataZoom,
     handleReSync,
     onEvents,
