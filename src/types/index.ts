@@ -424,10 +424,6 @@ export interface StatsPanelProps {
   analysisResult: AnalysisResult | null;
   /** 价格颜色类 */
   priceColorClass: string;
-  /** K 线数量 */
-  candleCount: number;
-  /** 是否运行中 */
-  isRunning: boolean;
 }
 
 /**

@@ -257,13 +257,11 @@ function App() {
               </div>
             </div>
 
-            {/* Stats Panel - 移动端 2 列 / 桌面端 4 列 */}
+            {/* Stats Panel - 单行 3 列 */}
             <StatsPanel
               latestData={latestData}
               analysisResult={analysisResult}
               priceColorClass={priceColorClass}
-              candleCount={candleHistory.length}
-              isRunning={isRunning}
             />
           </section>
 

@@ -55,33 +55,23 @@ function StatCell({
 
 /**
  * Rust 分析信息条组件
- * 专业终端风格：固定高度，4 列网格，高密度数据展示
+ * 专业终端风格：单行 3 列布局，高密度数据展示
  */
 function StatsPanel({
   latestData,
   analysisResult,
   priceColorClass,
-  candleCount,
-  isRunning,
 }: StatsPanelProps) {
-  /**
-   * 格式化 SMA5 显示值
-   * 严格使用 WasmAnalysisResult.sma5 字段 (camelCase)
-   */
+  /** 格式化 SMA5 显示值 */
   const formatSma5 = (): string => {
-    if (!analysisResult) return '--';
-    const { sma5 } = analysisResult;
-    if (sma5 == null) {
-      return isRunning ? 'Calc...' : '--';
-    }
-    return `$${sma5.toFixed(2)}`;
+    const sma5 = analysisResult?.sma5;
+    return sma5 != null ? `$${sma5.toFixed(2)}` : '--';
   };
   return (
     <div
       className="
-        shrink-0 h-auto md:h-16 bg-[#0d0d0d] border-t border-[#2b2f36]
-        grid grid-cols-2 md:grid-cols-4
-        divide-x divide-[#2b2f36]
+        shrink-0 h-10 md:h-12 bg-[#0d0d0d] border-t border-[#2b2f36]
+        grid grid-cols-3 divide-x divide-[#2b2f36]
       "
     >
       {/* Last Price */}
@@ -104,36 +94,6 @@ function StatsPanel({
         value={formatSma5()}
         colorClass="text-[#00B8D9]"
       />
-
-      {/* Candles / Status - 移动端简化 */}
-      <div className="flex items-center justify-between px-2 md:px-4 py-1 md:py-0">
-        <div className="flex flex-col justify-center h-full">
-          <span className="text-[8px] md:text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-0.5 md:mb-1">
-            Candles
-          </span>
-          <span
-            className="text-[clamp(12px,3vw,16px)] md:text-base font-bold font-mono tabular-nums leading-none text-[#E040FB]"
-            style={{ textShadow: '0 0 8px #E040FB' }}
-          >
-            {candleCount}
-          </span>
-        </div>
-        {/* 状态指示器 */}
-        <div className="flex items-center gap-1 md:gap-1.5">
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
-            }`}
-          />
-          <span
-            className={`text-[9px] md:text-[10px] font-mono ${
-              isRunning ? 'text-[#0ECB81]' : 'text-gray-500'
-            }`}
-          >
-            {isRunning ? 'LIVE' : 'OFF'}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }
