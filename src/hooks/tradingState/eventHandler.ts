@@ -24,6 +24,14 @@ export function safeToFixed(value: number | undefined, digits: number): string {
 }
 
 /**
+ * 风险提醒节流状态
+ * 避免同一风险等级的 toast 重复弹出
+ */
+let lastWarningRiskLevel: string | null = null;
+let lastWarningTime = 0;
+const WARNING_THROTTLE_MS = 30000; // 同一风险等级 30 秒内不重复提醒
+
+/**
  * 处理引擎事件并触发 Toast 通知
  *
  * 🔴 注意: Rust serde 可能序列化为 snake_case 或 camelCase
@@ -71,15 +79,27 @@ export function handleEngineEvents(
     } else if (isMarginWarningEvent(event) || e.type === 'marginWarning') {
       const riskLevel = e.riskLevel ?? e.risk_level ?? 'Unknown';
       const marginRatio = e.marginRatio ?? e.margin_ratio ?? 0;
-      const config =
-        RISK_LEVEL_CONFIG[riskLevel as keyof typeof RISK_LEVEL_CONFIG];
-      toast.warning(
-        `风险预警 [${config?.label || riskLevel}]: 保证金率 ${safeToFixed(
-          marginRatio,
-          2,
-        )}x`,
-        5000,
-      );
+      const now = Date.now();
+
+      // 节流：同一风险等级在指定时间内不重复提醒
+      const shouldShow =
+        riskLevel !== lastWarningRiskLevel ||
+        now - lastWarningTime > WARNING_THROTTLE_MS;
+
+      if (shouldShow) {
+        lastWarningRiskLevel = riskLevel;
+        lastWarningTime = now;
+
+        const config =
+          RISK_LEVEL_CONFIG[riskLevel as keyof typeof RISK_LEVEL_CONFIG];
+        toast.warning(
+          `风险预警 [${config?.label || riskLevel}]: 保证金率 ${safeToFixed(
+            marginRatio,
+            2,
+          )}x`,
+          5000,
+        );
+      }
     } else if (e.type === 'limitOrderCreated') {
       const side = e.side ?? 'UNKNOWN';
       const size = e.size ?? 0;
@@ -103,6 +123,21 @@ export function handleEngineEvents(
     } else if (e.type === 'limitOrderCancelled') {
       const releasedMargin = e.releasedMargin ?? e.released_margin ?? 0;
       toast.info(`挂单已取消，解冻 ${safeToFixed(releasedMargin, 2)} USDT`);
+    } else if (e.type === 'positionMerged') {
+      const side = e.side ?? 'UNKNOWN';
+      const addedSize = e.addedSize ?? e.added_size ?? 0;
+      const newSize = e.newSize ?? e.new_size ?? 0;
+      const newEntryPrice = e.newEntryPrice ?? e.new_entry_price ?? 0;
+      const newLeverage = e.newLeverage ?? e.new_leverage ?? 0;
+      toast.success(
+        `加仓成功: ${side} +${safeToFixed(
+          addedSize,
+          4,
+        )} BTC, 总持仓 ${safeToFixed(newSize, 4)} @ ${safeToFixed(
+          newEntryPrice,
+          2,
+        )}, ${newLeverage}x`,
+      );
     } else {
       // 未知事件类型，记录日志
       console.warn('[TradingState] Unknown event type:', e.type, event);

@@ -105,6 +105,59 @@ impl PositionManager {
         self.positions.clear();
     }
 
+    /// 为逐仓仓位增加保证金
+    ///
+    /// # Arguments
+    /// - `position_key`: 仓位标识
+    /// - `amount`: 增加的保证金金额
+    /// - `risk_config`: 风控配置（用于重新计算强平价）
+    ///
+    /// # Returns
+    /// - `Ok(new_margin)`: 增加后的总保证金
+    /// - `Err(msg)`: 错误信息
+    pub fn add_margin(
+        &mut self,
+        position_key: &str,
+        amount: f64,
+        risk_config: &RiskConfig,
+    ) -> Result<f64, String> {
+        let pos = self.positions.get_mut(position_key)
+            .ok_or_else(|| "仓位不存在".to_string())?;
+        
+        // 只允许逐仓模式增加保证金
+        if pos.margin_mode != MarginMode::Isolated {
+            return Err("只有逐仓模式可以增加保证金".to_string());
+        }
+        
+        if amount <= 0.0 {
+            return Err("增加金额必须大于0".to_string());
+        }
+        
+        // 增加保证金
+        pos.margin += amount;
+        
+        // 重新计算强平价（保证金增加，强平价变远）
+        let notional = pos.size * pos.entry_price;
+        let mmr = risk_config.get_maintenance_margin_rate(notional);
+        
+        // 逐仓强平价公式：基于独立保证金计算
+        // Long: liq = entry - (margin - mm) / size
+        // Short: liq = entry + (margin - mm) / size
+        let maintenance_margin = notional * mmr;
+        let margin_buffer = pos.margin - maintenance_margin;
+        
+        pos.liquidation_price = match pos.side {
+            PositionSide::Long => {
+                (pos.entry_price - margin_buffer / pos.size).max(0.0)
+            }
+            PositionSide::Short => {
+                pos.entry_price + margin_buffer / pos.size
+            }
+        };
+        
+        Ok(pos.margin)
+    }
+
     /// 获取所有仓位的迭代器
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Position)> {
         self.positions.iter()
@@ -285,13 +338,61 @@ impl PositionManager {
             .collect()
     }
 
-    /// 计算全仓模式总保证金
+    /// 计算全仓模式总保证金（考虑对冲）
+    ///
+    /// 🔴 对冲优化: 只对净敞口计算保证金，而不是累加每个仓位
+    /// - 如果 Long 5 BTC + Short 5 BTC (完全对冲)，实际保证金需求接近 0
+    /// - 如果 Long 6 BTC + Short 2 BTC，只对净敞口 4 BTC 计算保证金
     pub fn total_cross_margin(&self) -> f64 {
-        self.positions
-            .values()
-            .filter(|pos| pos.margin_mode == MarginMode::Cross)
-            .map(|pos| pos.margin)
-            .sum()
+        let (net_long_size, net_short_size, _, _) = 
+            self.calculate_net_exposure();
+        
+        // 计算对冲部分的大小
+        let hedged_size = net_long_size.min(net_short_size);
+        
+        // 对冲部分：只需要一边的保证金（取较大保证金率的一边）
+        // 简化：对冲部分按平均价格和平均杠杆计算，只占用一半保证金
+        let mut hedged_margin = 0.0;
+        if hedged_size > 0.0 {
+            // 对冲部分的保证金 = 取多空两边平均
+            let long_hedge_margin = self.positions
+                .values()
+                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Long)
+                .map(|p| p.margin * hedged_size / net_long_size.max(0.0001))
+                .sum::<f64>();
+            let short_hedge_margin = self.positions
+                .values()
+                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Short)
+                .map(|p| p.margin * hedged_size / net_short_size.max(0.0001))
+                .sum::<f64>();
+            // 对冲部分只需要一边的保证金
+            hedged_margin = long_hedge_margin.max(short_hedge_margin);
+        }
+        
+        // 非对冲部分：全额计算保证金
+        let net_long_margin = if net_long_size > net_short_size {
+            let net_ratio = (net_long_size - net_short_size) / net_long_size.max(0.0001);
+            self.positions
+                .values()
+                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Long)
+                .map(|p| p.margin * net_ratio)
+                .sum::<f64>()
+        } else {
+            0.0
+        };
+        
+        let net_short_margin = if net_short_size > net_long_size {
+            let net_ratio = (net_short_size - net_long_size) / net_short_size.max(0.0001);
+            self.positions
+                .values()
+                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Short)
+                .map(|p| p.margin * net_ratio)
+                .sum::<f64>()
+        } else {
+            0.0
+        };
+        
+        hedged_margin + net_long_margin + net_short_margin
     }
 
     /// 计算逐仓模式总保证金
@@ -321,7 +422,51 @@ impl PositionManager {
     // 风险检查辅助
     // ========================================================================
 
+    /// 计算净敞口（考虑对冲）
+    ///
+    /// # Returns
+    /// (净多头大小, 净空头大小, 多头平均入场价, 空头平均入场价)
+    pub fn calculate_net_exposure(&self) -> (f64, f64, f64, f64) {
+        let mut total_long_size = 0.0;
+        let mut total_short_size = 0.0;
+        let mut total_long_notional = 0.0;  // 用于计算加权平均入场价
+        let mut total_short_notional = 0.0;
+
+        for pos in self.positions.values() {
+            if pos.margin_mode != MarginMode::Cross {
+                continue; // 只考虑全仓仓位
+            }
+            
+            match pos.side {
+                PositionSide::Long => {
+                    total_long_size += pos.size;
+                    total_long_notional += pos.size * pos.entry_price;
+                }
+                PositionSide::Short => {
+                    total_short_size += pos.size;
+                    total_short_notional += pos.size * pos.entry_price;
+                }
+            }
+        }
+
+        let avg_long_entry = if total_long_size > 0.0 {
+            total_long_notional / total_long_size
+        } else {
+            0.0
+        };
+
+        let avg_short_entry = if total_short_size > 0.0 {
+            total_short_notional / total_short_size
+        } else {
+            0.0
+        };
+
+        (total_long_size, total_short_size, avg_long_entry, avg_short_entry)
+    }
+
     /// 计算各仓位的维持保证金
+    ///
+    /// 🔴 重要: 全仓模式下，对冲部分不需要维持保证金，只对净敞口计算
     ///
     /// # Returns
     /// (全仓总维持保证金, 需强平的逐仓仓位符号列表)
@@ -330,27 +475,33 @@ impl PositionManager {
         current_prices: &HashMap<String, f64>,
         risk_config: &RiskConfig,
     ) -> (f64, Vec<String>) {
-        let mut total_cross_mm = 0.0;
         let mut isolated_to_liquidate = Vec::new();
+        
+        // 计算全仓净敞口
+        let (net_long_size, net_short_size, _, _) = self.calculate_net_exposure();
+        let net_exposure = (net_long_size - net_short_size).abs();
+        
+        // 全仓维持保证金只对净敞口计算
+        let price = current_prices.get("BTCUSDT").copied().unwrap_or(0.0);
+        let net_notional = net_exposure * price;
+        let mmr = risk_config.get_maintenance_margin_rate(net_notional);
+        let total_cross_mm = net_notional * mmr;
 
+        // 逐仓仓位单独计算
         for (position_key, pos) in &self.positions {
-            // Hedge Mode: 使用 pos.symbol (display_symbol) 查找价格
-            let price = current_prices.get(&pos.symbol).copied().unwrap_or(pos.entry_price);
-            let notional = pos.size * price;
-            let mmr = risk_config.get_maintenance_margin_rate(notional);
-            let maintenance_margin = notional * mmr;
-
-            match pos.margin_mode {
-                MarginMode::Cross => {
-                    total_cross_mm += maintenance_margin;
-                }
-                MarginMode::Isolated => {
-                    // 逐仓: 检查独立保证金是否足够
-                    let isolated_equity = pos.margin + pos.unrealized_pnl;
-                    if isolated_equity <= maintenance_margin {
-                        isolated_to_liquidate.push(position_key.clone());
-                    }
-                }
+            if pos.margin_mode != MarginMode::Isolated {
+                continue;
+            }
+            
+            let pos_price = current_prices.get(&pos.symbol).copied().unwrap_or(pos.entry_price);
+            let notional = pos.size * pos_price;
+            let pos_mmr = risk_config.get_maintenance_margin_rate(notional);
+            let maintenance_margin = notional * pos_mmr;
+            
+            // 逐仓: 检查独立保证金是否足够
+            let isolated_equity = pos.margin + pos.unrealized_pnl;
+            if isolated_equity <= maintenance_margin {
+                isolated_to_liquidate.push(position_key.clone());
             }
         }
 

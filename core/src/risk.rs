@@ -378,6 +378,47 @@ impl RiskCalculator {
         }
     }
 
+    /// 计算全仓模式强平价格
+    ///
+    /// 全仓模式下，强平价基于账户总权益：
+    /// - Long: 强平价 = 入场价 - (账户权益 - 维持保证金) / 仓位大小
+    /// - Short: 强平价 = 入场价 + (账户权益 - 维持保证金) / 仓位大小
+    ///
+    /// # Arguments
+    /// - `entry_price`: 开仓均价
+    /// - `account_equity`: 账户权益 (余额 + 未实现盈亏)
+    /// - `maintenance_margin`: 维持保证金
+    /// - `size`: 仓位大小
+    /// - `side`: 仓位方向
+    pub fn calculate_cross_liquidation_price(
+        entry_price: f64,
+        account_equity: f64,
+        maintenance_margin: f64,
+        size: f64,
+        side: PositionSide,
+    ) -> f64 {
+        if size <= 0.0 {
+            return 0.0;
+        }
+
+        // 账户可承受的最大亏损 = 权益 - 维持保证金
+        let max_loss = account_equity - maintenance_margin;
+        
+        // 每单位仓位可承受的价格变动
+        let price_buffer = max_loss / size;
+
+        match side {
+            PositionSide::Long => {
+                // 多头：价格下跌导致亏损，强平价 = 入场价 - 缓冲
+                (entry_price - price_buffer).max(0.0)
+            }
+            PositionSide::Short => {
+                // 空头：价格上涨导致亏损，强平价 = 入场价 + 缓冲
+                entry_price + price_buffer
+            }
+        }
+    }
+
     /// 计算未实现盈亏 (Unrealized PnL)
     ///
     /// # Arguments

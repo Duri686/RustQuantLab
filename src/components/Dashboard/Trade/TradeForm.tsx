@@ -89,6 +89,8 @@ export interface TradeFormProps {
   pendingOrders?: PendingOrder[];
   /** 取消挂单回调 */
   onCancelOrder?: (orderId: string) => void;
+  /** 增加保证金回调 (逐仓模式) */
+  onAddMargin?: (positionId: string, amount: number) => void;
 }
 
 /* ============================================
@@ -163,6 +165,7 @@ function TradeForm({
   onSetMarginMode,
   pendingOrders = [],
   onCancelOrder,
+  onAddMargin,
 }: TradeFormProps) {
   // Toast
   const toast = useToast();
@@ -598,6 +601,7 @@ function TradeForm({
                   symbol={pos.symbol?.replace('USDT', '') || symbol}
                   currentPrice={currentPrice}
                   onClose={() => onClosePosition?.(pos.id)}
+                  onAddMargin={onAddMargin}
                 />
               ))}
               {/* 历史仓位 (灰色显示) */}

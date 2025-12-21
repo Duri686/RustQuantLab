@@ -120,6 +120,8 @@ export interface UseWasmEngineReturn {
   resetAccount: UseTradingActionsReturn['resetAccount'];
   /** 取消挂单 */
   cancelOrder: UseTradingActionsReturn['cancelOrder'];
+  /** 增加保证金 (逐仓模式) */
+  addMargin: UseTradingActionsReturn['addMargin'];
 }
 
 // ============================================================================

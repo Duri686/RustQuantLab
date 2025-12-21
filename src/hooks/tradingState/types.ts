@@ -33,6 +33,16 @@ export interface TradingWasmEngine {
   pending_order_count(): number;
   cancel_order(orderId: string): CancelOrderResult;
   cancel_all_orders(): CancelOrderResult;
+  // 逐仓保证金管理
+  add_margin(positionId: string, amount: number): AddMarginResult;
+}
+
+/** 增加保证金结果 */
+export interface AddMarginResult {
+  success: boolean;
+  message: string;
+  newMargin?: number;
+  error?: string;
 }
 
 /**

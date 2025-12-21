@@ -81,6 +81,7 @@ pub enum EngineEvent {
         new_size: f64,
         old_entry_price: f64,
         new_entry_price: f64,
+        new_leverage: u8,
     },
     /// 仓位已减少 (部分平仓)
     #[serde(rename_all = "camelCase")]
@@ -269,4 +270,18 @@ pub struct CancelOrderResult {
     pub message: String,
     /// 解冻的保证金
     pub released_margin: f64,
+}
+
+/// 增加保证金结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddMarginResult {
+    pub success: bool,
+    pub message: String,
+    /// 新的总保证金
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_margin: Option<f64>,
+    /// 错误信息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }

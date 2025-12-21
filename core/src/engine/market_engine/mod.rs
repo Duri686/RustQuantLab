@@ -17,7 +17,7 @@ use crate::trading::{PendingOrderManager, PositionManager, TradingAccount};
 
 use super::data::{CandleAggregator, CandleCache, TickDataManager};
 use super::trading::SimOrderExecutor;
-use super::types::{CancelOrderResult, EngineEvent, OpenPositionRequest};
+use super::types::{AddMarginResult, CancelOrderResult, EngineEvent, OpenPositionRequest};
 
 // 测试模块需要的额外导入
 #[cfg(test)]
@@ -231,6 +231,50 @@ impl MarketEngine {
     }
 
     pub fn position_count(&self) -> usize { self.position_manager.len() }
+
+    /// 为逐仓仓位增加保证金
+    ///
+    /// # Arguments
+    /// - `position_id`: 仓位 ID (如 "BTCUSDT_Long")
+    /// - `amount`: 增加的保证金金额 (USDT)
+    ///
+    /// # Returns
+    /// AddMarginResult: { success, message, newMargin?, error? }
+    pub fn add_margin(&mut self, position_id: &str, amount: f64) -> Result<JsValue, JsValue> {
+        // 检查可用余额
+        let available = self.account.calculate_available_balance(&self.position_manager);
+        if amount > available {
+            return to_js!(AddMarginResult {
+                success: false,
+                message: format!("可用余额不足，当前可用: {:.2} USDT", available),
+                new_margin: None,
+                error: Some("INSUFFICIENT_BALANCE".to_string()),
+            });
+        }
+        
+        // 增加保证金
+        match self.position_manager.add_margin(position_id, amount, &self.risk_config) {
+            Ok(new_margin) => {
+                // 从账户余额扣除
+                self.account.deduct(amount);
+                
+                to_js!(AddMarginResult {
+                    success: true,
+                    message: format!("已增加 {:.2} USDT 保证金，新保证金: {:.2} USDT", amount, new_margin),
+                    new_margin: Some(new_margin),
+                    error: None,
+                })
+            }
+            Err(e) => {
+                to_js!(AddMarginResult {
+                    success: false,
+                    message: e.clone(),
+                    new_margin: None,
+                    error: Some(e),
+                })
+            }
+        }
+    }
 
     // ========== 交易操作 ==========
 

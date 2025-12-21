@@ -64,6 +64,7 @@ function App() {
     closePosition,
     setLeverage,
     cancelOrder,
+    addMargin,
   } = useWasmEngine(100);
 
   // ========== 图表引用 ==========
@@ -300,6 +301,7 @@ function App() {
               onClosePosition={(positionId) => closePosition(positionId)}
               onSetLeverage={setLeverage}
               onCancelOrder={cancelOrder}
+              onAddMargin={addMargin}
             />
           </section>
         </div>

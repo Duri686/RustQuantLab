@@ -18,7 +18,7 @@ import type {
   MarginMode,
   OrderType,
 } from '../../types/trading';
-import type { TradingWasmEngine } from '../tradingState/types';
+import type { TradingWasmEngine, AddMarginResult } from '../tradingState/types';
 import type { MarketEngineInstance } from '../../types/index';
 
 // ============================================================================
@@ -78,7 +78,12 @@ export interface UseTradingActionsReturn {
   resetAccount: (initialBalance?: number) => void;
   /** 取消挂单 */
   cancelOrder: (orderId: string) => CancelOrderResult | null;
+  /** 增加保证金 (逐仓模式) */
+  addMargin: (positionId: string, amount: number) => AddMarginResult | null;
 }
+
+// 导出 AddMarginResult 类型（从 tradingState/types 重导出）
+export type { AddMarginResult } from '../tradingState/types';
 
 // ============================================================================
 // Hook 实现
@@ -333,11 +338,50 @@ export function useTradingActions(
     [engineRef, engineAlive, toast, syncState],
   );
 
+  // ========== 增加保证金 (逐仓模式) ==========
+  const addMargin = useCallback(
+    (positionId: string, amount: number): AddMarginResult | null => {
+      if (!engineAlive.current || !engineRef.current) {
+        console.warn('[useTradingActions] 引擎未就绪');
+        return null;
+      }
+
+      if (amount <= 0) {
+        toast.error('增加金额必须大于0');
+        return null;
+      }
+
+      try {
+        const engine = engineRef.current as unknown as TradingWasmEngine;
+        const result = engine.add_margin(positionId, amount);
+
+        if (result.success) {
+          toast.success(result.message);
+        } else {
+          toast.error(result.message || result.error || '增加保证金失败');
+        }
+
+        // 同步状态
+        syncState(engine);
+
+        return result;
+      } catch (err) {
+        console.error('[useTradingActions] 增加保证金失败:', err);
+        toast.error(
+          `增加保证金失败: ${err instanceof Error ? err.message : '未知错误'}`,
+        );
+        return null;
+      }
+    },
+    [engineRef, engineAlive, toast, syncState],
+  );
+
   return {
     placeOrder,
     closePosition,
     setLeverage,
     resetAccount,
     cancelOrder,
+    addMargin,
   };
 }

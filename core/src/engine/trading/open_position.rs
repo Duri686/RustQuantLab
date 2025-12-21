@@ -48,7 +48,7 @@ impl TradingExecutor {
         let position_key = format!("{}_{:?}", req.symbol, order_side);
         
         if position_manager.get(&position_key).is_some() {
-            Self::merge_position(&position_key, req.size, trade_price, position_manager, account, risk_config, pending_events)
+            Self::merge_position(&position_key, req.size, trade_price, leverage, position_manager, account, risk_config, pending_events)
         } else {
             Self::open_new_position(position_key, req.symbol, order_side, req.size, trade_price, leverage, req.margin_mode, position_manager, account, risk_config, pending_events, get_timestamp)
         }
@@ -112,6 +112,7 @@ impl TradingExecutor {
         symbol: &str,
         add_size: f64,
         market_price: f64,
+        new_leverage: u8,
         position_manager: &mut PositionManager,
         account: &TradingAccount,
         risk_config: &RiskConfig,
@@ -142,8 +143,9 @@ impl TradingExecutor {
             _ => return Self::error("意外的交易结果", "UNEXPECTED_RESULT"),
         };
 
-        // 更新强平价
+        // 更新杠杆和强平价
         let pos = position_manager.get_mut(symbol).unwrap();
+        pos.leverage = new_leverage; // 使用新杠杆
         let mmr = risk_config.get_maintenance_margin_rate(pos.size * pos.entry_price);
         pos.liquidation_price = RiskCalculator::calculate_liquidation_price(pos.entry_price, pos.leverage, pos.side, mmr);
         let updated_pos = pos.clone();
@@ -155,6 +157,7 @@ impl TradingExecutor {
             new_size,
             old_entry_price: old_entry,
             new_entry_price: new_entry,
+            new_leverage,
         });
 
         OpenPositionResult {

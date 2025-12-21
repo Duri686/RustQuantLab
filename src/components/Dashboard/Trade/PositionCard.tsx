@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import type {
   Position,
   LiquidationResult,
@@ -26,6 +26,8 @@ export interface WasmPositionCardProps {
   currentPrice: number;
   /** 平仓回调 */
   onClose?: () => void;
+  /** 增加保证金回调 (逐仓模式) */
+  onAddMargin?: (positionId: string, amount: number) => void;
 }
 
 const COLORS = {
@@ -61,17 +63,38 @@ function WasmPositionCard({
   symbol = 'BTC',
   currentPrice,
   onClose,
+  onAddMargin,
 }: WasmPositionCardProps) {
   const isLong = position.side === 'Long';
   const isProfit = position.unrealizedPnl >= 0;
+
+  // 增加保证金弹窗状态
+  const [showAddMargin, setShowAddMargin] = useState(false);
+  const [marginAmount, setMarginAmount] = useState('');
 
   // 🔴 直接使用 Wasm 计算的值，无本地计算
   // Hedge Mode: 每个仓位有独立的字段，由 Rust 计算
   const pnlValue = position.unrealizedPnl;
   const pnlPercent = position.pnlPercentage;
-  const liquidationPrice = position.liquidationPrice;
-  const marginRatio = position.marginRatio; // 由 Rust 计算
-  const riskLevel = riskAssessment?.riskLevel ?? 'Safe';
+
+  // 区分全仓/逐仓模式的数据来源
+  // 注意：Rust serde 序列化为小写 "cross"/"isolated"
+  const isCrossMode = position.marginMode?.toLowerCase() === 'cross';
+  // 全仓模式：使用账户级别的强平价和保证金率
+  // 逐仓模式：使用单仓位数据
+  const liquidationPrice = isCrossMode
+    ? riskAssessment?.liquidationPrice ?? position.liquidationPrice
+    : position.liquidationPrice;
+  const marginRatio = isCrossMode
+    ? riskAssessment?.marginRatio ?? position.marginRatio
+    : position.marginRatio;
+  const riskLevel = isCrossMode
+    ? riskAssessment?.riskLevel ?? 'Safe'
+    : position.marginRatio < 1.5
+    ? 'Critical'
+    : position.marginRatio < 3
+    ? 'High'
+    : 'Safe';
   // 计算该仓位距离强平的距离
   const distanceToLiq =
     liquidationPrice > 0
@@ -192,10 +215,53 @@ function WasmPositionCard({
 
       {/* Risk Warning Banner */}
       {isCritical && riskAssessment?.warningMessage && (
-        <div className="mb-2 px-2 py-1 rounded bg-[#f6465d]/10 border border-[#f6465d]/30">
-          <span className="text-[10px] text-[#f6465d]">
+        <div className="mb-2 px-2 py-1.5 rounded bg-[#f6465d]/10 border border-[#f6465d]/30 flex items-center justify-center">
+          <span className="text-[10px] text-[#f6465d] leading-none">
             ⚠️ {riskAssessment.warningMessage}
           </span>
+        </div>
+      )}
+
+      {/* 增加保证金输入 (仅逐仓模式) - 融合设计 */}
+      {showAddMargin && !isCrossMode && (
+        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-[#0ECB81]/50">
+          <input
+            type="number"
+            value={marginAmount}
+            onChange={(e) => setMarginAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const amount = parseFloat(marginAmount);
+                if (amount > 0) {
+                  onAddMargin?.(position.id, amount);
+                  setMarginAmount('');
+                  setShowAddMargin(false);
+                }
+              } else if (e.key === 'Escape') {
+                setMarginAmount('');
+                setShowAddMargin(false);
+              }
+            }}
+            placeholder="0.00"
+            className="flex-1 h-full px-2 text-[10px] bg-[#161a25] text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
+            autoFocus
+          />
+          <span className="px-1.5 text-[9px] text-gray-500 bg-[#161a25]">
+            USDT
+          </span>
+          <button
+            onClick={() => {
+              const amount = parseFloat(marginAmount);
+              if (amount > 0) {
+                onAddMargin?.(position.id, amount);
+                setMarginAmount('');
+                setShowAddMargin(false);
+              }
+            }}
+            className="h-full px-3 text-[9px] font-semibold text-white bg-[#0ECB81] hover:bg-[#0ECB81]/80 transition-colors"
+          >
+            OK
+          </button>
         </div>
       )}
 
@@ -204,12 +270,30 @@ function WasmPositionCard({
         <span className="text-[9px] text-gray-600 font-mono">
           距强平 {distanceToLiq.toFixed(1)}%
         </span>
-        <button
-          onClick={() => onClose?.()}
-          className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[#252a36] hover:bg-[#f6465d]/20 hover:text-[#f6465d] rounded transition-colors"
-        >
-          Close Position
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* 增加保证金按钮 (仅逐仓模式) - Toggle */}
+          {!isCrossMode && onAddMargin && (
+            <button
+              onClick={() => {
+                setShowAddMargin(!showAddMargin);
+                if (showAddMargin) setMarginAmount('');
+              }}
+              className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${
+                showAddMargin
+                  ? 'text-[#0ECB81] bg-[#0ECB81]/20 border border-[#0ECB81]/50'
+                  : 'text-[#0ECB81] bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 border border-transparent'
+              }`}
+            >
+              Add Margin
+            </button>
+          )}
+          <button
+            onClick={() => onClose?.()}
+            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[#252a36] hover:bg-[#f6465d]/20 hover:text-[#f6465d] rounded transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

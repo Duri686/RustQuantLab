@@ -72,19 +72,40 @@ impl RiskMonitor {
             margin_ratio, risk_config.margin_warning_threshold,
         );
 
-        // 获取主仓位信息
-        let primary_pos = position_manager.get("BTCUSDT")
-            .or_else(|| position_manager.iter().next().map(|(_, p)| p))
-            .cloned();
-
-        let Some(pos) = primary_pos else {
-            return Vec::new();
+        // 计算净敞口（考虑对冲）
+        let (net_long_size, net_short_size, avg_long_entry, avg_short_entry) = 
+            position_manager.calculate_net_exposure();
+        
+        let net_exposure = net_long_size - net_short_size;
+        
+        // 根据净敞口计算强平价
+        let cross_liq_price = if net_exposure.abs() < 0.0001 {
+            // 完全对冲：强平价设为 0（无强平风险）
+            0.0
+        } else if net_exposure > 0.0 {
+            // 净多头敞口
+            RiskCalculator::calculate_cross_liquidation_price(
+                avg_long_entry,
+                account_equity,
+                total_cross_mm,
+                net_exposure,
+                crate::trading::PositionSide::Long,
+            )
+        } else {
+            // 净空头敞口
+            RiskCalculator::calculate_cross_liquidation_price(
+                avg_short_entry,
+                account_equity,
+                total_cross_mm,
+                net_exposure.abs(),
+                crate::trading::PositionSide::Short,
+            )
         };
 
-        let distance_pct = if pos.liquidation_price > 0.0 {
-            ((price - pos.liquidation_price) / price * 100.0).abs()
+        let distance_pct = if cross_liq_price > 0.0 {
+            ((price - cross_liq_price) / price * 100.0).abs()
         } else {
-            100.0
+            100.0 // 完全对冲时，距离强平 100%
         };
 
         let is_liquidated = margin_ratio <= 1.0;
@@ -92,7 +113,7 @@ impl RiskMonitor {
         *risk_assessment = Some(LiquidationResult {
             risk_level,
             margin_ratio,
-            liquidation_price: pos.liquidation_price,
+            liquidation_price: cross_liq_price, // 使用全仓强平价
             distance_to_liquidation_pct: distance_pct,
             maintenance_margin: total_cross_mm,
             available_balance: account.calculate_available_balance(position_manager),
@@ -106,7 +127,7 @@ impl RiskMonitor {
                 symbol: "BTCUSDT".to_string(),
                 risk_level: format!("{:?}", risk_level),
                 margin_ratio,
-                liquidation_price: pos.liquidation_price,
+                liquidation_price: cross_liq_price, // 使用全仓强平价
                 distance_pct,
             });
         }

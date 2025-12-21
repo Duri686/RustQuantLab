@@ -109,6 +109,17 @@ impl TradingAccount {
         self.balance = balance.max(0.0);
     }
 
+    /// 从余额扣除金额 (用于逐仓增加保证金)
+    ///
+    /// # Arguments
+    /// - `amount`: 扣除金额
+    ///
+    /// # 注意
+    /// 余额不会变为负数，最小为 0
+    pub fn deduct(&mut self, amount: f64) {
+        self.balance = (self.balance - amount).max(0.0);
+    }
+
     /// 重置账户到初始状态
     pub fn reset(&mut self, initial_balance: Option<f64>) {
         self.balance = initial_balance.unwrap_or(DEFAULT_INITIAL_BALANCE);
