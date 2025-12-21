@@ -1,6 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useTradingEngine } from './hooks/useTradingEngine';
-import { useTradingState } from './hooks/useTradingState';
+import { useState, useCallback, useRef } from 'react';
+import { useWasmEngine } from './hooks/useWasmEngine';
 import type {
   Timeframe,
   Indicator,
@@ -31,45 +30,41 @@ const SUB_INDICATORS = ['VOL', 'MACD', 'RSI'] as const;
    ============================================ */
 
 function App() {
-  // ========== Market Data Hook (图表、指标) ==========
+  // ========== 统一的 Wasm 引擎 Hook ==========
+  // 整合市场数据 + 交易状态，React 只做 UI 搬运工
   const {
+    // 初始化状态
+    loading,
+    error,
+
+    // 市场数据 (Rust 计算)
     latestData,
     analysisResult,
     candleHistory,
     currentLiveCandle,
     indicatorData,
     currentTimeframe,
+
+    // 数据流控制
     isRunning,
-    loading,
-    error,
     priceTrend,
     priceColorClass,
     toggleFeed,
     setTimeframe,
-  } = useTradingEngine(100);
 
-  // ========== Trading State Hook (Wasm 交易引擎) ==========
-  const {
-    wasmReady,
+    // 交易状态 (Rust 管理)
     tradingState,
     position,
     riskAssessment,
     hasPosition,
     pendingOrders,
-    onTick,
+
+    // 交易操作 (调用 Rust)
     placeOrder,
     closePosition,
     setLeverage,
     cancelOrder,
-  } = useTradingState();
-
-  // ========== 连接数据流到 Wasm 交易引擎 ==========
-  // 每次价格更新时调用 onTick 同步状态
-  useEffect(() => {
-    if (wasmReady && latestData?.price) {
-      onTick(latestData.price);
-    }
-  }, [wasmReady, latestData?.price, onTick]);
+  } = useWasmEngine(100);
 
   // ========== 图表引用 ==========
   const chartRef = useRef<KLineChartHandle>(null);

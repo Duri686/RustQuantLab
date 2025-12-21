@@ -1,16 +1,12 @@
 /**
  * useTradingState 重导出模块
- * 保持向后兼容，实际实现已迁移至 ./tradingState/
+ *
+ * @deprecated 已迁移至 useWasmEngine，此文件保留向后兼容
+ * @see ./useWasmEngine.ts
  */
 
-export { useTradingState, useTradingState as default } from './tradingState';
-export {
-  handleEngineEvents,
-  safeToFixed,
-  useSharedEngine,
-} from './tradingState';
-export type {
-  TradingWasmEngine,
-  ToastHandler,
-  UseSharedEngineReturn,
-} from './tradingState';
+export { useWasmEngine as useTradingState } from './useWasmEngine';
+export { useWasmEngine as default } from './useWasmEngine';
+export { handleEngineEvents, safeToFixed } from './tradingState/eventHandler';
+export type { TradingWasmEngine, ToastHandler } from './tradingState/types';
+export type { UseWasmEngineReturn as UseTradingStateReturn } from './useWasmEngine';
