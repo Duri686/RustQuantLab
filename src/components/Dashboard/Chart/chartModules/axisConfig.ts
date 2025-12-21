@@ -233,6 +233,7 @@ function buildSubYAxis(
 
   // RSI 特殊配置：固定 Y 轴范围 0-100
   const isRSI = subChartType === 'RSI';
+  const isVOL = subChartType === 'VOL';
   const rsiAxisConfig = isRSI
     ? {
         min: 0,
@@ -259,7 +260,7 @@ function buildSubYAxis(
       verticalAlign: config.Y_AXIS_LABEL_INSIDE ? 'bottom' : 'middle',
       margin: config.Y_AXIS_LABEL_INSIDE ? 1 : 4,
       showMinLabel: true,
-      showMaxLabel: true,
+      showMaxLabel: !isVOL, // VOL 顶部标签会与主图交叉，禁用
       formatter: isRSI ? (value: number) => `${value}` : formatSubChartValue,
     },
     // 副图 Y 轴 axisPointer 配置 - 与主图统一样式

@@ -40,11 +40,12 @@ export const CHART_COLORS = {
   MACD_HIST_DOWN_STRONG: '#F6465D', // 下跌动能增强 - 深红
   MACD_HIST_DOWN_WEAK: 'rgba(246, 70, 93, 0.5)', // 下跌动能减弱 - 浅红
 
-  // RSI 颜色
+  // RSI 颜色 (参考 TradingView 紫色风格)
   RSI: '#A371F7',
-  RSI_OVERBOUGHT: 'rgba(246, 70, 93, 0.5)',
-  RSI_OVERSOLD: 'rgba(14, 203, 129, 0.5)',
-  RSI_NEUTRAL_ZONE: 'rgba(255, 255, 255, 0.03)',
+  /** RSI 30-70 区域边界线颜色 (半透明) */
+  RSI_BOUNDARY: 'rgba(146, 154, 165, 0.5)',
+  /** RSI 30-70 中性区域填充 (半透明紫色) */
+  RSI_NEUTRAL_ZONE: 'rgba(163, 113, 247, 0.08)',
 
   // 分隔线颜色
   DIVIDER: 'rgba(255, 255, 255, 0.1)',

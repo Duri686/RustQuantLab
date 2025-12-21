@@ -334,7 +334,7 @@ export function createRSISeries(
       smooth: true,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.RSI, width: 1.5 },
-      // RSI 超买超卖区域标记线 (专业样式)
+      // RSI 30-70 边界虚线 (TradingView 紫色风格)
       markLine: {
         silent: true,
         symbol: 'none',
@@ -343,36 +343,20 @@ export function createRSISeries(
           {
             yAxis: 70,
             lineStyle: {
-              color: CHART_COLORS.RSI_OVERBOUGHT,
+              color: CHART_COLORS.RSI_BOUNDARY,
               type: 'dashed',
               width: 1,
-              opacity: 0.6,
             },
-            label: {
-              show: true,
-              position: 'insideEndTop',
-              formatter: '70',
-              fontSize: 9,
-              color: 'rgba(246, 70, 93, 0.8)',
-              padding: [0, 4, 0, 0],
-            },
+            label: { show: false },
           },
           {
             yAxis: 30,
             lineStyle: {
-              color: CHART_COLORS.RSI_OVERSOLD,
+              color: CHART_COLORS.RSI_BOUNDARY,
               type: 'dashed',
               width: 1,
-              opacity: 0.6,
             },
-            label: {
-              show: true,
-              position: 'insideEndBottom',
-              formatter: '30',
-              fontSize: 9,
-              color: 'rgba(14, 203, 129, 0.8)',
-              padding: [0, 4, 0, 0],
-            },
+            label: { show: false },
           },
         ],
       },
@@ -399,13 +383,6 @@ export function createVolumeSeries(
   chartData: ChartData,
   subGridIndex: number,
 ): SeriesOption[] {
-  // 获取最新成交量值用于实时标签
-  const lastVolume = chartData.volumeData[chartData.volumeData.length - 1];
-  const lastVolumeValue =
-    typeof lastVolume === 'object' && 'value' in lastVolume
-      ? lastVolume.value
-      : 0;
-
   return [
     {
       name: '成交量',
@@ -416,35 +393,6 @@ export function createVolumeSeries(
       barWidth: BASE_BAR_WIDTH,
       barCategoryGap: BASE_BAR_CATEGORY_GAP,
       barGap: BASE_BAR_GAP,
-      // 实时成交量标签 (最后一根柱子右侧)
-      markPoint: {
-        symbol: 'rect',
-        symbolSize: [60, 18],
-        symbolOffset: [35, 0],
-        data: [
-          {
-            name: 'current',
-            coord: [chartData.volumeData.length - 1, lastVolumeValue],
-            value: formatVolumeValue(lastVolumeValue),
-            itemStyle: {
-              color:
-                lastVolume &&
-                typeof lastVolume === 'object' &&
-                lastVolume.itemStyle
-                  ? lastVolume.itemStyle.color
-                  : CHART_COLORS.UP,
-            },
-            label: {
-              show: true,
-              formatter: '{c}',
-              fontSize: 10,
-              fontFamily: 'monospace',
-              fontWeight: 'bold',
-              color: '#fff',
-            },
-          },
-        ],
-      },
     },
   ];
 }
