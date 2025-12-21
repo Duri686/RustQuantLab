@@ -73,7 +73,7 @@ function App() {
 
   /** 当前激活的时间周期 (UI 状态，与 Rust 引擎同步) */
   const [activeTimeframe, setActiveTimeframe] = useState<Timeframe>(
-    (currentTimeframe as Timeframe) ?? '1s',
+    (currentTimeframe as Timeframe) ?? '1H',
   );
 
   /** 当前激活的指标列表 (UI 状态) */

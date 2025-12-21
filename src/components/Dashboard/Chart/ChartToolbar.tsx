@@ -119,11 +119,11 @@ function Divider() {
  * Provides controls for timeframes, indicators, chart types, and actions.
  */
 function ChartToolbar({
-  activeTimeframe = '1s',
+  activeTimeframe = '1H',
   onTimeframeChange,
   activeIndicators = ['MA', 'VOL'],
   onIndicatorToggle,
-  activeChartType = 'Original',
+  activeChartType = 'TradingView',
   onChartTypeChange,
   onSettingsClick,
   onScreenshotClick,

@@ -33,6 +33,7 @@ import type {
   Candle,
   IndicatorData,
   MarketEngineInstance,
+  HistoryCandle,
 } from '../types/index';
 import type { WasmTimeframe, WasmCandleHistory } from '../types/wasm';
 import type {
@@ -76,6 +77,10 @@ export interface UseWasmEngineReturn {
   currentIndicators: PendingIndicators;
   /** 当前时间周期 */
   currentTimeframe: WasmTimeframe | null;
+  /** 历史 K 线数据 (由 Worker 生成) */
+  historyCandles: HistoryCandle[];
+  /** 历史数据是否就绪 */
+  historyReady: boolean;
 
   // ========== 数据流控制 ==========
   /** 数据流是否运行中 */
@@ -138,7 +143,15 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
   const toast = useToast();
 
   // ========== Mock 市场数据 ==========
-  const { latestData, isRunning, start, stop } = useMockMarket(tickInterval);
+  const {
+    latestData,
+    isRunning,
+    start,
+    stop,
+    historyCandles,
+    historyLoading,
+    requestHistory,
+  } = useMockMarket(tickInterval);
 
   // ========== Wasm 初始化状态 ==========
   const [wasmReady, setWasmReady] = useState(false);
@@ -294,12 +307,14 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     }
   }, [latestData, toast]);
 
-  // ========== 自动启动数据流 ==========
+  // ========== 自动启动数据流 + 加载历史数据 ==========
   useEffect(() => {
     if (wasmReady && !isRunning) {
+      // 先加载历史数据，再启动实时数据流
+      requestHistory();
       start();
     }
-  }, [wasmReady, isRunning, start]);
+  }, [wasmReady, isRunning, start, requestHistory]);
 
   // ========== K 线聚合 Hook ==========
   const {
@@ -321,6 +336,9 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     tradingState?.riskAssessment ?? null;
   const hasPosition = position !== null;
   const pendingOrders: PendingOrder[] = tradingState?.pendingOrders ?? [];
+
+  // ========== 历史数据状态 ==========
+  const historyReady = historyCandles.length > 0 && !historyLoading;
 
   // ========== 价格趋势 ==========
   const priceTrend = useMemo((): 'up' | 'down' | 'neutral' => {
@@ -399,6 +417,8 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     indicatorData,
     currentIndicators,
     currentTimeframe,
+    historyCandles,
+    historyReady,
 
     // 数据流控制
     isRunning,

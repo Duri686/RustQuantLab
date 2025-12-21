@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   OrderBook,
-  WorkerDataMessage,
+  WorkerOutMessage,
   WorkerStartMessage,
   WorkerStopMessage,
+  WorkerHistoryRequestMessage,
+  HistoryCandle,
 } from '../types/index';
 
 /**
@@ -13,9 +15,17 @@ import type {
  * @param interval - 数据更新间隔（毫秒），默认 100ms
  * @returns { latestData, isRunning, start, stop }
  */
+/** 默认历史 K 线数量 (30 天 * 24 小时 = 720) */
+const DEFAULT_HISTORY_COUNT = 720;
+
+/** 1H 时间周期 (秒) */
+const TIMEFRAME_1H_SECONDS = 3600;
+
 export function useMockMarket(interval: number = 100) {
   const [latestData, setLatestData] = useState<OrderBook | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [historyCandles, setHistoryCandles] = useState<HistoryCandle[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
 
   /**
@@ -32,9 +42,14 @@ export function useMockMarket(interval: number = 100) {
       { type: 'module' },
     );
 
-    worker.onmessage = (event: MessageEvent<WorkerDataMessage>) => {
-      if (event.data.type === 'DATA') {
+    worker.onmessage = (event: MessageEvent<WorkerOutMessage>) => {
+      const { type } = event.data;
+
+      if (type === 'DATA') {
         setLatestData(event.data.payload);
+      } else if (type === 'HISTORY') {
+        setHistoryCandles(event.data.payload.candles);
+        setHistoryLoading(false);
       }
     };
 
@@ -72,6 +87,27 @@ export function useMockMarket(interval: number = 100) {
   }, []);
 
   /**
+   * 请求历史 K 线数据
+   * @param timeframeSeconds - 时间周期 (秒)，默认 1H = 3600
+   * @param count - K 线数量，默认 720 (30天)
+   */
+  const requestHistory = useCallback(
+    (
+      timeframeSeconds: number = TIMEFRAME_1H_SECONDS,
+      count: number = DEFAULT_HISTORY_COUNT,
+    ) => {
+      const worker = initWorker();
+      setHistoryLoading(true);
+      const message: WorkerHistoryRequestMessage = {
+        type: 'GET_HISTORY',
+        payload: { timeframeSeconds, count },
+      };
+      worker.postMessage(message);
+    },
+    [initWorker],
+  );
+
+  /**
    * 组件卸载时清理 Worker
    */
   useEffect(() => {
@@ -88,5 +124,11 @@ export function useMockMarket(interval: number = 100) {
     isRunning,
     start,
     stop,
+    /** 历史 K 线数据 */
+    historyCandles,
+    /** 历史数据加载中 */
+    historyLoading,
+    /** 请求历史数据 */
+    requestHistory,
   };
 }

@@ -8,6 +8,8 @@ import type {
   OrderBook,
   WorkerMessage,
   WorkerDataMessage,
+  WorkerHistoryDataMessage,
+  HistoryCandle,
 } from '../types/index';
 
 // 配置常量
@@ -188,6 +190,138 @@ function stopGeneration(): void {
   }
 }
 
+// ============================================
+// 历史 K 线生成算法
+// ============================================
+
+/**
+ * 将时间戳对齐到指定周期的起始点
+ * @param timestamp - 时间戳 (毫秒)
+ * @param intervalMs - 周期时长 (毫秒)
+ */
+function alignTimestamp(timestamp: number, intervalMs: number): number {
+  return Math.floor(timestamp / intervalMs) * intervalMs;
+}
+
+/**
+ * 生成历史 K 线数据
+ *
+ * 算法特点：
+ * 1. 使用随机游走生成连续的价格序列
+ * 2. 模拟市场的“波动率周期” - 周期性的高/低波动
+ * 3. 模拟“趋势” - 简单的上升/下降势头
+ * 4. 成交量与波动率正相关 (大跌大涨量大)
+ *
+ * @param timeframeSeconds - 时间周期 (秒)
+ * @param count - K 线数量
+ * @returns 历史 K 线数组 (时间升序)
+ */
+function generateHistoricalCandles(
+  timeframeSeconds: number,
+  count: number,
+): HistoryCandle[] {
+  const intervalMs = timeframeSeconds * 1000;
+  const now = Date.now();
+
+  // 将当前时间对齐到周期边界，作为最后一根 K 线的结束时间
+  const alignedNow = alignTimestamp(now, intervalMs);
+
+  // 从最新往回计算起始时间
+  const startTime = alignedNow - count * intervalMs;
+
+  const candles: HistoryCandle[] = [];
+  let price = BASE_PRICE;
+
+  // 趋势状态
+  let trendDirection = Math.random() > 0.5 ? 1 : -1; // 1 = 上升, -1 = 下降
+  let trendStrength = 0.0005; // 趋势强度
+  let trendDuration = Math.floor(Math.random() * 48) + 12; // 趋势持续 12-60 根 K 线
+  let trendCounter = 0;
+
+  // 波动率状态
+  const volatility = 0.005; // 基础波动率 0.5%
+  let volatilityCycleTicks = 0;
+  const VOLATILITY_CYCLE_LENGTH = 72; // 波动率周期 (~3天 for 1H)
+
+  for (let i = 0; i < count; i++) {
+    const candleTime = startTime + i * intervalMs;
+
+    // 更新趋势
+    trendCounter++;
+    if (trendCounter >= trendDuration) {
+      // 切换趋势方向
+      trendDirection = Math.random() > 0.5 ? 1 : -1;
+      trendStrength = 0.0002 + Math.random() * 0.0008; // 0.02% - 0.1%
+      trendDuration = Math.floor(Math.random() * 48) + 12;
+      trendCounter = 0;
+    }
+
+    // 更新波动率周期 (正弦波模拟)
+    volatilityCycleTicks++;
+    const volatilityMultiplier =
+      1 +
+      0.5 *
+        Math.sin(
+          (volatilityCycleTicks / VOLATILITY_CYCLE_LENGTH) * Math.PI * 2,
+        );
+    const currentVolatility = volatility * volatilityMultiplier;
+
+    // 随机游走 + 趋势偏移
+    const randomChange = (Math.random() - 0.5) * 2 * currentVolatility;
+    const trendChange = trendDirection * trendStrength;
+    const totalChange = randomChange + trendChange;
+
+    // 计算 OHLC
+    const open = price;
+    const changePercent = totalChange;
+    const close = open * (1 + changePercent);
+
+    // 影子线波动 (K 线内部波动)
+    const shadowRange = Math.abs(close - open) * (0.5 + Math.random() * 1.5);
+    const high = Math.max(open, close) + shadowRange * Math.random();
+    const low = Math.min(open, close) - shadowRange * Math.random();
+
+    // 成交量与波动率正相关
+    const baseVolume = 100 + Math.random() * 400;
+    const volatilityBoost = currentVolatility / volatility;
+    const volume = baseVolume * volatilityBoost * (0.8 + Math.random() * 0.4);
+
+    candles.push({
+      time: candleTime,
+      open: Math.round(open * 100) / 100,
+      high: Math.round(high * 100) / 100,
+      low: Math.round(low * 100) / 100,
+      close: Math.round(close * 100) / 100,
+      volume: Math.round(volume * 100) / 100,
+    });
+
+    // 下一根 K 线的开盘价 = 当前收盘价
+    price = close;
+  }
+
+  // 同步全局价格状态，让实时数据从历史结束价继续
+  if (candles.length > 0) {
+    currentPrice = candles[candles.length - 1].close;
+  }
+
+  return candles;
+}
+
+/**
+ * 处理历史数据请求
+ */
+function handleHistoryRequest(timeframeSeconds: number, count: number): void {
+  const candles = generateHistoricalCandles(timeframeSeconds, count);
+  const message: WorkerHistoryDataMessage = {
+    type: 'HISTORY',
+    payload: {
+      timeframeSeconds,
+      candles,
+    },
+  };
+  self.postMessage(message);
+}
+
 // 监听主线程消息
 self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { type } = event.data;
@@ -200,6 +334,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     }
     case 'STOP': {
       stopGeneration();
+      break;
+    }
+    case 'GET_HISTORY': {
+      const { timeframeSeconds, count } = event.data.payload;
+      handleHistoryRequest(timeframeSeconds, count);
       break;
     }
     default:

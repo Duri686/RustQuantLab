@@ -95,17 +95,67 @@ export interface WorkerStopMessage {
 }
 
 /**
- * Worker 接收的消息联合类型
+ * Worker 消息类型：请求历史 K 线数据
  */
-export type WorkerMessage = WorkerStartMessage | WorkerStopMessage;
+export interface WorkerHistoryRequestMessage {
+  type: 'GET_HISTORY';
+  payload: {
+    /** 时间周期 (秒) */
+    timeframeSeconds: number;
+    /** 请求的 K 线数量 */
+    count: number;
+  };
+}
 
 /**
- * Worker 发送的消息类型
+ * Worker 接收的消息联合类型
+ */
+export type WorkerMessage =
+  | WorkerStartMessage
+  | WorkerStopMessage
+  | WorkerHistoryRequestMessage;
+
+/**
+ * 历史 K 线数据 (由 Worker 生成)
+ */
+export interface HistoryCandle {
+  /** K 线开始时间戳 (毫秒) */
+  time: number;
+  /** 开盘价 */
+  open: number;
+  /** 最高价 */
+  high: number;
+  /** 最低价 */
+  low: number;
+  /** 收盘价 */
+  close: number;
+  /** 成交量 */
+  volume: number;
+}
+
+/**
+ * Worker 发送的消息类型：实时数据
  */
 export interface WorkerDataMessage {
   type: 'DATA';
   payload: OrderBook;
 }
+
+/**
+ * Worker 发送的消息类型：历史 K 线数据
+ */
+export interface WorkerHistoryDataMessage {
+  type: 'HISTORY';
+  payload: {
+    timeframeSeconds: number;
+    candles: HistoryCandle[];
+  };
+}
+
+/**
+ * Worker 发送的消息联合类型
+ */
+export type WorkerOutMessage = WorkerDataMessage | WorkerHistoryDataMessage;
 
 /* ============================================
    Wasm 引擎相关类型
