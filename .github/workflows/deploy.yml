@@ -51,16 +51,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # ===== 4. Run Rust Tests =====
+      # ===== 4. Run Rust Tests (仅 PR 或手动触发时) =====
       - name: 🧪 Run Rust tests
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         run: |
           cd core
           cargo test --lib --release
           cd ..
 
-      # ===== 5. Install wasm-pack =====
+      # ===== 5. Cache & Install wasm-pack =====
+      - name: 📦 Cache wasm-pack
+        uses: actions/cache@v4
+        id: wasm-pack-cache
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: ${{ runner.os }}-wasm-pack-0.13.0
+
       - name: 📦 Install wasm-pack
-        run: cargo install wasm-pack --locked || true
+        if: steps.wasm-pack-cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-pack --locked
 
       # ===== 6. Setup Node.js =====
       - name: 🟢 Setup Node.js
