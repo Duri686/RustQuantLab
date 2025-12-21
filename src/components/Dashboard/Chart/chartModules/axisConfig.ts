@@ -196,7 +196,8 @@ function buildMainYAxis(
         fontWeight: 500,
         padding: [6, 10], // 增加内边距，提高可读性
         borderRadius: 4,
-        formatter: (params: { value: number }) => formatter(params.value),
+        formatter: (params: { value: number }) =>
+          params.value == null ? '-' : formatter(params.value),
       },
     },
     splitLine: {
@@ -276,10 +277,12 @@ function buildSubYAxis(
         fontWeight: 500,
         padding: [6, 10], // 增加内边距，提高可读性
         borderRadius: 4,
-        formatter: (params: { value: number }) =>
-          isRSI
+        formatter: (params: { value: number }) => {
+          if (params.value == null) return '-';
+          return isRSI
             ? `${params.value.toFixed(1)}`
-            : formatSubChartValue(params.value),
+            : formatSubChartValue(params.value);
+        },
       },
     },
     splitLine: {

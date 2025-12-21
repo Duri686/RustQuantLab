@@ -1,5 +1,7 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import type { HeaderProps } from '../../types/index';
+import { useFpsMonitor } from '../../hooks/useFpsMonitor';
+import { getWasmMemoryUsage } from '../../hooks/tradingEngine/wasmSingleton';
 
 /* ============================================
    Icon Components
@@ -49,6 +51,55 @@ function GitHubIcon({ className }: { className?: string }) {
  * 顶部导航栏组件
  * 显示 Logo、当前价格、状态指示器和控制按钮
  */
+/**
+ * FPS 性能监控显示组件
+ */
+function FpsMonitor() {
+  const { fps, frameTime } = useFpsMonitor();
+  const [wasmMemory, setWasmMemory] = useState<{
+    bytes: number;
+    megabytes: string;
+    pages: number;
+  } | null>(null);
+
+  // 每秒更新一次 WASM 内存
+  useEffect(() => {
+    const updateMemory = () => {
+      const memory = getWasmMemoryUsage();
+      setWasmMemory(memory);
+    };
+
+    // 立即执行一次
+    updateMemory();
+
+    // 每秒更新
+    const interval = setInterval(updateMemory, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // FPS 颜色：绿色 >= 50, 黄色 >= 30, 红色 < 30
+  const fpsColor =
+    fps >= 50
+      ? 'text-[#0ECB81]'
+      : fps >= 30
+      ? 'text-[#F0B90B]'
+      : 'text-[#F6465D]';
+
+  return (
+    <div className="hidden md:flex items-center gap-2 px-2 py-0.5 rounded bg-[#1e2026]/80 border border-[#2b2f36] text-[9px] font-mono">
+      <span className={`${fpsColor} font-semibold`}>{fps} FPS</span>
+      <span className="text-gray-500">|</span>
+      <span className="text-gray-400">{frameTime}ms</span>
+      {wasmMemory && (
+        <>
+          <span className="text-gray-500">|</span>
+          <span className="text-gray-400">WASM {wasmMemory.megabytes}MB</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Header({
   isRunning,
   onToggle,
@@ -59,7 +110,7 @@ function Header({
 }: HeaderProps) {
   return (
     <header className="h-11 md:h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-2 md:px-4 flex items-center justify-between">
-      {/* Logo - 移动端仅显示图标 */}
+      {/* Logo + FPS Monitor */}
       <div className="flex items-center gap-2 md:gap-3">
         <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-[#1e2026] border border-[#2b2f36] flex items-center justify-center">
           <span className="text-sm md:text-base">🦀</span>
@@ -72,6 +123,8 @@ function Header({
             Wasm Trading Engine
           </p>
         </div>
+        {/* FPS 监控 - logo 右侧 */}
+        <FpsMonitor />
       </div>
 
       {/* Center: Market Symbol + Price (clamp 流体字体) */}

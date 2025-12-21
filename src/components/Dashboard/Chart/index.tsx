@@ -297,7 +297,7 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
 
     // MACD 柱状图颜色（与图表一致）
     const getMacdHistDisplayColor = () => {
-      if (displayMacdHist === null) return '#888';
+      if (displayMacdHist == null) return '#888';
       const prevHist =
         displayIndex > 0
           ? mergedIndicatorData.macdHist[displayIndex - 1]
@@ -361,15 +361,15 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
                 <span className="text-neutral-500">MACD(12,26,9)</span>
                 <span style={{ color: CHART_COLORS.MACD_DIF }}>
                   DIF:
-                  {displayMacdDif !== null ? displayMacdDif.toFixed(2) : '-'}
+                  {displayMacdDif != null ? displayMacdDif.toFixed(2) : '-'}
                 </span>
                 <span style={{ color: CHART_COLORS.MACD_DEA }}>
                   DEA:
-                  {displayMacdDea !== null ? displayMacdDea.toFixed(2) : '-'}
+                  {displayMacdDea != null ? displayMacdDea.toFixed(2) : '-'}
                 </span>
                 <span style={{ color: getMacdHistDisplayColor() }}>
                   MACD:
-                  {displayMacdHist !== null ? displayMacdHist.toFixed(4) : '-'}
+                  {displayMacdHist != null ? displayMacdHist.toFixed(4) : '-'}
                 </span>
               </>
             )}
@@ -379,7 +379,7 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
               <>
                 <span className="text-neutral-600 ml-2">|</span>
                 <span style={{ color: CHART_COLORS.RSI }}>
-                  RSI(14):{displayRsi !== null ? displayRsi.toFixed(2) : '-'}
+                  RSI(14):{displayRsi != null ? displayRsi.toFixed(2) : '-'}
                 </span>
               </>
             )}

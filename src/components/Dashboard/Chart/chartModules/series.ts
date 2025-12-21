@@ -113,6 +113,13 @@ export function createCandlestickSeries(
  * @param indicatorData - 指标数据
  */
 export function createMASeries(indicatorData: IndicatorData): SeriesOption[] {
+  // 大数据优化配置
+  const largeOpts = {
+    large: true,
+    largeThreshold: 1000,
+    sampling: 'lttb' as const, // Largest Triangle Three Buckets 算法
+  };
+
   return [
     {
       name: 'MA7',
@@ -120,10 +127,11 @@ export function createMASeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.ma7,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false, // 关闭平滑提升性能
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.MA7, width: 1.5 },
       z: 10,
+      ...largeOpts,
     },
     {
       name: 'MA25',
@@ -131,10 +139,11 @@ export function createMASeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.ma25,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.MA25, width: 1.5 },
       z: 10,
+      ...largeOpts,
     },
     {
       name: 'MA99',
@@ -142,10 +151,11 @@ export function createMASeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.ma99,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.MA99, width: 1.5 },
       z: 10,
+      ...largeOpts,
     },
   ];
 }
@@ -155,6 +165,12 @@ export function createMASeries(indicatorData: IndicatorData): SeriesOption[] {
  * @param indicatorData - 指标数据
  */
 export function createEMASeries(indicatorData: IndicatorData): SeriesOption[] {
+  const largeOpts = {
+    large: true,
+    largeThreshold: 1000,
+    sampling: 'lttb' as const,
+  };
+
   return [
     {
       name: 'EMA7',
@@ -162,10 +178,11 @@ export function createEMASeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.ema7,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.EMA7, width: 1.5 },
       z: 10,
+      ...largeOpts,
     },
     {
       name: 'EMA25',
@@ -173,10 +190,11 @@ export function createEMASeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.ema25,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.EMA25, width: 1.5 },
       z: 10,
+      ...largeOpts,
     },
   ];
 }
@@ -186,6 +204,12 @@ export function createEMASeries(indicatorData: IndicatorData): SeriesOption[] {
  * @param indicatorData - 指标数据
  */
 export function createBOLLSeries(indicatorData: IndicatorData): SeriesOption[] {
+  const largeOpts = {
+    large: true,
+    largeThreshold: 1000,
+    sampling: 'lttb' as const,
+  };
+
   return [
     {
       name: 'BOLL-Upper',
@@ -193,10 +217,11 @@ export function createBOLLSeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.bollUpper,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.BOLL_UPPER, width: 1 },
       z: 8,
+      ...largeOpts,
     },
     {
       name: 'BOLL-Mid',
@@ -204,10 +229,11 @@ export function createBOLLSeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.bollMid,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.BOLL_MID, width: 1.5 },
       z: 9,
+      ...largeOpts,
     },
     {
       name: 'BOLL-Lower',
@@ -215,10 +241,11 @@ export function createBOLLSeries(indicatorData: IndicatorData): SeriesOption[] {
       data: indicatorData.bollLower,
       xAxisIndex: 0,
       yAxisIndex: 0,
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       lineStyle: { color: CHART_COLORS.BOLL_LOWER, width: 1 },
       z: 7,
+      ...largeOpts,
     },
   ];
 }

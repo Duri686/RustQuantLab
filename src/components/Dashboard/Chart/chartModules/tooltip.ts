@@ -343,16 +343,16 @@ export function buildSubChartTitles(
         const lastDea = indicatorData.macdDea[indicatorData.macdDea.length - 1];
         const lastHist =
           indicatorData.macdHist[indicatorData.macdHist.length - 1];
-        const difStr = lastDif !== null ? lastDif.toFixed(2) : '-';
-        const deaStr = lastDea !== null ? lastDea.toFixed(2) : '-';
-        const histStr = lastHist !== null ? lastHist.toFixed(4) : '-';
+        const difStr = lastDif != null ? lastDif.toFixed(2) : '-';
+        const deaStr = lastDea != null ? lastDea.toFixed(2) : '-';
+        const histStr = lastHist != null ? lastHist.toFixed(4) : '-';
         titleText = `MACD(12,26,9) DIF:${difStr} DEA:${deaStr} MACD:${histStr}`;
         titleColor = '#888';
         break;
       }
       case 'RSI': {
         const lastRsi = indicatorData.rsi14[indicatorData.rsi14.length - 1];
-        const rsiStr = lastRsi !== null ? lastRsi.toFixed(2) : '-';
+        const rsiStr = lastRsi != null ? lastRsi.toFixed(2) : '-';
         titleText = `RSI(14) ${rsiStr}`;
         titleColor = CHART_COLORS.RSI;
         break;

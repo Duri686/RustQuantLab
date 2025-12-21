@@ -21,6 +21,7 @@ import {
   wasmSingleton,
   initWasmEngine,
   destroyWasmEngine,
+  getWasmMemoryUsage,
 } from './tradingEngine/wasmSingleton';
 import {
   useTradingActions,
@@ -182,10 +183,16 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
   // ========== Wasm 初始化 ==========
   useEffect(() => {
     let aborted = false;
+    const t0 = performance.now();
 
     const init = async () => {
       try {
+        console.log('[Perf] ⏱️ 开始 WASM 初始化...');
         const engine = await initWasmEngine();
+        console.log(
+          `[Perf] ✅ WASM 初始化完成: ${(performance.now() - t0).toFixed(0)}ms`,
+        );
+
         if (aborted) return;
 
         engineRef.current = engine;
@@ -330,10 +337,14 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     }
 
     try {
+      const startTime = performance.now();
+
       // 加载 1m K 线并自动聚合到所有高周期 (5m/15m/1H/4H/1D)
       const results =
         engineRef.current.load_history_1m_and_aggregate(historyCandles);
       historyLoadedRef.current = true;
+
+      const loadTime = performance.now() - startTime;
 
       // 获取历史数据的最后收盘价，作为实时数据的起点
       const lastPrice = historyCandles[historyCandles.length - 1].close;
@@ -342,10 +353,22 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
       const summary = results
         .map(([tf, count]) => `${tf}: ${count}`)
         .join(', ');
+
+      // 获取真实 WASM 内存使用
+      const wasmMemory = getWasmMemoryUsage();
+      const memoryInfo = wasmMemory
+        ? `${wasmMemory.megabytes} MB (${wasmMemory.pages} pages)`
+        : '无法获取';
+
       console.log(
         `[useWasmEngine] 历史数据已加载: ${summary}, 起始价: $${lastPrice.toFixed(
           2,
-        )}`,
+        )}\n` +
+          `  ⏱️ Rust 处理耗时: ${loadTime.toFixed(1)}ms (${(
+            (historyCandles.length / loadTime) *
+            1000
+          ).toFixed(0)} 根/秒)\n` +
+          `  📦 WASM 线性内存: ${memoryInfo}`,
       );
 
       // 切换到 1H 时间周期，触发 K 线数据刷新

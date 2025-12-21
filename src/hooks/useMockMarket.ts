@@ -15,8 +15,8 @@ import type {
  * @param interval - 数据更新间隔（毫秒），默认 100ms
  * @returns { latestData, isRunning, start, stop }
  */
-/** 默认历史 K 线数量 (7 天 * 24 * 60 = 10080 根 1m K 线) */
-const DEFAULT_HISTORY_COUNT = 10080;
+/** 默认历史 K 线数量 (180 天 * 24 * 60 = 259200 根 1m K 线，约6个月) */
+const DEFAULT_HISTORY_COUNT = 259200;
 
 /** 1m 时间周期 (秒) - 作为基础粒度，Rust 会自动聚合到高周期 */
 const TIMEFRAME_1M_SECONDS = 60;
@@ -48,8 +48,16 @@ export function useMockMarket(interval: number = 100) {
       if (type === 'DATA') {
         setLatestData(event.data.payload);
       } else if (type === 'HISTORY') {
-        setHistoryCandles(event.data.payload.candles);
+        const t0 = performance.now();
+        const candles = event.data.payload.candles;
+        console.log(`[Perf] 📦 Worker 历史数据到达: ${candles.length} 根`);
+        setHistoryCandles(candles);
         setHistoryLoading(false);
+        console.log(
+          `[Perf] ✅ React state 更新: ${(performance.now() - t0).toFixed(
+            0,
+          )}ms`,
+        );
       }
     };
 
@@ -93,13 +101,14 @@ export function useMockMarket(interval: number = 100) {
   /**
    * 请求历史 K 线数据
    * @param timeframeSeconds - 时间周期 (秒)，默认 1m = 60
-   * @param count - K 线数量，默认 10080 (7天)
+   * @param count - K 线数量，默认 259200 (6个月)
    */
   const requestHistory = useCallback(
     (
       timeframeSeconds: number = TIMEFRAME_1M_SECONDS,
       count: number = DEFAULT_HISTORY_COUNT,
     ) => {
+      console.log(`[Perf] 📤 请求历史数据: ${count} 根 K 线...`);
       const worker = initWorker();
       setHistoryLoading(true);
       const message: WorkerHistoryRequestMessage = {

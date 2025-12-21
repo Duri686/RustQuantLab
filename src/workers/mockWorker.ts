@@ -256,6 +256,8 @@ function generateHistoricalCandles(
   timeframeSeconds: number,
   count: number,
 ): HistoryCandle[] {
+  const startGenTime = performance.now();
+
   const intervalMs = timeframeSeconds * 1000;
   const now = Date.now();
   const alignedNow = alignTimestamp(now, intervalMs);
@@ -269,7 +271,7 @@ function generateHistoricalCandles(
     phase: 'CONSOLIDATION',
     sentiment: 'CALM',
     phaseProgress: 0,
-    phaseDuration: 60 + Math.floor(Math.random() * 120), // 60-180 根 K 线
+    phaseDuration: 1440 + Math.floor(Math.random() * 2880), // 1440-4320 根 K 线 (约1-3天)
     phaseCounter: 0,
     momentum: 0,
     avgVolume: 2000,
@@ -298,6 +300,12 @@ function generateHistoricalCandles(
   if (candles.length > 0) {
     currentPrice = candles[candles.length - 1].close;
   }
+
+  const genTime = performance.now() - startGenTime;
+  console.log(
+    `[MockWorker] 生成 ${count} 根 K 线耗时: ${genTime.toFixed(1)}ms ` +
+      `(${((count / genTime) * 1000).toFixed(0)} 根/秒)`,
+  );
 
   return candles;
 }
@@ -365,11 +373,11 @@ function transitionPhase(state: MarketState): void {
 function getPhaseDuration(phase: MarketPhase): number {
   switch (phase) {
     case 'BULL_RUN':
-      return 30 + Math.floor(Math.random() * 90); // 30-120 根
+      return 720 + Math.floor(Math.random() * 1440); // 720-2160 根 (约0.5-1.5天)
     case 'BEAR_RUN':
-      return 20 + Math.floor(Math.random() * 60); // 20-80 根（熊市通常更短更急）
+      return 360 + Math.floor(Math.random() * 720); // 360-1080 根 (约0.25-0.75天，熊市更短更急)
     case 'CONSOLIDATION':
-      return 60 + Math.floor(Math.random() * 120); // 60-180 根
+      return 1440 + Math.floor(Math.random() * 2880); // 1440-4320 根 (约1-3天)
   }
 }
 

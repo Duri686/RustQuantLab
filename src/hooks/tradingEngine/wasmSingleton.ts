@@ -15,6 +15,10 @@ interface WasmSingleton {
   initPromise: Promise<MarketEngineInstance> | null;
   isInitializing: boolean;
   instanceCount: number;
+  /** WASM 模块引用 (用于内存测量) */
+  wasmModule: WasmModule | null;
+  /** WASM 内部实例 (用于获取 memory) */
+  wasmInstance: unknown | null;
 }
 
 /** 全局 Wasm 单例状态 */
@@ -23,6 +27,8 @@ export const wasmSingleton: WasmSingleton = {
   initPromise: null,
   isInitializing: false,
   instanceCount: 0,
+  wasmModule: null,
+  wasmInstance: null,
 };
 
 /**
@@ -46,13 +52,28 @@ export async function initWasmEngine(): Promise<MarketEngineInstance> {
     try {
       const wasm = await import('../../../core/pkg/quant_core');
       if (typeof wasm.default === 'function') {
-        await wasm.default();
+        // wasm.default() 返回内部 wasm exports (包含 memory)
+        const wasmExports = await wasm.default();
+        wasmSingleton.wasmInstance = wasmExports;
+
+        // 调试：检查 memory 是否存在
+        const hasMemory = wasmExports && 'memory' in wasmExports;
+        console.log(`[Wasm] wasmExports.memory 存在: ${hasMemory}`);
+        if (hasMemory) {
+          const mem = (wasmExports as { memory: WebAssembly.Memory }).memory;
+          console.log(
+            `[Wasm] 初始内存: ${(mem.buffer.byteLength / 1024 / 1024).toFixed(
+              2,
+            )} MB`,
+          );
+        }
       }
 
       const wasmMod = wasm as unknown as WasmModule;
       const engine = new wasmMod.MarketEngine();
 
       wasmSingleton.engine = engine;
+      wasmSingleton.wasmModule = wasmMod;
       wasmSingleton.instanceCount += 1;
       console.log(
         `[Wasm] MarketEngine 初始化成功 (instance #${wasmSingleton.instanceCount})`,
@@ -75,6 +96,36 @@ export async function initWasmEngine(): Promise<MarketEngineInstance> {
  */
 export function getSharedWasmEngine(): MarketEngineInstance | null {
   return wasmSingleton.engine;
+}
+
+/**
+ * 获取 WASM 线性内存使用情况
+ * @returns 内存信息对象，包含字节数和 MB 格式
+ */
+export function getWasmMemoryUsage(): {
+  bytes: number;
+  megabytes: string;
+  pages: number;
+} | null {
+  try {
+    // 通过 wasmInstance 访问 memory (wasm.default() 返回的 exports)
+    const wasmExports = wasmSingleton.wasmInstance as {
+      memory?: WebAssembly.Memory;
+    } | null;
+
+    if (wasmExports?.memory) {
+      const bytes = wasmExports.memory.buffer.byteLength;
+      const pages = bytes / 65536; // 每页 64KB
+      return {
+        bytes,
+        megabytes: (bytes / 1024 / 1024).toFixed(2),
+        pages,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
