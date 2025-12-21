@@ -245,7 +245,8 @@ pub struct ClosePositionResult {
     pub new_balance: f64,
 }
 
-/// 挂单创建结果
+/// 挂单创建结果 (预留扩展)
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaceOrderResult {

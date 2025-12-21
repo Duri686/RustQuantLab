@@ -24,4 +24,3 @@ mod tests;
 
 // 重新导出
 pub use market_engine::MarketEngine;
-pub use types::*;

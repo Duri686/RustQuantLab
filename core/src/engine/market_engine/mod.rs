@@ -13,7 +13,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::models::{OrderBook, SimOrder, Timeframe};
 use crate::risk::{LiquidationResult, RiskConfig};
-use crate::trading::{PendingOrderManager, Position, PositionManager, TradingAccount};
+use crate::trading::{PendingOrderManager, PositionManager, TradingAccount};
 
 use super::data::{CandleAggregator, CandleCache, TickDataManager};
 use super::trading::SimOrderExecutor;
