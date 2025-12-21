@@ -2,8 +2,8 @@
 //!
 //! 测试 MarketEngine 的完整交易流程和各组件协调工作。
 
-use super::*;
 use super::market_engine::MarketEngine;
+use super::types::{EngineEvent, OpenPositionRequest};
 use crate::models::OrderBook;
 use crate::risk::PositionSide;
 use crate::trading::{DEFAULT_INITIAL_BALANCE, DEFAULT_LEVERAGE, MarginMode, OrderType};

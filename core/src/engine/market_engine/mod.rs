@@ -21,9 +21,7 @@ use super::types::{CancelOrderResult, EngineEvent, OpenPositionRequest};
 
 // 测试模块需要的额外导入
 #[cfg(test)]
-use crate::risk::PositionSide;
-#[cfg(test)]
-use crate::trading::MarginMode;
+use crate::trading::Position;
 
 /// Wasm 序列化辅助宏
 macro_rules! to_js {
