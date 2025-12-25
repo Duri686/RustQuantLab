@@ -231,13 +231,17 @@ export function useCandleData(
   /** 将 Rust K 线历史转换为前端格式 */
   const rustConvertedCandles = useMemo((): Candle[] => {
     if (!useRustCandles || !rustCandleHistory) return [];
-    return rustCandleHistory.candles.map(convertWasmCandle);
+    const tf = rustCandleHistory.timeframe;
+    return rustCandleHistory.candles.map((c) => convertWasmCandle(c, tf));
   }, [useRustCandles, rustCandleHistory]);
 
   /** Rust 模式下的当前实时 K 线 */
   const rustCurrentCandle = useMemo((): Candle | null => {
     if (!useRustCandles || !rustCandleHistory?.currentCandle) return null;
-    return convertWasmCandle(rustCandleHistory.currentCandle);
+    return convertWasmCandle(
+      rustCandleHistory.currentCandle,
+      rustCandleHistory.timeframe,
+    );
   }, [useRustCandles, rustCandleHistory]);
 
   /** 当前时间周期 */

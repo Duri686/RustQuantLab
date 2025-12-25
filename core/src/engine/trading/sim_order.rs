@@ -42,8 +42,14 @@ impl SimOrderExecutor {
 
     /// 计算价格冲击
     fn calculate_price_impact(price: f64, size: f64, value: f64, side: &SimOrderSide) -> f64 {
+        // 防止 size <= 0 导致 ln() 返回 NaN 或 -inf
+        if size <= 0.0 || price <= 0.0 {
+            return 0.0;
+        }
+        
         let base_rate = 0.0001;
-        let size_mult = (1.0 + size.ln().abs()).min(5.0);
+        // 使用 ln(1 + size) 避免 size < 1 时的负值问题
+        let size_mult = (1.0 + (1.0 + size).ln()).min(5.0);
         let impact_pct = base_rate * size_mult * (value / 10000.0).min(1.0);
 
         match side {

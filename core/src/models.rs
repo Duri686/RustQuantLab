@@ -3,6 +3,7 @@
 //! 包含所有共享的数据结构，用于 Wasm 与 JavaScript 之间的数据交换。
 //! 纯数据定义，无业务逻辑。
 
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -35,30 +36,19 @@ pub enum Timeframe {
 
 impl Timeframe {
     /// 获取时间周期对应的秒数
+    #[must_use]
     pub fn as_seconds(&self) -> u64 {
         *self as u64
     }
 
     /// 获取时间周期对应的毫秒数
+    #[must_use]
     pub fn as_millis(&self) -> u64 {
         self.as_seconds() * 1000
     }
 
-    /// 从字符串解析时间周期
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "1s" => Some(Timeframe::S1),
-            "1m" => Some(Timeframe::M1),
-            "5m" => Some(Timeframe::M5),
-            "15m" => Some(Timeframe::M15),
-            "1H" => Some(Timeframe::H1),
-            "4H" => Some(Timeframe::H4),
-            "1D" => Some(Timeframe::D1),
-            _ => None,
-        }
-    }
-
     /// 转换为字符串表示
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Timeframe::S1 => "1s",
@@ -72,9 +62,28 @@ impl Timeframe {
     }
 
     /// 将时间戳对齐到当前周期的起始点
+    #[must_use]
     pub fn align_timestamp(&self, timestamp_ms: u64) -> u64 {
         let interval_ms = self.as_millis();
         (timestamp_ms / interval_ms) * interval_ms
+    }
+}
+
+/// FromStr 实现，支持 "1s", "1m" 等字符串解析
+impl FromStr for Timeframe {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "1s" => Ok(Timeframe::S1),
+            "1m" => Ok(Timeframe::M1),
+            "5m" => Ok(Timeframe::M5),
+            "15m" => Ok(Timeframe::M15),
+            "1H" | "1h" => Ok(Timeframe::H1),
+            "4H" | "4h" => Ok(Timeframe::H4),
+            "1D" | "1d" => Ok(Timeframe::D1),
+            _ => Err(format!("无效的时间周期: {}", s)),
+        }
     }
 }
 

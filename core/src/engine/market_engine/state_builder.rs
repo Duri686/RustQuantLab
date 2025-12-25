@@ -22,7 +22,7 @@ impl MarketEngine {
             leverage: self.account.leverage(),
             current_price: self.current_price,
             positions,
-            closed_positions: self.position_manager.closed_positions().clone(),
+            closed_positions: self.position_manager.closed_positions().to_vec(),
             position: primary,
             risk_assessment: self.risk_assessment.clone(),
             pending_events: events,

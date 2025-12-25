@@ -159,6 +159,9 @@ impl TradeResult {
 // 仓位结构体
 // ============================================================================
 
+/// 默认维持保证金率 (当未指定时使用)
+const DEFAULT_MMR: f64 = 0.005;
+
 /// 活跃仓位
 ///
 /// 表示某个交易对的持仓 (Hedge Mode: 多空可同时存在)。
@@ -186,6 +189,9 @@ pub struct Position {
     pub margin_mode: MarginMode,
     /// 强平价格
     pub liquidation_price: f64,
+    /// 维持保证金率 (根据名义价值从 RiskConfig 获取)
+    #[serde(default = "default_mmr")]
+    pub maintenance_margin_rate: f64,
     /// 未实现盈亏
     pub unrealized_pnl: f64,
     /// 盈亏百分比
@@ -206,8 +212,17 @@ pub struct Position {
     pub close_time: u64,
 }
 
+/// serde 默认值函数
+fn default_mmr() -> f64 {
+    DEFAULT_MMR
+}
+
 impl Position {
     /// 创建新仓位
+    ///
+    /// # Arguments
+    /// - `mmr`: 维持保证金率 (从 RiskConfig 获取)
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         symbol: String,
@@ -220,9 +235,29 @@ impl Position {
         liquidation_price: f64,
         open_time: u64,
     ) -> Self {
+        Self::with_mmr(
+            id, symbol, side, size, entry_price, margin,
+            leverage, margin_mode, liquidation_price, open_time, DEFAULT_MMR,
+        )
+    }
+
+    /// 创建新仓位 (指定 MMR)
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_mmr(
+        id: String,
+        symbol: String,
+        side: PositionSide,
+        size: f64,
+        entry_price: f64,
+        margin: f64,
+        leverage: u8,
+        margin_mode: MarginMode,
+        liquidation_price: f64,
+        open_time: u64,
+        mmr: f64,
+    ) -> Self {
         // 初始保证金率 = 保证金 / 维持保证金 (开仓时 PnL = 0)
         let notional = size * entry_price;
-        let mmr = 0.005; // ~0.5% 维持保证金率
         let maintenance_margin = notional * mmr;
         let initial_margin_ratio = if maintenance_margin > 0.0 {
             margin / maintenance_margin
@@ -241,6 +276,7 @@ impl Position {
             leverage,
             margin_mode,
             liquidation_price,
+            maintenance_margin_rate: mmr,
             unrealized_pnl: 0.0,
             pnl_percentage: 0.0,
             margin_ratio: initial_margin_ratio,
@@ -392,8 +428,7 @@ impl Position {
         // 更新保证金率 = 仓位权益 / 维持保证金
         let position_equity = self.margin + self.unrealized_pnl;
         let notional = self.size * current_price;
-        let mmr = 0.005; // ~0.5% 维持保证金率
-        let maintenance_margin = notional * mmr;
+        let maintenance_margin = notional * self.maintenance_margin_rate;
         self.margin_ratio = if maintenance_margin > 0.0 {
             position_equity / maintenance_margin
         } else {

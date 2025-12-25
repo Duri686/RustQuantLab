@@ -11,6 +11,7 @@
 //! - **限价 > 创建时价格**: 等待价格上涨到限价时触发
 //! - **限价 < 创建时价格**: 等待价格下跌到限价时触发
 
+use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 use crate::risk::PositionSide;
 use super::MarginMode;
@@ -196,6 +197,9 @@ impl PendingOrder {
 // 挂单管理器
 // ============================================================================
 
+/// 订单历史最大容量
+const MAX_ORDER_HISTORY: usize = 100;
+
 /// 挂单管理器
 ///
 /// 管理所有等待执行的限价订单。
@@ -203,8 +207,8 @@ impl PendingOrder {
 pub struct PendingOrderManager {
     /// 活跃挂单列表
     orders: Vec<PendingOrder>,
-    /// 已完成订单历史 (最近 N 条)
-    order_history: Vec<PendingOrder>,
+    /// 已完成订单历史 (最近 N 条，使用 VecDeque 优化 pop_front)
+    order_history: VecDeque<PendingOrder>,
     /// 下一个订单 ID 计数器
     next_id: u64,
 }
@@ -214,7 +218,7 @@ impl PendingOrderManager {
     pub fn new() -> Self {
         Self {
             orders: Vec::new(),
-            order_history: Vec::new(),
+            order_history: VecDeque::with_capacity(MAX_ORDER_HISTORY),
             next_id: 1,
         }
     }
@@ -310,12 +314,7 @@ impl PendingOrderManager {
         let orders: Vec<_> = self.orders.drain(..).collect();
         for mut order in orders {
             order.mark_cancelled();
-            self.order_history.push(order);
-        }
-        // 保留最近 100 条历史
-        if self.order_history.len() > 100 {
-            let excess = self.order_history.len() - 100;
-            self.order_history.drain(0..excess);
+            self.add_to_history(order);
         }
         total_frozen
     }
@@ -359,17 +358,22 @@ impl PendingOrderManager {
         self.orders.iter().map(|o| o.frozen_margin).sum()
     }
 
-    /// 获取订单历史
-    pub fn history(&self) -> &[PendingOrder] {
-        &self.order_history
+    /// 获取订单历史 (slice view)
+    pub fn history(&self) -> impl Iterator<Item = &PendingOrder> {
+        self.order_history.iter()
     }
 
-    /// 添加到历史记录 (保留最近 100 条)
+    /// 获取订单历史数量
+    pub fn history_len(&self) -> usize {
+        self.order_history.len()
+    }
+
+    /// 添加到历史记录 (保留最近 N 条，pop_front 为 O(1))
     fn add_to_history(&mut self, order: PendingOrder) {
-        self.order_history.push(order);
-        if self.order_history.len() > 100 {
-            self.order_history.remove(0);
+        if self.order_history.len() >= MAX_ORDER_HISTORY {
+            self.order_history.pop_front();
         }
+        self.order_history.push_back(order);
     }
 
     /// 清空所有挂单
@@ -463,7 +467,7 @@ mod tests {
         let frozen = manager.cancel_order(&id);
         assert_eq!(frozen, Some(500.0));
         assert_eq!(manager.active_count(), 0);
-        assert_eq!(manager.history().len(), 1);
+        assert_eq!(manager.history_len(), 1);
     }
 
     #[test]

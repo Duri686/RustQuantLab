@@ -11,6 +11,9 @@ use crate::engine::types::EngineEvent;
 pub(crate) struct RiskMonitor;
 
 impl RiskMonitor {
+    /// 主交易对符号 (TODO: 未来可配置化)
+    const PRIMARY_SYMBOL: &'static str = "BTCUSDT";
+
     /// 更新价格并执行风险检查，返回需要强平的仓位列表
     pub fn check_and_update(
         price: f64,
@@ -23,7 +26,7 @@ impl RiskMonitor {
         pending_events: &mut Vec<EngineEvent>,
     ) -> Vec<String> {
         *current_price = price;
-        symbol_prices.insert("BTCUSDT".to_string(), price);
+        symbol_prices.insert(Self::PRIMARY_SYMBOL.to_string(), price);
 
         if position_manager.is_empty() {
             *risk_assessment = None;
@@ -124,7 +127,7 @@ impl RiskMonitor {
         // 发送风险预警事件
         if matches!(risk_level, RiskLevel::High | RiskLevel::Critical) {
             pending_events.push(EngineEvent::MarginWarning {
-                symbol: "BTCUSDT".to_string(),
+                symbol: Self::PRIMARY_SYMBOL.to_string(),
                 risk_level: format!("{:?}", risk_level),
                 margin_ratio,
                 liquidation_price: cross_liq_price, // 使用全仓强平价

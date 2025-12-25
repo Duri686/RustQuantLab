@@ -548,11 +548,11 @@ function calculatePriceChange(
 
   // 均值回归：价格偏离基准越远，回归力越强
   const deviation = (currentPrice - basePrice) / basePrice; // 偏离百分比
-  const maxDeviation = 0.5; // 最大允许偏离 50%
-  if (Math.abs(deviation) > 0.1) {
-    // 偏离超过 10% 时开始回归
+  const maxDeviation = 0.15; // 最大允许偏离 15%（更接近真实 BTC 月波动）
+  if (Math.abs(deviation) > 0.05) {
+    // 偏离超过 5% 时开始回归（更紧密的均值回归）
     const reversionStrength =
-      Math.min(Math.abs(deviation) / maxDeviation, 1) * 0.002;
+      Math.min(Math.abs(deviation) / maxDeviation, 1) * 0.003;
     changePercent -= deviation > 0 ? reversionStrength : -reversionStrength;
   }
 
@@ -564,7 +564,7 @@ function calculatePriceChange(
   }
 
   // 限制单根 K 线最大变动幅度
-  const maxChange = 0.02; // 单根最大 2%
+  const maxChange = 0.008; // 单根最大 0.8%（更接近真实 1m K 线）
   changePercent = Math.max(-maxChange, Math.min(maxChange, changePercent));
 
   return { changePercent, volatility };

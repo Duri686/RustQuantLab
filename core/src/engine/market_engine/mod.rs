@@ -112,14 +112,14 @@ impl MarketEngine {
     }
 
     pub fn set_timeframe(&mut self, timeframe_str: &str) -> bool {
-        Timeframe::from_str(timeframe_str).map(|tf| self.active_timeframe = tf).is_some()
+        timeframe_str.parse::<Timeframe>().map(|tf| self.active_timeframe = tf).is_ok()
     }
 
     pub fn get_timeframe(&self) -> String { self.active_timeframe.as_str().to_string() }
 
     pub fn get_candles(&self, timeframe_str: &str) -> Result<JsValue, JsValue> {
-        let tf = Timeframe::from_str(timeframe_str)
-            .ok_or_else(|| JsValue::from_str(&format!("无效的时间周期: {}", timeframe_str)))?;
+        let tf: Timeframe = timeframe_str.parse()
+            .map_err(|e: String| JsValue::from_str(&e))?;
         to_js!(self.build_candle_history(tf, timeframe_str))
     }
 
@@ -128,7 +128,7 @@ impl MarketEngine {
     }
 
     pub fn get_candle_count(&self, timeframe_str: &str) -> usize {
-        Timeframe::from_str(timeframe_str)
+        timeframe_str.parse::<Timeframe>().ok()
             .and_then(|tf| self.candle_cache.get(&tf))
             .map(|c| c.history.len())
             .unwrap_or(0)
@@ -143,8 +143,8 @@ impl MarketEngine {
     /// @returns 加载的 K 线数量
     pub fn load_history_candles(&mut self, timeframe_str: &str, candles_js: JsValue) -> Result<usize, JsValue> {
         // 解析时间周期
-        let tf = Timeframe::from_str(timeframe_str)
-            .ok_or_else(|| JsValue::from_str(&format!("无效的时间周期: {}", timeframe_str)))?;
+        let tf: Timeframe = timeframe_str.parse()
+            .map_err(|e: String| JsValue::from_str(&e))?;
 
         // 解析 K 线数据
         let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析历史 K 线失败")?;

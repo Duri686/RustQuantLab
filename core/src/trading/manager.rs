@@ -47,7 +47,13 @@ pub struct PositionManager {
 }
 
 impl PositionManager {
+    /// 防止除零的最小值常量
+    const EPSILON: f64 = 1e-10;
+}
+
+impl PositionManager {
     /// 创建空的仓位管理器
+    #[must_use]
     pub fn new() -> Self {
         Self {
             positions: HashMap::new(),
@@ -96,7 +102,6 @@ impl PositionManager {
 
     /// 检查是否有逐仓仓位 (用于杠杆修改限制)
     pub fn has_isolated_positions(&self) -> bool {
-        use crate::trading::position::MarginMode;
         self.positions.values().any(|p| p.margin_mode == MarginMode::Isolated)
     }
 
@@ -174,7 +179,7 @@ impl PositionManager {
     }
 
     /// 获取所有已平仓仓位历史
-    pub fn closed_positions(&self) -> &Vec<Position> {
+    pub fn closed_positions(&self) -> &[Position] {
         &self.closed_positions
     }
 
@@ -344,55 +349,63 @@ impl PositionManager {
     /// - 如果 Long 5 BTC + Short 5 BTC (完全对冲)，实际保证金需求接近 0
     /// - 如果 Long 6 BTC + Short 2 BTC，只对净敞口 4 BTC 计算保证金
     pub fn total_cross_margin(&self) -> f64 {
-        let (net_long_size, net_short_size, _, _) = 
-            self.calculate_net_exposure();
+        // 一次遍历收集多空两边的数据
+        let (long_total, short_total) = self.collect_cross_margin_by_side();
+        let (net_long_size, net_short_size, _, _) = self.calculate_net_exposure();
         
-        // 计算对冲部分的大小
-        let hedged_size = net_long_size.min(net_short_size);
-        
-        // 对冲部分：只需要一边的保证金（取较大保证金率的一边）
-        // 简化：对冲部分按平均价格和平均杠杆计算，只占用一半保证金
-        let mut hedged_margin = 0.0;
-        if hedged_size > 0.0 {
-            // 对冲部分的保证金 = 取多空两边平均
-            let long_hedge_margin = self.positions
-                .values()
-                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Long)
-                .map(|p| p.margin * hedged_size / net_long_size.max(0.0001))
-                .sum::<f64>();
-            let short_hedge_margin = self.positions
-                .values()
-                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Short)
-                .map(|p| p.margin * hedged_size / net_short_size.max(0.0001))
-                .sum::<f64>();
-            // 对冲部分只需要一边的保证金
-            hedged_margin = long_hedge_margin.max(short_hedge_margin);
+        // 无仓位快速返回
+        if net_long_size == 0.0 && net_short_size == 0.0 {
+            return 0.0;
         }
         
+        // 计算对冲部分
+        let hedged_size = net_long_size.min(net_short_size);
+        
+        // 对冲部分：只需要一边的保证金
+        let hedged_margin = if hedged_size > 0.0 {
+            let long_hedge = long_total.margin * (hedged_size / net_long_size.max(Self::EPSILON));
+            let short_hedge = short_total.margin * (hedged_size / net_short_size.max(Self::EPSILON));
+            long_hedge.max(short_hedge)
+        } else {
+            0.0
+        };
+        
         // 非对冲部分：全额计算保证金
-        let net_long_margin = if net_long_size > net_short_size {
-            let net_ratio = (net_long_size - net_short_size) / net_long_size.max(0.0001);
-            self.positions
-                .values()
-                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Long)
-                .map(|p| p.margin * net_ratio)
-                .sum::<f64>()
+        let net_margin = if net_long_size > net_short_size {
+            let ratio = (net_long_size - net_short_size) / net_long_size.max(Self::EPSILON);
+            long_total.margin * ratio
+        } else if net_short_size > net_long_size {
+            let ratio = (net_short_size - net_long_size) / net_short_size.max(Self::EPSILON);
+            short_total.margin * ratio
         } else {
             0.0
         };
         
-        let net_short_margin = if net_short_size > net_long_size {
-            let net_ratio = (net_short_size - net_long_size) / net_short_size.max(0.0001);
-            self.positions
-                .values()
-                .filter(|p| p.margin_mode == MarginMode::Cross && p.side == PositionSide::Short)
-                .map(|p| p.margin * net_ratio)
-                .sum::<f64>()
-        } else {
-            0.0
-        };
+        hedged_margin + net_margin
+    }
+    
+    /// 一次遍历收集全仓多空两边的保证金汇总
+    fn collect_cross_margin_by_side(&self) -> (CrossSideTotal, CrossSideTotal) {
+        let mut long_total = CrossSideTotal::default();
+        let mut short_total = CrossSideTotal::default();
         
-        hedged_margin + net_long_margin + net_short_margin
+        for pos in self.positions.values() {
+            if pos.margin_mode != MarginMode::Cross {
+                continue;
+            }
+            match pos.side {
+                PositionSide::Long => {
+                    long_total.margin += pos.margin;
+                    long_total.size += pos.size;
+                }
+                PositionSide::Short => {
+                    short_total.margin += pos.margin;
+                    short_total.size += pos.size;
+                }
+            }
+        }
+        
+        (long_total, short_total)
     }
 
     /// 计算逐仓模式总保证金
@@ -476,16 +489,19 @@ impl PositionManager {
         risk_config: &RiskConfig,
     ) -> (f64, Vec<String>) {
         let mut isolated_to_liquidate = Vec::new();
+        let mut total_cross_mm = 0.0;
         
-        // 计算全仓净敞口
-        let (net_long_size, net_short_size, _, _) = self.calculate_net_exposure();
-        let net_exposure = (net_long_size - net_short_size).abs();
-        
-        // 全仓维持保证金只对净敞口计算
-        let price = current_prices.get("BTCUSDT").copied().unwrap_or(0.0);
-        let net_notional = net_exposure * price;
-        let mmr = risk_config.get_maintenance_margin_rate(net_notional);
-        let total_cross_mm = net_notional * mmr;
+        // 按交易对分组计算全仓净敞口的维持保证金
+        let cross_exposures = self.calculate_cross_exposure_by_symbol();
+        for (symbol, (long_size, short_size)) in &cross_exposures {
+            let net_exposure = (long_size - short_size).abs();
+            if net_exposure > 0.0 {
+                let price = current_prices.get(symbol).copied().unwrap_or(0.0);
+                let net_notional = net_exposure * price;
+                let mmr = risk_config.get_maintenance_margin_rate(net_notional);
+                total_cross_mm += net_notional * mmr;
+            }
+        }
 
         // 逐仓仓位单独计算
         for (position_key, pos) in &self.positions {
@@ -507,6 +523,34 @@ impl PositionManager {
 
         (total_cross_mm, isolated_to_liquidate)
     }
+    
+    /// 按交易对分组计算全仓净敞口
+    /// 
+    /// # Returns
+    /// HashMap<symbol, (long_size, short_size)>
+    fn calculate_cross_exposure_by_symbol(&self) -> HashMap<String, (f64, f64)> {
+        let mut exposures: HashMap<String, (f64, f64)> = HashMap::new();
+        
+        for pos in self.positions.values() {
+            if pos.margin_mode != MarginMode::Cross {
+                continue;
+            }
+            let entry = exposures.entry(pos.symbol.clone()).or_insert((0.0, 0.0));
+            match pos.side {
+                PositionSide::Long => entry.0 += pos.size,
+                PositionSide::Short => entry.1 += pos.size,
+            }
+        }
+        
+        exposures
+    }
+}
+
+/// 全仓单边汇总数据 (用于保证金计算)
+#[derive(Debug, Default)]
+struct CrossSideTotal {
+    margin: f64,
+    size: f64,
 }
 
 // ============================================================================
@@ -639,5 +683,152 @@ mod tests {
         assert_eq!(manager.isolated_position_symbols(), vec!["ETHUSDT".to_string()]);
         assert!((manager.total_cross_margin() - 500.0).abs() < 0.01);
         assert!((manager.total_isolated_margin() - 300.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_move_to_history() {
+        let mut manager = PositionManager::new();
+        
+        let pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        manager.insert(pos);
+        assert_eq!(manager.len(), 1);
+        assert!(manager.closed_positions().is_empty());
+
+        // 移动到历史
+        manager.move_to_history_with_time("BTCUSDT", 51000.0, 100.0, false, 2000);
+        
+        assert!(manager.is_empty());
+        assert_eq!(manager.closed_positions().len(), 1);
+        
+        let closed = &manager.closed_positions()[0];
+        assert_eq!(closed.exit_price, 51000.0);
+        assert_eq!(closed.realized_pnl, 100.0);
+        assert_eq!(closed.close_time, 2000);
+        assert!(matches!(closed.status, PositionStatus::Closed));
+    }
+
+    #[test]
+    fn test_move_to_history_liquidation() {
+        let mut manager = PositionManager::new();
+        
+        let pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        manager.insert(pos);
+
+        manager.move_to_history("BTCUSDT", 45000.0, -500.0, true);
+        
+        let closed = &manager.closed_positions()[0];
+        assert!(matches!(closed.status, PositionStatus::Liquidated));
+    }
+
+    #[test]
+    fn test_calculate_net_exposure() {
+        let mut manager = PositionManager::new();
+
+        // Long 0.1 BTC + Short 0.05 BTC = 净多 0.05
+        let mut long_pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        long_pos.margin_mode = MarginMode::Cross;
+        manager.insert(long_pos);
+
+        let mut short_pos = create_test_position("BTCUSDT", PositionSide::Short, 0.05, 51000.0);
+        short_pos.margin_mode = MarginMode::Cross;
+        // 使用不同的 key 来存储
+        manager.positions.insert("BTCUSDT_Short".to_string(), short_pos);
+
+        let (long_size, short_size, avg_long, avg_short) = manager.calculate_net_exposure();
+        
+        assert!((long_size - 0.1).abs() < 1e-10);
+        assert!((short_size - 0.05).abs() < 1e-10);
+        assert!((avg_long - 50000.0).abs() < 0.01);
+        assert!((avg_short - 51000.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_total_cross_margin_with_hedge() {
+        let mut manager = PositionManager::new();
+
+        // 完全对冲场景: Long 0.1 + Short 0.1
+        let mut long_pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        long_pos.margin_mode = MarginMode::Cross;
+        long_pos.margin = 500.0;
+        manager.positions.insert("BTCUSDT_Long".to_string(), long_pos);
+
+        let mut short_pos = create_test_position("BTCUSDT", PositionSide::Short, 0.1, 50000.0);
+        short_pos.margin_mode = MarginMode::Cross;
+        short_pos.margin = 500.0;
+        manager.positions.insert("BTCUSDT_Short".to_string(), short_pos);
+
+        let margin = manager.total_cross_margin();
+        
+        // 完全对冲，只需要一边保证金 (500)
+        assert!((margin - 500.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_add_margin() {
+        let mut manager = PositionManager::new();
+        
+        // 创建逐仓仓位
+        let mut pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        pos.margin_mode = MarginMode::Isolated;
+        pos.margin = 500.0;
+        manager.insert(pos);
+
+        let risk_config = RiskConfig::default();
+        
+        // 增加保证金
+        let result = manager.add_margin("BTCUSDT", 200.0, &risk_config);
+        assert!(result.is_ok());
+        assert!((result.unwrap() - 700.0).abs() < 0.01);
+
+        // 验证仓位保证金已更新
+        let pos = manager.get("BTCUSDT").unwrap();
+        assert!((pos.margin - 700.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_add_margin_cross_mode_error() {
+        let mut manager = PositionManager::new();
+        
+        // 全仓模式不能增加保证金
+        let mut pos = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        pos.margin_mode = MarginMode::Cross;
+        manager.insert(pos);
+
+        let risk_config = RiskConfig::default();
+        let result = manager.add_margin("BTCUSDT", 200.0, &risk_config);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("逐仓"));
+    }
+
+    #[test]
+    fn test_calculate_cross_exposure_by_symbol() {
+        let mut manager = PositionManager::new();
+
+        // BTC: Long 0.1 + Short 0.05
+        let mut btc_long = create_test_position("BTCUSDT", PositionSide::Long, 0.1, 50000.0);
+        btc_long.margin_mode = MarginMode::Cross;
+        manager.positions.insert("BTCUSDT_Long".to_string(), btc_long);
+
+        let mut btc_short = create_test_position("BTCUSDT", PositionSide::Short, 0.05, 51000.0);
+        btc_short.margin_mode = MarginMode::Cross;
+        manager.positions.insert("BTCUSDT_Short".to_string(), btc_short);
+
+        // ETH: Long 1.0
+        let mut eth_long = create_test_position("ETHUSDT", PositionSide::Long, 1.0, 3000.0);
+        eth_long.margin_mode = MarginMode::Cross;
+        manager.positions.insert("ETHUSDT_Long".to_string(), eth_long);
+
+        let exposures = manager.calculate_cross_exposure_by_symbol();
+        
+        assert_eq!(exposures.len(), 2);
+        
+        let btc = exposures.get("BTCUSDT").unwrap();
+        assert!((btc.0 - 0.1).abs() < 1e-10);  // long
+        assert!((btc.1 - 0.05).abs() < 1e-10); // short
+
+        let eth = exposures.get("ETHUSDT").unwrap();
+        assert!((eth.0 - 1.0).abs() < 1e-10);  // long
+        assert!((eth.1 - 0.0).abs() < 1e-10);  // short
     }
 }

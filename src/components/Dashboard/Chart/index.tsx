@@ -104,36 +104,37 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
     const chartData = useMemo(() => extractChartData(allCandles), [allCandles]);
 
     // 确保指标数据与 K 线数据长度对齐
-    // Rust 返回的 indicators 长度应该与 allCandles 一致（包含 currentCandle）
-    // 如果长度不一致，说明存在边界情况，需要补齐
+    // Rust 返回的 indicators 长度 = candles.length + (currentCandle ? 1 : 0)
+    // 前端 allCandles = candleHistory + currentLiveCandle，两者长度应一致
+    // 如果有差异（边界情况），用 null 后置填充
     const mergedIndicatorData: IndicatorData = useMemo(() => {
       const klineLen = allCandles.length;
       const indicatorLen = indicatorData.ma7.length;
 
-      // 长度已对齐，直接使用
+      // 长度已对齐或指标更多，直接使用
       if (indicatorLen >= klineLen) {
         return indicatorData;
       }
 
-      // 需要补齐：用 null 前置填充，确保指标在正确的 K 线位置绘制
+      // 边界情况：指标比 K 线少，后置填充 null（为最后的 K 线补空指标）
       const padLen = klineLen - indicatorLen;
       const padding = new Array<null>(padLen).fill(null);
 
       return {
-        sma5: [...padding, ...indicatorData.sma5],
-        ma7: [...padding, ...indicatorData.ma7],
-        ma25: [...padding, ...indicatorData.ma25],
-        ma99: [...padding, ...indicatorData.ma99],
-        ema7: [...padding, ...indicatorData.ema7],
-        ema25: [...padding, ...indicatorData.ema25],
-        rsi14: [...padding, ...indicatorData.rsi14],
-        bollUpper: [...padding, ...indicatorData.bollUpper],
-        bollMid: [...padding, ...indicatorData.bollMid],
-        bollLower: [...padding, ...indicatorData.bollLower],
-        macdDif: [...padding, ...indicatorData.macdDif],
-        macdDea: [...padding, ...indicatorData.macdDea],
-        macdHist: [...padding, ...indicatorData.macdHist],
-        volMa5: [...padding, ...indicatorData.volMa5],
+        sma5: [...indicatorData.sma5, ...padding],
+        ma7: [...indicatorData.ma7, ...padding],
+        ma25: [...indicatorData.ma25, ...padding],
+        ma99: [...indicatorData.ma99, ...padding],
+        ema7: [...indicatorData.ema7, ...padding],
+        ema25: [...indicatorData.ema25, ...padding],
+        rsi14: [...indicatorData.rsi14, ...padding],
+        bollUpper: [...indicatorData.bollUpper, ...padding],
+        bollMid: [...indicatorData.bollMid, ...padding],
+        bollLower: [...indicatorData.bollLower, ...padding],
+        macdDif: [...indicatorData.macdDif, ...padding],
+        macdDea: [...indicatorData.macdDea, ...padding],
+        macdHist: [...indicatorData.macdHist, ...padding],
+        volMa5: [...indicatorData.volMa5, ...padding],
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [indicatorData, allCandles.length, currentLiveCandle?.close]);
@@ -295,6 +296,20 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
     // RSI 动态数据
     const displayRsi = mergedIndicatorData.rsi14[displayIndex];
 
+    // MA 动态数据
+    const displayMa7 = mergedIndicatorData.ma7[displayIndex];
+    const displayMa25 = mergedIndicatorData.ma25[displayIndex];
+    const displayMa99 = mergedIndicatorData.ma99[displayIndex];
+
+    // EMA 动态数据
+    const displayEma7 = mergedIndicatorData.ema7[displayIndex];
+    const displayEma25 = mergedIndicatorData.ema25[displayIndex];
+
+    // BOLL 动态数据
+    const displayBollUpper = mergedIndicatorData.bollUpper[displayIndex];
+    const displayBollMid = mergedIndicatorData.bollMid[displayIndex];
+    const displayBollLower = mergedIndicatorData.bollLower[displayIndex];
+
     // MACD 柱状图颜色（与图表一致）
     const getMacdHistDisplayColor = () => {
       if (displayMacdHist == null) return '#888';
@@ -353,6 +368,54 @@ const KLineChart = forwardRef<KLineChartHandle, KLineChartProps>(
             <span className="text-neutral-500">
               量 {formatVolume(displayVolumeValue)}
             </span>
+
+            {/* MA 动态数据 (仅在启用 MA 时显示) */}
+            {activeMainIndicators.includes('MA') && (
+              <>
+                <span className="text-neutral-600 ml-2">|</span>
+                <span style={{ color: CHART_COLORS.MA7 }}>
+                  MA7:{displayMa7 != null ? displayMa7.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.MA25 }}>
+                  MA25:{displayMa25 != null ? displayMa25.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.MA99 }}>
+                  MA99:{displayMa99 != null ? displayMa99.toFixed(2) : '-'}
+                </span>
+              </>
+            )}
+
+            {/* EMA 动态数据 (仅在启用 EMA 时显示) */}
+            {activeMainIndicators.includes('EMA') && (
+              <>
+                <span className="text-neutral-600 ml-2">|</span>
+                <span style={{ color: CHART_COLORS.EMA7 }}>
+                  EMA7:{displayEma7 != null ? displayEma7.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.EMA25 }}>
+                  EMA25:{displayEma25 != null ? displayEma25.toFixed(2) : '-'}
+                </span>
+              </>
+            )}
+
+            {/* BOLL 动态数据 (仅在启用 BOLL 时显示) */}
+            {activeMainIndicators.includes('BOLL') && (
+              <>
+                <span className="text-neutral-600 ml-2">|</span>
+                <span className="text-neutral-500">BOLL(20,2)</span>
+                <span style={{ color: CHART_COLORS.BOLL_UPPER }}>
+                  上:
+                  {displayBollUpper != null ? displayBollUpper.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.BOLL_MID }}>
+                  中:{displayBollMid != null ? displayBollMid.toFixed(2) : '-'}
+                </span>
+                <span style={{ color: CHART_COLORS.BOLL_LOWER }}>
+                  下:
+                  {displayBollLower != null ? displayBollLower.toFixed(2) : '-'}
+                </span>
+              </>
+            )}
 
             {/* MACD 动态数据 (仅在启用 MACD 时显示) */}
             {activeSubIndicators.includes('MACD') && (

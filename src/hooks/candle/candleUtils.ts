@@ -6,7 +6,11 @@
  */
 
 import type { Candle, IndicatorData } from '../../types/index';
-import type { WasmCandle, WasmAnalysisResult } from '../../types/wasm';
+import type {
+  WasmCandle,
+  WasmAnalysisResult,
+  WasmTimeframe,
+} from '../../types/wasm';
 
 // ============================================
 // 常量
@@ -128,12 +132,52 @@ export function createEmptyPendingIndicators(): PendingIndicators {
 // ============================================
 
 /**
- * 将 WasmCandle 转换为前端 Candle 类型
+ * 根据时间周期格式化时间显示
+ * - 1D: 显示日期 (MM/DD)
+ * - 1H/4H: 显示日期+时间 (MM/DD HH:mm)
+ * - 其他: 显示时间 (HH:mm:ss)
  */
-export function convertWasmCandle(wc: WasmCandle): Candle {
+export function formatCandleTime(
+  timestamp: number,
+  timeframe?: WasmTimeframe,
+): string {
+  const date = new Date(timestamp);
+
+  switch (timeframe) {
+    case '1D':
+      // 日线显示日期: MM/DD
+      return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date
+        .getDate()
+        .toString()
+        .padStart(2, '0')}`;
+    case '4H':
+    case '1H':
+      // 小时线显示日期+时间: MM/DD HH:mm
+      return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date
+        .getDate()
+        .toString()
+        .padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date
+        .getMinutes()
+        .toString()
+        .padStart(2, '0')}`;
+    default:
+      // 分钟/秒线显示时间: HH:mm:ss
+      return date.toLocaleTimeString();
+  }
+}
+
+/**
+ * 将 WasmCandle 转换为前端 Candle 类型
+ * @param wc - Wasm K 线数据
+ * @param timeframe - 时间周期（用于格式化时间显示）
+ */
+export function convertWasmCandle(
+  wc: WasmCandle,
+  timeframe?: WasmTimeframe,
+): Candle {
   return {
     time: wc.time,
-    timeStr: new Date(wc.time).toLocaleTimeString(),
+    timeStr: formatCandleTime(wc.time, timeframe),
     open: wc.open,
     high: wc.high,
     low: wc.low,

@@ -29,10 +29,17 @@ impl MarketEngine {
     }
 
     /// 构建 K 线历史数据
+    ///
+    /// 指标历史包含已完成的 K 线 + 当前实时 K 线 (currentCandle)。
+    /// 这确保了最新一根 K 线的均线会随着实时 tick 动态更新。
+    /// 前端 allCandles = candles + currentCandle，指标数组长度与之对齐。
     pub(crate) fn build_candle_history(&self, tf: Timeframe, timeframe_str: &str) -> CandleHistory {
         let cache = self.candle_cache.get(&tf);
         let candles = cache.map(|c| c.history.clone()).unwrap_or_default();
         let current_candle = cache.and_then(|c| c.current.clone());
+        
+        // 指标历史包含 currentCandle，这样最新 K 线的均线会实时更新
+        // indicators 数组长度 = candles.len() + (current_candle.is_some() ? 1 : 0)
         let indicators = CandleIndicatorCalculator::compute(&candles, current_candle.as_ref());
 
         CandleHistory {
