@@ -134,10 +134,20 @@ export function generateNormalCandle(
     changePercent = applyTechnicalResponse(s, open, changePercent);
   }
 
-  // 均值回归
+  // 均值回归 - 防止价格偏离基准价格太远
   const deviation = (open - s.basePrice) / s.basePrice;
   if (Math.abs(deviation) > 0.05) {
-    changePercent -= deviation * 0.0008 * dtScale;
+    // 偏离超过5%时，产生回归力
+    const reversionForce = deviation * 0.3; // 回归强度
+    changePercent -= reversionForce * dtScale;
+  }
+  
+  // 价格保护：防止价格偏离基准价格超过50%
+  const maxDeviation = 0.5; // 最大偏离50%
+  if (Math.abs(deviation) > maxDeviation) {
+    // 如果偏离过大，强制回归
+    const forcedReversion = -deviation * 0.5;
+    changePercent = forcedReversion * dtScale;
   }
 
   // 限制单根K线的最大变化幅度

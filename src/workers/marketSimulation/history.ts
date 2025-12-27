@@ -32,11 +32,18 @@ export function generateHistoricalCandles(
     candles.push(candle);
   }
 
+  // 历史数据生成后，状态已保留最后一个价格（在 generateCandleFromState 中更新）
+  const lastPrice = state.currentPrice;
+  const startPrice = state.basePrice;
+  const priceChange = ((lastPrice - startPrice) / startPrice) * 100;
+
   const genTime = performance.now() - startGenTime;
   // eslint-disable-next-line no-console
   console.info(
     `[MockWorker] 生成 ${count} 根 K 线耗时: ${genTime.toFixed(1)}ms ` +
-      `(${((count / genTime) * 1000).toFixed(0)} 根/秒)`,
+      `(${((count / genTime) * 1000).toFixed(0)} 根/秒)\n` +
+      `  起始价格: $${startPrice.toFixed(2)}, 结束价格: $${lastPrice.toFixed(2)} ` +
+      `(变化: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%)`,
   );
 
   return candles;

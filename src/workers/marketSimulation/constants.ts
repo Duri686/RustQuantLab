@@ -3,7 +3,18 @@
  */
 
 export const SYMBOL = 'BTC-USDT';
+
+/**
+ * 生成随机基准价格（锚点价格）
+ * 范围: 100000 - 200000
+ */
+export function getRandomBasePrice(): number {
+  return 100000 + Math.random() * (200000 - 100000);
+}
+
+/** @deprecated 使用 getRandomBasePrice() 替代 */
 export const BASE_PRICE = 40000.0;
+
 export const LEVELS = 50; // 订单簿深度
 export const PRICE_PRECISION = 100; // 价格精度 (0.01)
 

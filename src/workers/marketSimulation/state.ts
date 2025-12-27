@@ -3,7 +3,7 @@
  */
 
 import type { MarketState } from './types';
-import { BASE_PRICE } from './constants';
+import { getRandomBasePrice } from './constants';
 
 /** 全局状态实例 */
 let state: MarketState | null = null;
@@ -33,7 +33,9 @@ export function getStateOrNull(): MarketState | null {
  * 初始化市场状态
  */
 export function initializeState(startPrice?: number): MarketState {
-  const price = startPrice && startPrice > 0 ? startPrice : BASE_PRICE;
+  // 如果提供了有效的起始价格，使用它；否则使用随机基准价格
+  const price =
+    startPrice && startPrice > 0 ? startPrice : getRandomBasePrice();
 
   state = {
     phase: 'ACCUMULATION',

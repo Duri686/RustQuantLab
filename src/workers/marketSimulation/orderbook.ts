@@ -8,6 +8,9 @@ import { SYMBOL, LEVELS } from './constants';
 import { round2, fatTailRandom } from './utils';
 import { getNextPhase, getPhaseDuration } from './wyckoff';
 
+/** 最小价格限制，防止负数或过小的价格 */
+const MIN_PRICE = 0.01;
+
 /**
  * 生成订单簿数据
  */
@@ -38,6 +41,11 @@ export function generateOrderBook(): OrderBook {
   const random = fatTailRandom() * baseVol;
   const changePercent = drift + random + state.momentum * 0.0001;
   state.currentPrice = prevPrice * (1 + changePercent);
+  
+  // 价格保护：确保价格不会变成负数或过小
+  if (state.currentPrice < MIN_PRICE) {
+    state.currentPrice = Math.max(MIN_PRICE, prevPrice * 0.99); // 最多下跌 1%
+  }
 
   // 更新动量
   state.momentum = state.momentum * 0.98 + changePercent * 50;
@@ -56,20 +64,32 @@ export function generateOrderBook(): OrderBook {
   const bids: [number, number][] = [];
   const asks: [number, number][] = [];
 
-  let bidSpread = 0;
-  let askSpread = 0;
+  // 确保当前价格不低于最小价格
+  const currentPrice = Math.max(state.currentPrice, MIN_PRICE);
+
+  // 使用百分比 spread，适应不同价格水平
+  // 每层 spread: 0.05% - 0.3%，累加后最多约 15% 的深度
+  let bidSpreadPercent = 0;
+  let askSpreadPercent = 0;
 
   for (let i = 0; i < LEVELS; i++) {
     const depthMultiplier = 1 + i * 0.15;
     const baseQty = Math.floor(Math.random() * 99) + 1;
 
-    bidSpread += 0.01 + Math.random() * 0.49;
-    const bidPrice = state.currentPrice - bidSpread;
-    bids.push([round2(bidPrice), Math.round(baseQty * depthMultiplier)]);
+    // 百分比 spread，每层增加 0.05% - 0.3%
+    bidSpreadPercent += (0.0005 + Math.random() * 0.0025);
+    const bidPrice = currentPrice * (1 - bidSpreadPercent);
+    
+    // 确保买单价格不低于最小价格，且低于当前价格
+    const safeBidPrice = Math.max(MIN_PRICE, Math.min(bidPrice, currentPrice * 0.999));
+    bids.push([round2(safeBidPrice), Math.round(baseQty * depthMultiplier)]);
 
-    askSpread += 0.01 + Math.random() * 0.49;
-    const askPrice = state.currentPrice + askSpread;
-    asks.push([round2(askPrice), Math.round(baseQty * depthMultiplier)]);
+    askSpreadPercent += (0.0005 + Math.random() * 0.0025);
+    const askPrice = currentPrice * (1 + askSpreadPercent);
+    
+    // 确保卖单价格高于当前价格
+    const safeAskPrice = Math.max(askPrice, currentPrice * 1.001);
+    asks.push([round2(safeAskPrice), Math.round(baseQty * depthMultiplier)]);
   }
 
   bids.sort((a, b) => b[0] - a[0]);
@@ -78,7 +98,7 @@ export function generateOrderBook(): OrderBook {
   return {
     symbol: SYMBOL,
     timestamp: Date.now(),
-    price: round2(state.currentPrice),
+    price: round2(currentPrice),
     bids,
     asks,
   };

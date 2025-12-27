@@ -15,7 +15,7 @@ export type {
 } from './types';
 
 // 常量导出
-export { SYMBOL, BASE_PRICE, LEVELS, PRICE_PRECISION } from './constants';
+export { SYMBOL, BASE_PRICE, getRandomBasePrice, LEVELS, PRICE_PRECISION } from './constants';
 
 // 状态管理
 export {
