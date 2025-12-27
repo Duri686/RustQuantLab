@@ -105,24 +105,25 @@ impl CandleAggregator {
         }
     }
 
-    /// 从 1m K 线历史聚合到所有高周期
+    /// 从 1s K 线历史聚合到所有高周期
     ///
-    /// 接收 1m K 线数据，自动聚合到 5m/15m/1H/4H/1D
+    /// 接收 1s K 线数据，自动聚合到 1m/5m/15m/1H/4H/1D
     /// 返回各周期加载的 K 线数量
     pub fn aggregate_history_from_1m(
         candle_cache: &mut HashMap<Timeframe, CandleCache>,
-        candles_1m: Vec<Candle>,
+        candles_s1: Vec<Candle>,
     ) -> Vec<(String, usize)> {
         let mut results = Vec::new();
 
-        // 1. 直接加载 1m 到缓存
-        let m1_count = candles_1m.len();
-        let cache_1m = candle_cache.entry(Timeframe::M1).or_insert_with(CandleCache::new);
-        cache_1m.load_history(candles_1m.clone());
-        results.push(("1m".to_string(), m1_count));
+        // 1. 直接加载 1s 到缓存
+        let s1_count = candles_s1.len();
+        let cache_s1 = candle_cache.entry(Timeframe::S1).or_insert_with(CandleCache::new);
+        cache_s1.load_history(candles_s1.clone());
+        results.push(("1s".to_string(), s1_count));
 
         // 2. 聚合到高周期
         let higher_timeframes = [
+            Timeframe::M1,
             Timeframe::M5,
             Timeframe::M15,
             Timeframe::H1,
@@ -131,7 +132,7 @@ impl CandleAggregator {
         ];
 
         for tf in higher_timeframes {
-            let aggregated = Self::aggregate_candles(&candles_1m, tf);
+            let aggregated = Self::aggregate_candles(&candles_s1, tf);
             let count = aggregated.len();
             let cache = candle_cache.entry(tf).or_insert_with(CandleCache::new);
             cache.load_history(aggregated);

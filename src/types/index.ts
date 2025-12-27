@@ -285,7 +285,7 @@ export interface MarketEngineInstance {
     timeframe: _WasmTimeframe,
     candles: HistoryCandle[],
   ) => number;
-  /** 加载 1m K 线并自动聚合到所有高周期 (5m/15m/1H/4H/1D) */
+  /** 加载 1s K 线并自动聚合到所有高周期 (1m/5m/15m/1H/4H/1D) */
   load_history_1m_and_aggregate: (
     candles: HistoryCandle[],
   ) => [string, number][];
@@ -293,6 +293,7 @@ export interface MarketEngineInstance {
   // 模拟交易方法
   submit_order: (order: SimOrder) => SimOrderResult;
 }
+
 /**
  * MarketEngine 构造函数类型
  */

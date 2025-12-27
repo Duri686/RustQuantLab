@@ -15,11 +15,11 @@ import type {
  * @param interval - 数据更新间隔（毫秒），默认 100ms
  * @returns { latestData, isRunning, start, stop }
  */
-/** 默认历史 K 线数量 (180 天 * 24 * 60 = 259200 根 1m K 线，约6个月) */
-const DEFAULT_HISTORY_COUNT = 259200;
+/** 默认历史 K 线数量 (15 天 * 24 * 60 * 60 = 1296000 根 1s K 线，约 15 天) */
+const DEFAULT_HISTORY_COUNT = 1296000;
 
-/** 1m 时间周期 (秒) - 作为基础粒度，Rust 会自动聚合到高周期 */
-const TIMEFRAME_1M_SECONDS = 60;
+/** 1s 时间周期 (秒) - 作为基础粒度，Rust 会自动聚合到高周期 */
+const TIMEFRAME_1S_SECONDS = 1;
 
 export function useMockMarket(interval: number = 100) {
   const [latestData, setLatestData] = useState<OrderBook | null>(null);
@@ -101,11 +101,11 @@ export function useMockMarket(interval: number = 100) {
   /**
    * 请求历史 K 线数据
    * @param timeframeSeconds - 时间周期 (秒)，默认 1m = 60
-   * @param count - K 线数量，默认 259200 (6个月)
+   * @param count - K 线数量，默认 1296000 (15 天 1s K 线)
    */
   const requestHistory = useCallback(
     (
-      timeframeSeconds: number = TIMEFRAME_1M_SECONDS,
+      timeframeSeconds: number = TIMEFRAME_1S_SECONDS,
       count: number = DEFAULT_HISTORY_COUNT,
     ) => {
       console.log(`[Perf] 📤 请求历史数据: ${count} 根 K 线...`);

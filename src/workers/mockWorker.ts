@@ -271,7 +271,7 @@ function generateHistoricalCandles(
     phase: 'CONSOLIDATION',
     sentiment: 'CALM',
     phaseProgress: 0,
-    phaseDuration: 1440 + Math.floor(Math.random() * 2880), // 1440-4320 根 K 线 (约1-3天)
+    phaseDuration: getPhaseDuration('CONSOLIDATION', timeframeSeconds), // 1440-4320 根 K 线 (约1-3天)
     phaseCounter: 0,
     momentum: 0,
     avgVolume: 2000,
@@ -283,13 +283,18 @@ function generateHistoricalCandles(
     const candleTime = startTime + i * intervalMs;
 
     // 更新市场状态
-    updateMarketState(state, price);
+    updateMarketState(state, price, timeframeSeconds);
 
     // 更新当前价格到状态
     state.currentPrice = price;
 
     // 根据市场状态生成 K 线
-    const candle = generateCandleFromState(state, price, candleTime);
+    const candle = generateCandleFromState(
+      state,
+      price,
+      candleTime,
+      timeframeSeconds,
+    );
     candles.push(candle);
 
     // 下一根 K 线的开盘价 = 当前收盘价
@@ -313,22 +318,29 @@ function generateHistoricalCandles(
 /**
  * 更新市场状态机
  */
-function updateMarketState(state: MarketState, _price: number): void {
+function updateMarketState(
+  state: MarketState,
+  _price: number,
+  timeframeSeconds: number,
+): void {
   state.phaseCounter++;
   state.phaseProgress = state.phaseCounter / state.phaseDuration;
 
+  const BASE_TIMEFRAME_SECONDS = 60;
+  const timeScale = timeframeSeconds / BASE_TIMEFRAME_SECONDS;
+
   // 阶段结束，切换到新阶段
   if (state.phaseCounter >= state.phaseDuration) {
-    transitionPhase(state);
+    transitionPhase(state, timeframeSeconds);
   }
 
   // 随机情绪事件（5% 概率触发极端情绪）
-  if (Math.random() < 0.05) {
+  if (Math.random() < 0.05 * timeScale) {
     triggerSentimentEvent(state);
   }
 
   // 情绪自然衰减回归平静
-  if (state.sentiment !== 'CALM' && Math.random() < 0.1) {
+  if (state.sentiment !== 'CALM' && Math.random() < 0.1 * timeScale) {
     state.sentiment = 'CALM';
   }
 
@@ -340,7 +352,7 @@ function updateMarketState(state: MarketState, _price: number): void {
 /**
  * 阶段转换逻辑
  */
-function transitionPhase(state: MarketState): void {
+function transitionPhase(state: MarketState, timeframeSeconds: number): void {
   const rand = Math.random();
   const prevPhase = state.phase;
 
@@ -364,20 +376,26 @@ function transitionPhase(state: MarketState): void {
 
   // 重置阶段计数器
   state.phaseCounter = 0;
-  state.phaseDuration = getPhaseDuration(state.phase);
+  state.phaseDuration = getPhaseDuration(state.phase, timeframeSeconds);
 }
 
 /**
  * 获取阶段持续时间
  */
-function getPhaseDuration(phase: MarketPhase): number {
+function getPhaseDuration(
+  phase: MarketPhase,
+  timeframeSeconds: number,
+): number {
+  const BASE_TIMEFRAME_SECONDS = 60;
+  const scale = BASE_TIMEFRAME_SECONDS / timeframeSeconds;
+
   switch (phase) {
     case 'BULL_RUN':
-      return 720 + Math.floor(Math.random() * 1440); // 720-2160 根 (约0.5-1.5天)
+      return Math.floor((720 + Math.floor(Math.random() * 1440)) * scale); // 720-2160 根 (约0.5-1.5天)
     case 'BEAR_RUN':
-      return 360 + Math.floor(Math.random() * 720); // 360-1080 根 (约0.25-0.75天，熊市更短更急)
+      return Math.floor((360 + Math.floor(Math.random() * 720)) * scale); // 360-1080 根 (约0.25-0.75天，熊市更短更急)
     case 'CONSOLIDATION':
-      return 1440 + Math.floor(Math.random() * 2880); // 1440-4320 根 (约1-3天)
+      return Math.floor((1440 + Math.floor(Math.random() * 2880)) * scale); // 1440-4320 根 (约1-3天)
   }
 }
 
@@ -444,6 +462,7 @@ function generateCandleFromState(
   state: MarketState,
   openPrice: number,
   time: number,
+  timeframeSeconds: number,
 ): HistoryCandle {
   // 确定量价模式
   const volumePattern = determineVolumePattern(state);
@@ -452,6 +471,7 @@ function generateCandleFromState(
   const { changePercent, volatility } = calculatePriceChange(
     state,
     volumePattern,
+    timeframeSeconds,
   );
 
   const open = openPrice;
@@ -518,11 +538,19 @@ function determineVolumePattern(state: MarketState): VolumePattern {
 function calculatePriceChange(
   state: MarketState,
   pattern: VolumePattern,
+  timeframeSeconds: number,
 ): { changePercent: number; volatility: number } {
   const { momentum, sentiment, currentPrice, basePrice } = state;
 
+  const BASE_TIMEFRAME_SECONDS = 60;
+  const dtScale = timeframeSeconds / BASE_TIMEFRAME_SECONDS;
+  const sqrtDt = Math.sqrt(dtScale);
+
+  const baseVol = 0.001;
+  const baseDriftPerMinute = baseVol * 0.3;
+
   // 基础波动率（降低到 0.1%，更符合 1m K 线）
-  let volatility = 0.001;
+  let volatility = baseVol * sqrtDt;
 
   // 根据情绪调整波动率
   switch (sentiment) {
@@ -543,7 +571,7 @@ function calculatePriceChange(
 
   // 计算变动：动量 + 随机
   const randomComponent = (Math.random() - 0.5) * 2 * volatility;
-  const momentumComponent = momentum * volatility * 0.3;
+  const momentumComponent = momentum * baseDriftPerMinute * dtScale;
   let changePercent = randomComponent + momentumComponent;
 
   // 均值回归：价格偏离基准越远，回归力越强
@@ -552,7 +580,7 @@ function calculatePriceChange(
   if (Math.abs(deviation) > 0.05) {
     // 偏离超过 5% 时开始回归（更紧密的均值回归）
     const reversionStrength =
-      Math.min(Math.abs(deviation) / maxDeviation, 1) * 0.003;
+      Math.min(Math.abs(deviation) / maxDeviation, 1) * 0.003 * dtScale;
     changePercent -= deviation > 0 ? reversionStrength : -reversionStrength;
   }
 
@@ -564,7 +592,7 @@ function calculatePriceChange(
   }
 
   // 限制单根 K 线最大变动幅度
-  const maxChange = 0.008; // 单根最大 0.8%（更接近真实 1m K 线）
+  const maxChange = 0.008 * sqrtDt; // 单根最大 0.8%（更接近真实 1m K 线），按时间缩放
   changePercent = Math.max(-maxChange, Math.min(maxChange, changePercent));
 
   return { changePercent, volatility };
@@ -580,24 +608,40 @@ function generateCandleShape(
   sentiment: MarketSentiment,
 ): { high: number; low: number } {
   const body = Math.abs(close - open);
-  const minShadow = open * volatility * 0.2;
+  const minShadow = open * volatility * 0.05;
   const baseRange = Math.max(body, minShadow);
 
-  let upperShadowRatio = 0.3 + Math.random() * 0.7; // 上影线比例
-  let lowerShadowRatio = 0.3 + Math.random() * 0.7; // 下影线比例
+  let upperShadowRatio: number;
+  let lowerShadowRatio: number;
+
+  const shapeRand = Math.random();
+
+  if (shapeRand < 0.6) {
+    // 常规形态：上下影线相对较短
+    upperShadowRatio = 0.1 + Math.random() * 0.3;
+    lowerShadowRatio = 0.1 + Math.random() * 0.3;
+  } else if (shapeRand < 0.8) {
+    // 以长上影为主
+    upperShadowRatio = 0.8 + Math.random() * 1.2;
+    lowerShadowRatio = 0.05 + Math.random() * 0.15;
+  } else {
+    // 以长下影为主
+    upperShadowRatio = 0.05 + Math.random() * 0.15;
+    lowerShadowRatio = 0.8 + Math.random() * 1.2;
+  }
 
   // 根据情绪调整影线形态
   if (sentiment === 'PANIC') {
     // 恐慌：长上影（冲高回落）或长下影后继续跌
-    upperShadowRatio *= 1.5;
-    lowerShadowRatio *= 0.5;
+    upperShadowRatio *= 1.2;
+    lowerShadowRatio *= 0.7;
   } else if (sentiment === 'FOMO') {
     // FOMO：长下影（探底回升）
-    lowerShadowRatio *= 1.5;
-    upperShadowRatio *= 0.5;
+    lowerShadowRatio *= 1.2;
+    upperShadowRatio *= 0.7;
   } else if (sentiment === 'CAPITULATION') {
     // 投降：极长下影（恐慌抛售后反弹）
-    lowerShadowRatio *= 2;
+    lowerShadowRatio *= 1.5;
   }
 
   const high =

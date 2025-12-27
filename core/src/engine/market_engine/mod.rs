@@ -163,15 +163,15 @@ impl MarketEngine {
         Ok(count)
     }
 
-    /// 加载 1m K 线数据并聚合到所有周期
+    /// 加载 1s K 线数据并聚合到所有周期
     ///
-    /// 接收 1m K 线数据，自动聚合到 5m/15m/1H/4H/1D
+    /// 接收 1s K 线数据，自动聚合到 1m/5m/15m/1H/4H/1D
     /// 返回各周期加载的 K 线数量
     ///
-    /// @param candles_js - 1m K 线数组 (JS 格式)
+    /// @param candles_js - 1s K 线数组 (JS 格式)
     /// @returns 各周期加载的 K 线数量
     pub fn load_history_1m_and_aggregate(&mut self, candles_js: JsValue) -> Result<JsValue, JsValue> {
-        let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析 1m K 线失败")?;
+        let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析 1s K 线失败")?;
 
         if candles.is_empty() {
             return Err(JsValue::from_str("历史 K 线数据为空"));
