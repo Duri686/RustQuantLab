@@ -103,10 +103,10 @@ function FpsMonitor() {
 function Header({
   isRunning,
   onToggle,
-  price,
-  symbol = 'BTC-USDT',
-  priceTrend = 'neutral',
-  priceColorClass = 'text-white',
+  price: _price,
+  symbol: _symbol = 'BTC-USDT',
+  priceTrend: _priceTrend = 'neutral',
+  priceColorClass: _priceColorClass = 'text-white',
 }: HeaderProps) {
   return (
     <header className="h-11 md:h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-2 md:px-4 flex items-center justify-between">
@@ -127,23 +127,8 @@ function Header({
         <FpsMonitor />
       </div>
 
-      {/* Center: Market Symbol + Price (clamp 流体字体) */}
-      <div className="flex items-center gap-1.5 md:gap-2">
-        <span className="text-[11px] md:text-sm font-mono font-semibold text-gray-300 truncate max-w-[80px] md:max-w-none">
-          {symbol}
-        </span>
-        <span
-          className={`text-[clamp(12px,3vw,14px)] md:text-sm font-mono font-bold tabular-nums ${priceColorClass}`}
-        >
-          ${price?.toFixed(2) ?? '--'}
-        </span>
-        {priceTrend === 'up' && (
-          <span className="text-[#0ECB81] text-[10px] md:text-xs">▲</span>
-        )}
-        {priceTrend === 'down' && (
-          <span className="text-[#F6465D] text-[10px] md:text-xs">▼</span>
-        )}
-      </div>
+      {/* Center: (removed) */}
+      <div />
 
       {/* Right: Status & Controls */}
       <div className="flex items-center gap-2 md:gap-3">

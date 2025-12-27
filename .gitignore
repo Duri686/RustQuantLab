@@ -17,6 +17,7 @@ Cargo.lock
 .idea/
 *.swp
 *.swo
+.cursorrules
 
 # OS
 .DS_Store

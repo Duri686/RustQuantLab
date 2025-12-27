@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect } from 'react';
+import { memo, useMemo, useState, useEffect, useRef } from 'react';
 import type { OrderBookProps } from '../../types/index';
 
 /* ============================================
@@ -208,6 +208,7 @@ function OrderBook({
   const [viewMode, setViewMode] = useState<ViewMode>('both');
   const [precisionIndex, setPrecisionIndex] = useState(0);
   const isMobile = useIsMobile();
+  const asksContainerRef = useRef<HTMLDivElement>(null);
 
   // 响应式行数：移动端 5 行，桌面端 50 行
   const visibleRows = isMobile ? VISIBLE_ROWS_MOBILE : VISIBLE_ROWS_DESKTOP;
@@ -231,17 +232,15 @@ function OrderBook({
       return { price: p, amount: q, cumulative: bidCumulative };
     });
 
-    // 处理卖单（升序显示，但累计从下到上）
+    // 处理卖单：升序取数据，累计从低价开始，然后 reverse 用于显示（高价在上）
     const asksSlice = asks.slice(0, visibleRows);
     let askCumulative = 0;
     const processedAsks = asksSlice
-      .map(([p, q]) => ({ price: p, amount: q, cumulative: 0 }))
-      .reverse()
-      .map((item) => {
-        askCumulative += item.amount;
-        return { ...item, cumulative: askCumulative };
+      .map(([p, q]) => {
+        askCumulative += q;
+        return { price: p, amount: q, cumulative: askCumulative };
       })
-      .reverse();
+      .reverse(); // 反转后：高价在上，低价在下（靠近 spread）
 
     const maxCumulative = Math.max(bidCumulative, askCumulative, 1);
 
@@ -251,6 +250,13 @@ function OrderBook({
       maxCumulativeVolume: maxCumulative,
     };
   }, [bids, asks, visibleRows]);
+
+  // 卖单区域自动滚动到底部
+  useEffect(() => {
+    if (asksContainerRef.current) {
+      asksContainerRef.current.scrollTop = asksContainerRef.current.scrollHeight;
+    }
+  }, [processedAsks]);
 
   /**
    * 获取价格趋势颜色
@@ -324,19 +330,22 @@ function OrderBook({
 
       {/* ========== 卖单区域 ========== */}
       {/* 移动端固定高度 (5行 x 18px = 90px)，桌面端 flex-1 */}
+      {/* 双层结构：外层滚动容器 + 内层底部对齐，与买单区域滚动行为一致 */}
       {(viewMode === 'both' || viewMode === 'asks') && (
-        <div className="h-[90px] md:flex-1 md:h-auto overflow-y-auto flex flex-col justify-end min-h-0">
-          {processedAsks.map((ask, idx) => (
-            <OrderRow
-              key={`ask-${idx}`}
-              price={ask.price}
-              amount={ask.amount}
-              cumulativeVolume={ask.cumulative}
-              maxVolume={maxCumulativeVolume}
-              type="ask"
-              pricePrecision={pricePrecision}
-            />
-          ))}
+        <div ref={asksContainerRef} className="h-[90px] md:flex-1 md:h-auto overflow-y-auto min-h-0">
+          <div className="flex flex-col justify-end min-h-full">
+            {processedAsks.map((ask, idx) => (
+              <OrderRow
+                key={`ask-${idx}`}
+                price={ask.price}
+                amount={ask.amount}
+                cumulativeVolume={ask.cumulative}
+                maxVolume={maxCumulativeVolume}
+                type="ask"
+                pricePrecision={pricePrecision}
+              />
+            ))}
+          </div>
         </div>
       )}
 

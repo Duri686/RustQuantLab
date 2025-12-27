@@ -2,15 +2,16 @@
 
 # 🦀 RustQuantLab
 
-**高性能 Web 永续合约模拟交易终端 · Rust/Wasm + React + ECharts**
+**高性能 Web 永续合约模拟交易终端 · Rust/Wasm + React + TradingView**
 
 [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org/)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Enabled-654FF0?logo=webassembly)](https://webassembly.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev/)
+[![TradingView](https://img.shields.io/badge/Lightweight_Charts-5-2962FF?logo=tradingview)](https://www.tradingview.com/lightweight-charts/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38BDF8?logo=tailwindcss)](https://tailwindcss.com/)
-[![ECharts](https://img.shields.io/badge/ECharts-6-AA344D?logo=apacheecharts)](https://echarts.apache.org/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite)](https://vitejs.dev/)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](./LICENSE)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-Duri686%2FRustQuantLab-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTQgMTloMTYiLz48cGF0aCBkPSJNNCAxNWg4Ii8+PHBhdGggZD0iTTQgMTFoNiIvPjxwYXRoIGQ9Ik0xMiAxMWw0LTYgNCA2Ii8+PHBhdGggZD0iTTE0IDExaDQiLz48L3N2Zz4=)](https://deepwiki.com/Duri686/RustQuantLab)
 
 *基于 Rust/WebAssembly 的本地永续合约模拟引擎，提供零延迟交易体验与专业级交易终端 UI。*
 
@@ -56,7 +57,7 @@ flowchart LR
     end
     
     subgraph UI["🖥️ UI 组件"]
-        H[KLineChart<br/>ECharts 渲染]
+        H[LightweightChart<br/>TradingView 渲染]
         I[TradeForm<br/>开仓/挂单]
         J[PositionCard<br/>实时盈亏]
         K[OrderBook<br/>深度盘口]
@@ -95,7 +96,7 @@ flowchart LR
 | **3. 市场引擎** | `MarketEngine` (Rust) | K线聚合、技术指标、订单簿 |
 | **4. 交易引擎** | `TradingEngine` (Rust) | 仓位、盈亏、限价单、风控 |
 | **5. 操作封装** | `useTradingActions` | 开仓/平仓/挂单/撤单 API |
-| **6. 渲染** | React + ECharts | 60FPS K线图、交易 UI |
+| **6. 渲染** | React + TradingView | 60FPS K线图、交易 UI |
 
 ---
 
@@ -120,8 +121,7 @@ flowchart LR
 | **TypeScript** | 5.6 | 类型安全开发 |
 | **Vite** | 5.4 | 新一代构建工具 |
 | **Tailwind CSS** | 4.0 | 原子化 CSS 框架 |
-| **ECharts** | 6.0 | 专业图表库 |
-| **echarts-for-react** | 3.0 | ECharts React 封装 |
+| **Lightweight Charts** | 5.1 | TradingView 专业 K 线图表 |
 | **Lucide React** | 0.562 | 现代图标库 |
 | **vite-plugin-wasm** | 3.3 | Wasm 集成插件 |
 
@@ -180,70 +180,29 @@ npm run dev
 
 ```
 RustQuantLab/
-├── core/                          # 🦀 Rust/Wasm 核心
-│   ├── src/
-│   │   ├── lib.rs                 # Wasm 导出 API
-│   │   ├── engine/                # 引擎模块
-│   │   │   ├── market_engine/     # 市场数据引擎
-│   │   │   │   ├── mod.rs         # MarketEngine 主体
-│   │   │   │   ├── market_data.rs # 行情处理
-│   │   │   │   ├── risk_control.rs# 风控检查
-│   │   │   │   └── trade_executor.rs # 交易执行
-│   │   │   ├── trading/           # 交易逻辑
-│   │   │   │   ├── open_position.rs  # 开仓
-│   │   │   │   ├── close_position.rs # 平仓
-│   │   │   │   ├── limit_order.rs    # 限价单
-│   │   │   │   └── risk_monitor.rs   # 风控监控
-│   │   │   ├── data/              # 数据结构
-│   │   │   │   ├── candles.rs     # K线聚合
-│   │   │   │   └── tick_data.rs   # Tick 处理
-│   │   │   └── types.rs           # 引擎类型定义
-│   │   ├── trading/               # 交易领域模型
-│   │   │   ├── position.rs        # 仓位模型
-│   │   │   ├── orders.rs          # 订单模型
-│   │   │   ├── balance.rs         # 余额管理
-│   │   │   └── manager.rs         # 交易管理器
-│   │   ├── indicators.rs          # 技术指标 (SMA/EMA/MACD/RSI/BOLL)
-│   │   ├── models.rs              # 通用数据模型
-│   │   └── risk.rs                # 风控算法
-│   ├── Cargo.toml
-│   └── pkg/                       # Wasm 编译输出
-├── src/                           # ⚛️ React 前端
-│   ├── components/
-│   │   ├── Dashboard/
-│   │   │   ├── Chart/             # K线图表
-│   │   │   │   ├── index.tsx      # 图表容器
-│   │   │   │   ├── chartModules/  # ECharts 配置模块
-│   │   │   │   └── ChartToolbar.tsx # 工具栏
-│   │   │   ├── Trade/             # 交易组件
-│   │   │   │   ├── TradeForm.tsx  # 开仓表单
-│   │   │   │   └── PositionCard.tsx # 仓位卡片
-│   │   │   ├── OrderBook.tsx      # 订单簿
-│   │   │   └── StatsPanel.tsx     # 统计面板
-│   │   ├── Layout/                # 布局组件
-│   │   └── Toast/                 # 通知系统
+├── core/                       # 🦀 Rust/Wasm 核心引擎
+│   └── src/
+│       ├── lib.rs              # Wasm 导出 API
+│       ├── engine/             # 引擎模块
+│       │   ├── market_engine/  # MarketEngine (K线/指标/订单簿)
+│       │   ├── trading/        # 交易逻辑 (开仓/平仓/限价单/风控)
+│       │   └── data/           # K线聚合、Tick 处理
+│       ├── trading/            # 交易领域模型 (仓位/订单/余额)
+│       ├── indicators/         # 技术指标 (SMA/EMA/MACD/RSI/BOLL)
+│       └── risk/               # 风控算法 (强平/保证金)
+├── src/                        # ⚛️ React 前端
+│   ├── components/Dashboard/
+│   │   ├── Chart/              # TradingView Lightweight Charts
+│   │   │   └── LightweightChart/  # 多窗格图表系统
+│   │   ├── Trade/              # 交易组件 (表单/仓位卡片)
+│   │   └── OrderBook.tsx       # 订单簿
 │   ├── hooks/
-│   │   ├── useWasmEngine.ts       # 🎯 统一 Wasm 引擎入口
-│   │   ├── useCandleData.ts       # K线数据适配
-│   │   ├── useMockMarket.ts       # Mock 行情 Hook
-│   │   ├── tradingEngine/         # 交易引擎 Hooks
-│   │   │   ├── useTradingActions.ts # 交易操作封装
-│   │   │   └── wasmSingleton.ts   # Wasm 单例管理
-│   │   ├── tradingState/          # 交易状态
-│   │   │   ├── eventHandler.ts    # 事件处理
-│   │   │   └── types.ts           # 状态类型
-│   │   └── candle/                # K线工具
-│   │       ├── candleUtils.ts     # K线计算
-│   │       └── useIndicatorHistory.ts # 指标历史
-│   ├── types/                     # TypeScript 类型
-│   │   ├── index.ts               # 通用类型
-│   │   ├── trading.ts             # 交易类型
-│   │   └── wasm.ts                # Wasm 接口类型
+│   │   ├── useWasmEngine.ts    # 🎯 统一 Wasm 引擎入口
+│   │   ├── tradingEngine/      # 交易操作封装
+│   │   └── candle/             # K线数据处理
 │   ├── workers/
-│   │   └── mockWorker.ts          # 行情模拟 Worker
-│   └── App.tsx                    # 根组件
-├── ARCHITECTURE.md
-├── vite.config.ts
+│   │   └── mockWorker.ts       # Random Walk 行情模拟
+│   └── App.tsx
 └── package.json
 ```
 
