@@ -1,5 +1,5 @@
 import { memo, useState, useEffect } from 'react';
-import type { HeaderProps } from '../../types/index';
+import type { HeaderProps, DataSource } from '../../types/index';
 import { useFpsMonitor } from '../../hooks/useFpsMonitor';
 import { getWasmMemoryUsage } from '../../hooks/tradingEngine/wasmSingleton';
 
@@ -100,6 +100,59 @@ function FpsMonitor() {
   );
 }
 
+/**
+ * 数据源切换按钮
+ */
+function DataSourceSwitch({
+  dataSource,
+  connectionStatus,
+  onChange,
+}: {
+  dataSource: DataSource;
+  connectionStatus?: string;
+  onChange: (source: DataSource) => void;
+}) {
+  const isBinance = dataSource === 'binance';
+  const isConnected = connectionStatus === 'connected';
+
+  return (
+    <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+      {/* Mock 按钮 */}
+      <button
+        onClick={() => onChange('mock')}
+        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
+          !isBinance
+            ? 'bg-[#F0B90B]/20 text-[#F0B90B] border border-[#F0B90B]/30'
+            : 'text-gray-500 hover:text-gray-300'
+        }`}
+        title="模拟数据 (开发模式)"
+      >
+        MOCK
+      </button>
+
+      {/* Binance 按钮 */}
+      <button
+        onClick={() => onChange('binance')}
+        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${
+          isBinance
+            ? 'bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30'
+            : 'text-gray-500 hover:text-gray-300'
+        }`}
+        title="Binance 实时数据"
+      >
+        <span>LIVE</span>
+        {isBinance && (
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isConnected ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-500'
+            }`}
+          />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function Header({
   isRunning,
   onToggle,
@@ -107,6 +160,9 @@ function Header({
   symbol: _symbol = 'BTC-USDT',
   priceTrend: _priceTrend = 'neutral',
   priceColorClass: _priceColorClass = 'text-white',
+  dataSource = 'mock',
+  onDataSourceChange,
+  connectionStatus,
 }: HeaderProps) {
   return (
     <header className="h-11 md:h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-2 md:px-4 flex items-center justify-between">
@@ -132,38 +188,69 @@ function Header({
 
       {/* Right: Status & Controls */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Live 指示器 - 移动端简化为圆点 */}
-        <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
-            }`}
+        {/* 数据源切换 */}
+        {onDataSourceChange && (
+          <DataSourceSwitch
+            dataSource={dataSource}
+            connectionStatus={connectionStatus}
+            onChange={onDataSourceChange}
           />
-          <span
-            className={`text-[11px] font-mono ${
-              isRunning ? 'text-[#0ECB81]' : 'text-gray-500'
-            }`}
-          >
-            {isRunning ? 'LIVE' : 'PAUSED'}
-          </span>
-        </div>
+        )}
 
-        {/* 播放/暂停按钮 */}
-        <button
-          onClick={onToggle}
-          className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
-            isRunning
-              ? 'bg-[#1e2026] hover:bg-[#2b2f36] text-[#F0B90B] border border-[#2b2f36]'
-              : 'bg-[#0ECB81] hover:bg-[#0bb375] text-black'
-          }`}
-          title={isRunning ? '暂停数据流' : '启动数据流'}
-        >
-          {isRunning ? (
-            <PauseIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          ) : (
-            <PlayIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          )}
-        </button>
+        {/* Live 指示器 - 移动端简化为圆点 */}
+        {/* LIVE 模式下显示连接状态，MOCK 模式下显示运行状态 */}
+        {dataSource === 'binance' ? (
+          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
+              }`}
+            />
+            <span
+              className={`text-[11px] font-mono ${
+                connectionStatus === 'connected' ? 'text-[#0ECB81]' : 'text-gray-500'
+              }`}
+            >
+              {connectionStatus === 'connected' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONNECTING' : 'DISCONNECTED'}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
+                }`}
+              />
+              <span
+                className={`text-[11px] font-mono ${
+                  isRunning ? 'text-[#0ECB81]' : 'text-gray-500'
+                }`}
+              >
+                {isRunning ? 'LIVE' : 'PAUSED'}
+              </span>
+            </div>
+
+            {/* 播放/暂停按钮 - 仅在 MOCK 模式下显示，且 onToggle 存在 */}
+            {onToggle && (
+              <button
+                onClick={onToggle}
+                className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
+                  isRunning
+                    ? 'bg-[#1e2026] hover:bg-[#2b2f36] text-[#F0B90B] border border-[#2b2f36]'
+                    : 'bg-[#0ECB81] hover:bg-[#0bb375] text-black'
+                }`}
+                title={isRunning ? '暂停数据流' : '启动数据流'}
+              >
+                {isRunning ? (
+                  <PauseIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                ) : (
+                  <PlayIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                )}
+              </button>
+            )}
+          </>
+        )}
 
         {/* GitHub 链接 */}
         <a

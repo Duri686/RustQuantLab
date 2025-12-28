@@ -71,6 +71,8 @@ export interface OrderBook {
   bids: [number, number][];
   /** 卖单列表 [价格, 数量]，按价格升序排列（Top 10） */
   asks: [number, number][];
+  /** 成交量（可选，来自 Binance K 线数据） */
+  volume?: number;
 }
 
 /* ============================================
@@ -397,14 +399,17 @@ export interface TradingEngineState {
    组件 Props 类型
    ============================================ */
 
+/** 数据源类型 */
+export type DataSource = 'mock' | 'binance';
+
 /**
  * Header 组件 Props
  */
 export interface HeaderProps {
   /** 数据流是否运行中 */
   isRunning: boolean;
-  /** 切换数据流回调 */
-  onToggle: () => void;
+  /** 切换数据流回调 (仅 MOCK 模式需要，LIVE 模式下为 undefined) */
+  onToggle?: () => void;
   /** 当前价格 */
   price?: number;
   /** 交易对符号 */
@@ -413,6 +418,12 @@ export interface HeaderProps {
   priceTrend?: 'up' | 'down' | 'neutral';
   /** 价格颜色类 */
   priceColorClass?: string;
+  /** 当前数据源 */
+  dataSource?: DataSource;
+  /** 切换数据源回调 */
+  onDataSourceChange?: (source: DataSource) => void;
+  /** WebSocket 连接状态 */
+  connectionStatus?: string;
 }
 
 /**

@@ -127,10 +127,9 @@ function OrderRow({
 }: OrderRowProps) {
   const isBid = type === 'bid';
   const depthPercent = Math.min((cumulativeVolume / maxVolume) * 100, 100);
-  const total = price * amount;
 
   return (
-    <div className="relative h-[18px] md:h-5 grid grid-cols-[1fr_1fr_1fr] items-center px-1.5 md:px-2 hover:bg-white/5 cursor-pointer group">
+    <div className="relative h-[18px] md:h-5 grid grid-cols-[1fr_1fr] items-center px-1.5 md:px-2 hover:bg-white/5 cursor-pointer group">
       {/* 深度背景条 */}
       <div
         className="absolute top-0.5 bottom-0.5 right-0 pointer-events-none"
@@ -156,14 +155,6 @@ function OrderRow({
       >
         {amount.toFixed(5)}
       </span>
-
-      {/* 总量列 - 右对齐，移动端隐藏 */}
-      <span
-        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right hidden lg:block"
-        style={{ color: COLORS.textGray }}
-      >
-        {total.toFixed(2)}
-      </span>
     </div>
   );
 }
@@ -177,7 +168,7 @@ const PRECISION_OPTIONS = [0.01, 0.1, 1, 10] as const;
 
 /** 订单簿显示行数配置 */
 const VISIBLE_ROWS_MOBILE = 5;
-const VISIBLE_ROWS_DESKTOP = 50;
+const VISIBLE_ROWS_DESKTOP = 50; // 买单和卖单各显示50行，总共100行
 
 /**
  * 自定义 Hook: 检测是否为移动端视口
@@ -277,7 +268,8 @@ function OrderBook({
   return (
     <div className="bg-terminal-bg flex flex-col h-full overflow-hidden">
       {/* ========== 工具栏 ========== */}
-      <div className="shrink-0 h-8 md:h-9 px-2 md:px-3 flex items-center justify-between border-b border-[#2b2f36]">
+      {/* 高度与 ChartToolbar 对齐: h-9 md:h-10 */}
+      <div className="shrink-0 h-9 md:h-10 px-2 md:px-3 flex items-center justify-between border-b border-[#2b2f36]">
         {/* 小数精度选择器 */}
         <button
           onClick={cyclePrecision}
@@ -322,10 +314,10 @@ function OrderBook({
       </div>
 
       {/* ========== 表头 ========== */}
-      <div className="shrink-0 h-5 md:h-6 grid grid-cols-[1fr_1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[#2b2f36] bg-[#0d0d0d]">
+      {/* 高度与图表子标题对齐: h-7 md:h-8 */}
+      <div className="shrink-0 h-7 md:h-8 grid grid-cols-[1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[#2b2f36] bg-[#0d0d0d]">
         <span className="text-left">Price</span>
         <span className="text-right">Amount</span>
-        <span className="text-right hidden lg:block">Total</span>
       </div>
 
       {/* ========== 卖单区域 ========== */}

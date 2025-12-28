@@ -13,6 +13,19 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    // Binance API 代理 (仅用于本地开发，解决 CORS 问题)
+    proxy: {
+      '/binance-spot': {
+        target: 'https://api.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/binance-spot/, ''),
+      },
+      '/binance-futures': {
+        target: 'https://fapi.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/binance-futures/, ''),
+      },
+    },
   },
   build: {
     target: 'esnext',

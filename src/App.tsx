@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { useWasmEngine } from './hooks/useWasmEngine';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useWasmEngine, type DataSource } from './hooks/useWasmEngine';
 import type {
   Timeframe,
   Indicator,
@@ -25,11 +25,44 @@ const MAIN_INDICATORS = ['MA', 'EMA', 'BOLL'] as const;
 /** 副图指标: VOL, MACD, RSI */
 const SUB_INDICATORS = ['VOL', 'MACD', 'RSI'] as const;
 
+/** localStorage key for data source preference */
+const DATA_SOURCE_KEY = 'rustquantlab_data_source';
+
+/**
+ * 获取初始数据源
+ * 优先级: URL 参数 > localStorage > 默认 mock
+ */
+function getInitialDataSource(): DataSource {
+  // 检查 URL 参数
+  const params = new URLSearchParams(window.location.search);
+  const urlSource = params.get('source');
+  if (urlSource === 'binance' || urlSource === 'mock') {
+    return urlSource;
+  }
+  
+  // 检查 localStorage
+  const savedSource = localStorage.getItem(DATA_SOURCE_KEY);
+  if (savedSource === 'binance' || savedSource === 'mock') {
+    return savedSource;
+  }
+  
+  // 默认使用模拟数据
+  return 'mock';
+}
+
 /* ============================================
    Main App Component (Composition Root)
    ============================================ */
 
 function App() {
+  // ========== 数据源状态 ==========
+  const [dataSource, setDataSource] = useState<DataSource>(getInitialDataSource);
+  
+  // 持久化数据源偏好
+  useEffect(() => {
+    localStorage.setItem(DATA_SOURCE_KEY, dataSource);
+  }, [dataSource]);
+
   // ========== 统一的 Wasm 引擎 Hook ==========
   // 整合市场数据 + 交易状态，React 只做 UI 搬运工
   const {
@@ -51,6 +84,8 @@ function App() {
     priceColorClass,
     toggleFeed,
     setTimeframe,
+    dataSource: engineDataSource,
+    connectionStatus,
 
     // 交易状态 (Rust 管理)
     tradingState,
@@ -65,7 +100,11 @@ function App() {
     setLeverage,
     cancelOrder,
     addMargin,
-  } = useWasmEngine(100);
+  } = useWasmEngine({
+    tickInterval: 100,
+    dataSource,
+    historyCount: 5000, // 获取更多历史数据（5000 根 1m K 线 ≈ 3.5 天，足够计算所有指标）
+  });
 
   // ========== 图表引用 ==========
   const chartRef = useRef<KLineChartHandle>(null);
@@ -179,11 +218,14 @@ function App() {
     <div className="h-screen w-screen bg-[#161a1e] flex flex-col overflow-hidden">
       <Header
         isRunning={isRunning}
-        onToggle={toggleFeed}
+        onToggle={dataSource === 'mock' ? toggleFeed : undefined} // LIVE 模式下禁用切换
         price={latestData?.price}
         symbol={latestData?.symbol}
         priceTrend={priceTrend}
         priceColorClass={priceColorClass}
+        dataSource={dataSource}
+        onDataSourceChange={setDataSource}
+        connectionStatus={connectionStatus}
       />
 
       {/* ========== 主内容区域 ========== */}
@@ -202,13 +244,24 @@ function App() {
         "
       >
         {/* 响应式网格容器 */}
+        {/* 
+          - 移动端: 单列垂直布局
+          - 平板端 (md): 2列 (图表 + 订单簿)
+          - 桌面端 (xl): 
+            * 有交易表单 (MOCK): 3列 (图表 + 订单簿自适应 + 交易表单固定300px)
+            * 无交易表单 (LIVE): 2列 (图表 + 订单簿自适应占满)
+        */}
         <div
-          className="
+          className={`
             flex flex-col
-            md:grid md:grid-cols-[1fr_280px] md:h-full
-            xl:grid-cols-[1fr_260px_300px]
+            md:grid md:h-full
             gap-px bg-[#2b2f36]
-          "
+            ${
+              dataSource === 'mock'
+                ? 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_240px_300px]'
+                : 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_auto]'
+            }
+          `}
         >
           {/* ========== 图表区域 (Chart + Toolbar + Stats) ========== */}
           <section className="flex flex-col min-h-0 bg-terminal-bg">
@@ -267,7 +320,13 @@ function App() {
 
           {/* ========== 订单簿区域 ========== */}
           {/* 移动端高度压缩: 工具栏(28) + 表头(18) + 卖单(70) + Ticker(28) + 买单(70) = 214px */}
-          <section className="h-[214px] md:h-full min-h-0 bg-terminal-bg border-t md:border-t-0 md:border-l border-[#2b2f36]">
+          {/* MOCK 模式: 固定宽度 240px | LIVE 模式: 自动宽度占满剩余空间 */}
+          <section
+            className={`
+              h-[214px] md:h-full min-h-0 bg-terminal-bg border-t md:border-t-0 md:border-l border-[#2b2f36]
+              ${dataSource === 'binance' ? 'xl:min-w-[200px]' : ''}
+            `}
+          >
             <OrderBook
               bids={latestData?.bids ?? []}
               asks={latestData?.asks ?? []}
@@ -278,46 +337,50 @@ function App() {
             />
           </section>
 
-          {/* ========== 交易表单区域 (仅平板/桌面端显示) ========== */}
-          {/* 🔴 使用 Wasm 交易状态 */}
-          <section className="hidden xl:block h-full min-h-0 border-l border-[#2b2f36]">
-            <TradeForm
-              symbol="BTC"
-              currentPrice={latestData?.price ?? 40000}
-              // Wasm Trading State
-              balance={tradingState?.balance ?? 10000}
-              availableBalance={tradingState?.availableBalance ?? 10000}
-              currentLeverage={tradingState?.leverage ?? 10}
-              position={position}
-              positions={tradingState?.positions ?? []}
-              closedPositions={tradingState?.closedPositions ?? []}
-              riskAssessment={riskAssessment}
-              hasPosition={hasPosition}
-              pendingOrders={pendingOrders}
-              // Wasm Actions
-              onPlaceOrder={placeOrder}
-              onClosePosition={(positionId) => closePosition(positionId)}
-              onSetLeverage={setLeverage}
-              onCancelOrder={cancelOrder}
-              onAddMargin={addMargin}
-            />
-          </section>
+          {/* ========== 交易表单区域 (仅 MOCK 模式下显示) ========== */}
+          {/* LIVE 模式下隐藏交易表单，只展示数据 */}
+          {dataSource === 'mock' && (
+            <section className="hidden xl:block h-full min-h-0 border-l border-[#2b2f36]">
+              <TradeForm
+                symbol="BTC"
+                currentPrice={latestData?.price ?? 40000}
+                // Wasm Trading State
+                balance={tradingState?.balance ?? 10000}
+                availableBalance={tradingState?.availableBalance ?? 10000}
+                currentLeverage={tradingState?.leverage ?? 10}
+                position={position}
+                positions={tradingState?.positions ?? []}
+                closedPositions={tradingState?.closedPositions ?? []}
+                riskAssessment={riskAssessment}
+                hasPosition={hasPosition}
+                pendingOrders={pendingOrders}
+                // Wasm Actions
+                onPlaceOrder={placeOrder}
+                onClosePosition={(positionId) => closePosition(positionId)}
+                onSetLeverage={setLeverage}
+                onCancelOrder={cancelOrder}
+                onAddMargin={addMargin}
+              />
+            </section>
+          )}
         </div>
       </main>
 
-      {/* ========== 移动端 Sticky 底部交易栏 ========== */}
-      {/* 🔴 使用 Wasm placeOrder */}
-      <MobileTradebar
-        currentPrice={latestData?.price ?? 40000}
-        onBuy={() => {
-          // 移动端快速买入：市价单，固定数量
-          placeOrder('LONG', 0.01, tradingState?.leverage ?? 10);
-        }}
-        onSell={() => {
-          // 移动端快速卖出：市价单，固定数量
-          placeOrder('SHORT', 0.01, tradingState?.leverage ?? 10);
-        }}
-      />
+      {/* ========== 移动端 Sticky 底部交易栏 (仅 MOCK 模式下显示) ========== */}
+      {/* LIVE 模式下隐藏交易栏，只展示数据 */}
+      {dataSource === 'mock' && (
+        <MobileTradebar
+          currentPrice={latestData?.price ?? 40000}
+          onBuy={() => {
+            // 移动端快速买入：市价单，固定数量
+            placeOrder('LONG', 0.01, tradingState?.leverage ?? 10);
+          }}
+          onSell={() => {
+            // 移动端快速卖出：市价单，固定数量
+            placeOrder('SHORT', 0.01, tradingState?.leverage ?? 10);
+          }}
+        />
+      )}
     </div>
   );
 }

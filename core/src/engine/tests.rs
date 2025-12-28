@@ -72,6 +72,7 @@ fn test_engine_estimate_volume() {
         price: 100.0,
         bids: vec![(99.0, 10.0)],
         asks: vec![(101.0, 20.0)],
+        volume: None,
     };
     assert_eq!(engine.tick_data.estimate_volume(&order_book), 15.0);
 }
@@ -87,6 +88,7 @@ fn test_compute_all_indicators() {
         price: 40500.0,
         bids: vec![(40490.0, 1.0)],
         asks: vec![(40510.0, 1.0)],
+        volume: None,
     };
 
     let result = engine.compute_all_indicators(&order_book);

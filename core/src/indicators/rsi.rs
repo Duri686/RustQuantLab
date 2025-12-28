@@ -16,26 +16,31 @@ pub fn calculate_rsi(data: &[f64], period: usize) -> Option<f64> {
         return None;
     }
 
-    let (gains, losses): (Vec<f64>, Vec<f64>) = data
-        .windows(2)
-        .map(|window| {
-            let change = window[1] - window[0];
-            if change > 0.0 {
-                (change, 0.0)
-            } else {
-                (0.0, change.abs())
-            }
-        })
-        .unzip();
+    let mut gains_sum = 0.0;
+    let mut losses_sum = 0.0;
+    for i in 1..=period {
+        let change = data[i] - data[i - 1];
+        if change > 0.0 {
+            gains_sum += change;
+        } else {
+            losses_sum += -change;
+        }
+    }
 
-    let start = gains.len().saturating_sub(period);
-    let recent_gains = &gains[start..];
-    let recent_losses = &losses[start..];
-
-    let avg_gain: f64 = recent_gains.iter().sum::<f64>() / period as f64;
-    let avg_loss: f64 = recent_losses.iter().sum::<f64>() / period as f64;
+    let mut avg_gain = gains_sum / period as f64;
+    let mut avg_loss = losses_sum / period as f64;
+    for i in (period + 1)..data.len() {
+        let change = data[i] - data[i - 1];
+        let gain = if change > 0.0 { change } else { 0.0 };
+        let loss = if change < 0.0 { -change } else { 0.0 };
+        avg_gain = (avg_gain * (period as f64 - 1.0) + gain) / period as f64;
+        avg_loss = (avg_loss * (period as f64 - 1.0) + loss) / period as f64;
+    }
 
     if avg_loss == 0.0 {
+        if avg_gain == 0.0 {
+            return Some(50.0);
+        }
         return Some(100.0);
     }
 
@@ -67,7 +72,7 @@ mod tests {
     fn test_rsi_flat() {
         let data = vec![100.0; 20];
         let rsi = calculate_rsi(&data, 14);
-        assert_eq!(rsi, Some(100.0));
+        assert_eq!(rsi, Some(50.0));
     }
 
     #[test]

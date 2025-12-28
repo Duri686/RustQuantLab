@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useMockMarket } from './useMockMarket';
+import { useMarketData, type DataSource } from './useMarketData';
 import { useCandleData } from './useCandleData';
 import { useToast } from '../components/Toast';
 import {
@@ -94,6 +94,10 @@ export interface UseWasmEngineReturn {
   toggleFeed: () => void;
   /** 切换时间周期 */
   setTimeframe: (timeframe: WasmTimeframe) => boolean;
+  /** 当前数据源 */
+  dataSource: DataSource;
+  /** WebSocket 连接状态 (仅 Binance) */
+  connectionStatus?: string;
 
   // ========== 交易状态 (Rust 管理) ==========
   /** 交易状态快照 */
@@ -136,16 +140,47 @@ const MAX_ERRORS = 5;
 // ============================================================================
 
 /**
+ * useWasmEngine Hook 配置
+ */
+export interface UseWasmEngineOptions {
+  /** Tick 数据间隔（毫秒），默认 100ms */
+  tickInterval?: number;
+  /** 数据源: 'mock' (模拟) | 'binance' (实时) */
+  dataSource?: DataSource;
+  /** Binance 历史 K 线数量 */
+  historyCount?: number;
+}
+
+/**
  * 统一的 Wasm 引擎 Hook
  *
- * @param tickInterval - Tick 数据间隔（毫秒），默认 100ms
+ * @param options - 配置选项
  * @returns UseWasmEngineReturn
+ *
+ * @example
+ * ```tsx
+ * // 使用模拟数据 (开发模式)
+ * const engine = useWasmEngine({ dataSource: 'mock' });
+ *
+ * // 使用 Binance 实时数据 (生产模式)
+ * const engine = useWasmEngine({ dataSource: 'binance' });
+ * ```
  */
-export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
+export function useWasmEngine(
+  options: UseWasmEngineOptions | number = {},
+): UseWasmEngineReturn {
+  // 兼容旧版 API (直接传 tickInterval)
+  const opts =
+    typeof options === 'number'
+      ? { tickInterval: options, dataSource: 'mock' as DataSource }
+      : { tickInterval: 100, dataSource: 'mock' as DataSource, ...options };
+
+  const { tickInterval, dataSource, historyCount } = opts;
+
   // ========== Toast ==========
   const toast = useToast();
 
-  // ========== Mock 市场数据 ==========
+  // ========== 市场数据 (可切换数据源) ==========
   const {
     latestData,
     isRunning,
@@ -154,7 +189,13 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     historyCandles,
     historyLoading,
     requestHistory,
-  } = useMockMarket(tickInterval);
+    connectionStatus,
+    error: marketError,
+  } = useMarketData({
+    source: dataSource,
+    tickInterval,
+    historyCount,
+  });
 
   // ========== Wasm 初始化状态 ==========
   const [wasmReady, setWasmReady] = useState(false);
@@ -170,6 +211,31 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
   const lastProcessTimeRef = useRef(0);
   /** 历史数据是否已加载到 Rust 引擎 */
   const historyLoadedRef = useRef(false);
+  /** 追踪数据源变化 */
+  const prevDataSourceRef = useRef<DataSource>(dataSource);
+  const lastMarketErrorRef = useRef<string | null>(null);
+
+  // ========== 数据源切换时重置状态 ==========
+  useEffect(() => {
+    if (prevDataSourceRef.current !== dataSource) {
+      console.log(
+        `[useWasmEngine] 数据源切换: ${prevDataSourceRef.current} -> ${dataSource}`,
+      );
+
+      // 清空 Rust 引擎内部历史，避免不同数据源之间的价格/成交量互相污染
+      if (engineAlive.current && engineRef.current) {
+        try {
+          engineRef.current.clear_history();
+        } catch (err) {
+          console.warn('[useWasmEngine] 清理历史数据失败:', err);
+        }
+      }
+
+      // 重置历史数据加载标记，允许新数据源重新加载
+      historyLoadedRef.current = false;
+      prevDataSourceRef.current = dataSource;
+    }
+  }, [dataSource]);
 
   // ========== 分析结果 ==========
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
@@ -250,6 +316,16 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
       }
 
       // 1. 调用 Rust on_tick 处理市场数据
+      // 🔍 成交量追踪日志：传递给 WASM 引擎
+      console.log(`[VOL追踪] 🚀 useWasmEngine → on_tick:`, {
+        hasVolume: latestData.volume !== undefined,
+        volume: latestData.volume,
+        volumeType: typeof latestData.volume,
+        price: latestData.price.toFixed(2),
+        dataSource,
+        timestamp: latestData.timestamp,
+      });
+
       const result = engineRef.current.on_tick(latestData);
       setAnalysisResult(result);
       prevPriceRef.current = latestData.price;
@@ -317,6 +393,20 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
       isProcessingRef.current = false;
     }
   }, [latestData, toast]);
+
+  useEffect(() => {
+    if (
+      dataSource === 'binance' &&
+      marketError &&
+      lastMarketErrorRef.current !== marketError
+    ) {
+      toast.error(
+        `LIVE 模式（Binance）数据获取失败：${marketError}，建议切换到 MOCK 模式`,
+        6000,
+      );
+      lastMarketErrorRef.current = marketError;
+    }
+  }, [dataSource, marketError, toast]);
 
   // ========== 自动请求历史数据 ==========
   useEffect(() => {
@@ -497,6 +587,8 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     priceColorClass,
     toggleFeed,
     setTimeframe,
+    dataSource,
+    connectionStatus,
 
     // 交易状态
     tradingState,
@@ -515,3 +607,4 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
 export { getSharedWasmEngine } from './tradingEngine/wasmSingleton';
 export { handleEngineEvents, safeToFixed } from './tradingState/eventHandler';
 export type { TradingWasmEngine, ToastHandler } from './tradingState/types';
+export type { DataSource } from './useMarketData';

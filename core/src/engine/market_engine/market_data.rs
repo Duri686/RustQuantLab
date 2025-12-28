@@ -13,7 +13,27 @@ impl MarketEngine {
     pub(crate) fn process_tick(&mut self, order_book: &OrderBook) {
         // 1. 更新 Tick 数据
         self.tick_data.push_price(order_book.price);
-        let volume = self.tick_data.estimate_volume(order_book);
+        
+        // 🔍 成交量追踪日志：Rust 引擎接收
+        let volume = if let Some(provided_volume) = order_book.volume {
+            // 使用提供的成交量（来自 Binance K 线数据）
+            // 注意：这是该 K 线的累计成交量，不是增量
+            // 对于实时 K 线，我们需要计算增量
+            web_sys::console::log_1(&format!(
+                "[VOL追踪] 🦀 Rust process_tick: 使用提供的成交量={:.4}",
+                provided_volume
+            ).into());
+            provided_volume
+        } else {
+            // 回退到估算方法（用于 MOCK 数据）
+            let estimated = self.tick_data.estimate_volume(order_book);
+            web_sys::console::log_1(&format!(
+                "[VOL追踪] 🦀 Rust process_tick: 成交量未提供，使用估算值={:.4}",
+                estimated
+            ).into());
+            estimated
+        };
+        
         self.tick_data.push_volume(volume);
 
         // 2. 更新 K 线

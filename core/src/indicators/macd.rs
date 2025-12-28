@@ -71,7 +71,7 @@ pub fn calculate_macd(
     Some(MacdResult {
         dif,
         dea,
-        hist: (dif - dea) * 2.0,
+        hist: (dif - dea),
     })
 }
 
@@ -92,7 +92,7 @@ mod tests {
     fn test_macd_histogram_formula() {
         let data: Vec<f64> = (1..=60).map(|x| 100.0 + x as f64).collect();
         let macd = calculate_macd(&data, 12, 26, 9).unwrap();
-        let expected_hist = (macd.dif - macd.dea) * 2.0;
+        let expected_hist = macd.dif - macd.dea;
         assert!((macd.hist - expected_hist).abs() < 0.0001);
     }
 

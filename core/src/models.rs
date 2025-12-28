@@ -306,6 +306,10 @@ pub struct OrderBook {
 
     /// 卖单列表 [(价格, 数量), ...] - 按价格升序
     pub asks: Vec<(f64, f64)>,
+
+    /// 成交量（可选，来自 Binance K 线数据的累计成交量）
+    #[serde(default)]
+    pub volume: Option<f64>,
 }
 
 // ============================================================================
@@ -418,6 +422,7 @@ mod tests {
             price: 42000.5,
             bids: vec![(41999.0, 1.5), (41998.0, 2.0)],
             asks: vec![(42001.0, 1.2)],
+            volume: None,
         };
 
         assert_eq!(ob.price, 42000.5);
