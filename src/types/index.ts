@@ -424,6 +424,7 @@ export interface HeaderProps {
   onDataSourceChange?: (source: DataSource) => void;
   /** WebSocket 连接状态 */
   connectionStatus?: string;
+  isSwitching?: boolean;
 }
 
 /**

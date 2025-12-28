@@ -82,6 +82,8 @@ export interface UseWasmEngineReturn {
   historyCandles: HistoryCandle[];
   /** 历史数据是否就绪 */
   historyReady: boolean;
+  /** 历史数据加载中（用于切换数据源/首次进入显示 Chart 层 Loading） */
+  historyLoading: boolean;
 
   // ========== 数据流控制 ==========
   /** 数据流是否运行中 */
@@ -579,6 +581,7 @@ export function useWasmEngine(
     currentIndicators,
     currentTimeframe,
     historyCandles,
+    historyLoading,
     historyReady,
 
     // 数据流控制

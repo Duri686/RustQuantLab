@@ -1,6 +1,6 @@
 /**
  * useUnifiedChartSetup Hook
- * 
+ *
  * 职责：管理 Unified Multi-Pane Chart 的生命周期
  * - 创建/销毁 Chart 实例
  * - 管理 Pane 结构（根据 panePlan 动态创建）
@@ -28,7 +28,12 @@ import type { Candle } from '../../../../../types';
 import { CHART_COLORS } from '../utils/chartColors';
 import { RIGHT_PRICE_SCALE_MIN_WIDTH } from '../utils/chartLayout';
 import { formatTickMark } from '../utils/tickMarkFormatter';
-import { formatAxisPrice, formatAxisVolume, formatAxisIndicator, timeToChartTime } from '../utils/dataTransform';
+import {
+  formatAxisPrice,
+  formatAxisVolume,
+  formatAxisIndicator,
+  timeToChartTime,
+} from '../utils/dataTransform';
 
 // ============ Types ============
 
@@ -119,13 +124,19 @@ export function useUnifiedChartSetup({
   const [chartEpoch, setChartEpoch] = useState(0);
   const [hoverTime, setHoverTime] = useState<Time | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [paneTopOffsets, setPaneTopOffsets] = useState<Record<string, number>>({});
+  const [paneTopOffsets, setPaneTopOffsets] = useState<Record<string, number>>(
+    {},
+  );
 
   // Refs for callbacks to avoid stale closures
   const onCrosshairMoveRef = useRef(onCrosshairMove);
   const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
-  useEffect(() => { onCrosshairMoveRef.current = onCrosshairMove; }, [onCrosshairMove]);
-  useEffect(() => { onVisibleRangeChangeRef.current = onVisibleRangeChange; }, [onVisibleRangeChange]);
+  useEffect(() => {
+    onCrosshairMoveRef.current = onCrosshairMove;
+  }, [onCrosshairMove]);
+  useEffect(() => {
+    onVisibleRangeChangeRef.current = onVisibleRangeChange;
+  }, [onVisibleRangeChange]);
 
   // Series refs
   const mainSeriesRefs = useRef<MainSeriesRefs>(createInitialMainSeriesRefs());
@@ -160,7 +171,11 @@ export function useUnifiedChartSetup({
 
     // Clean up old chart
     if (chartRef.current) {
-      try { chartRef.current.remove(); } catch { /* ignore */ }
+      try {
+        chartRef.current.remove();
+      } catch {
+        /* ignore */
+      }
       chartRef.current = null;
     }
 
@@ -191,11 +206,13 @@ export function useUnifiedChartSetup({
         borderColor: CHART_COLORS.BORDER,
         timeVisible: true,
         secondsVisible: false,
-        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => formatTickMark(time, tickMarkType),
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) =>
+          formatTickMark(time, tickMarkType),
         rightOffset: 5,
       },
       crosshair: {
-        mode: 1,
+        // 使用 Normal 模式 (0)，使交点跟随鼠标，不再吸附到蜡烛数据点
+        mode: 0,
         vertLine: { color: CHART_COLORS.CROSSHAIR, width: 1, style: 1 },
         horzLine: { color: CHART_COLORS.CROSSHAIR, width: 1, style: 1 },
       },
@@ -206,7 +223,11 @@ export function useUnifiedChartSetup({
     // Remove extra panes if any exist
     const paneApis = chart.panes();
     for (let i = paneApis.length - 1; i >= 1; i -= 1) {
-      try { chart.removePane(i); } catch { /* ignore */ }
+      try {
+        chart.removePane(i);
+      } catch {
+        /* ignore */
+      }
     }
 
     // Create required panes
@@ -218,95 +239,146 @@ export function useUnifiedChartSetup({
     // Set stretch factors
     const panes = chart.panes();
     const subCount = requiredPanes - 1;
-    const mainRatio = subCount === 0 ? 1 : subCount === 1 ? 0.75 : subCount === 2 ? 0.6 : 0.5;
+    const mainRatio =
+      subCount === 0 ? 1 : subCount === 1 ? 0.75 : subCount === 2 ? 0.6 : 0.5;
     const subRatio = subCount === 0 ? 0 : (1 - mainRatio) / subCount;
     panes.forEach((p, idx) => {
-      try { p.setStretchFactor(idx === 0 ? mainRatio : subRatio); } catch { /* ignore */ }
+      try {
+        p.setStretchFactor(idx === 0 ? mainRatio : subRatio);
+      } catch {
+        /* ignore */
+      }
     });
 
     computePaneOffsets(chart, panePlan);
 
     // === Create main chart series (pane 0) ===
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: CHART_COLORS.UP,
-      downColor: CHART_COLORS.DOWN,
-      borderVisible: false,
-      wickUpColor: CHART_COLORS.UP,
-      wickDownColor: CHART_COLORS.DOWN,
-      priceFormat: {
-        type: 'custom',
-        formatter: (p: number) => formatAxisPrice(p, 2),
+    const candleSeries = chart.addSeries(
+      CandlestickSeries,
+      {
+        upColor: CHART_COLORS.UP,
+        downColor: CHART_COLORS.DOWN,
+        borderVisible: false,
+        wickUpColor: CHART_COLORS.UP,
+        wickDownColor: CHART_COLORS.DOWN,
+        priceFormat: {
+          type: 'custom',
+          formatter: (p: number) => formatAxisPrice(p, 2),
+        },
       },
-    }, 0);
+      0,
+    );
     mainSeriesRefs.current.candle = candleSeries;
 
     // === Create sub-pane series ===
-    const paneIndexByType = new Map(panePlan.map((t, idx) => [t, idx] as const));
+    const paneIndexByType = new Map(
+      panePlan.map((t, idx) => [t, idx] as const),
+    );
 
     // VOL
     if (paneIndexByType.has('VOL')) {
       const paneIndex = paneIndexByType.get('VOL')!;
-      const volSeries = chart.addSeries(HistogramSeries, {
-        priceFormat: { type: 'custom', formatter: (v: number) => formatAxisVolume(v) },
-        priceScaleId: 'right',
-      }, paneIndex);
+      const volSeries = chart.addSeries(
+        HistogramSeries,
+        {
+          priceFormat: {
+            type: 'custom',
+            formatter: (v: number) => formatAxisVolume(v),
+          },
+          priceScaleId: 'right',
+        },
+        paneIndex,
+      );
       subSeriesRefs.current.volume = volSeries;
     }
 
     // MACD
     if (paneIndexByType.has('MACD')) {
       const paneIndex = paneIndexByType.get('MACD')!;
-      const hist = chart.addSeries(HistogramSeries, {
-        priceFormat: { type: 'custom', formatter: (v: number) => formatAxisIndicator(v, 2) },
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
-      const dif = chart.addSeries(LineSeries, {
-        color: CHART_COLORS.MACD_DIF,
-        lineWidth: 1,
-        priceFormat: { type: 'custom', formatter: (v: number) => formatAxisIndicator(v, 2) },
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
-      const dea = chart.addSeries(LineSeries, {
-        color: CHART_COLORS.MACD_DEA,
-        lineWidth: 1,
-        priceFormat: { type: 'custom', formatter: (v: number) => formatAxisIndicator(v, 2) },
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
+      const hist = chart.addSeries(
+        HistogramSeries,
+        {
+          priceFormat: {
+            type: 'custom',
+            formatter: (v: number) => formatAxisIndicator(v, 2),
+          },
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
+      const dif = chart.addSeries(
+        LineSeries,
+        {
+          color: CHART_COLORS.MACD_DIF,
+          lineWidth: 1,
+          priceFormat: {
+            type: 'custom',
+            formatter: (v: number) => formatAxisIndicator(v, 2),
+          },
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
+      const dea = chart.addSeries(
+        LineSeries,
+        {
+          color: CHART_COLORS.MACD_DEA,
+          lineWidth: 1,
+          priceFormat: {
+            type: 'custom',
+            formatter: (v: number) => formatAxisIndicator(v, 2),
+          },
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
       subSeriesRefs.current.macd = { dif, dea, hist };
     }
 
     // RSI
     if (paneIndexByType.has('RSI')) {
       const paneIndex = paneIndexByType.get('RSI')!;
-      const overbought = chart.addSeries(LineSeries, {
-        color: CHART_COLORS.RSI_OVERBOUGHT_LINE,
-        lineWidth: 1,
-        lineStyle: LineStyle.Dashed,
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
-      const oversold = chart.addSeries(LineSeries, {
-        color: CHART_COLORS.RSI_OVERSOLD_LINE,
-        lineWidth: 1,
-        lineStyle: LineStyle.Dashed,
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
-      const rsi = chart.addSeries(LineSeries, {
-        color: CHART_COLORS.RSI,
-        lineWidth: 2,
-        priceScaleId: 'right',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      }, paneIndex);
+      const overbought = chart.addSeries(
+        LineSeries,
+        {
+          color: CHART_COLORS.RSI_OVERBOUGHT_LINE,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
+      const oversold = chart.addSeries(
+        LineSeries,
+        {
+          color: CHART_COLORS.RSI_OVERSOLD_LINE,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
+      const rsi = chart.addSeries(
+        LineSeries,
+        {
+          color: CHART_COLORS.RSI,
+          lineWidth: 2,
+          priceScaleId: 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        },
+        paneIndex,
+      );
       subSeriesRefs.current.rsi = { rsi, overbought, oversold };
 
       // Fix RSI axis 0-100
@@ -315,8 +387,12 @@ export function useUnifiedChartSetup({
           autoScale: false,
           scaleMargins: { top: 0.05, bottom: 0.05 },
         });
-        chart.priceScale('right', paneIndex).setVisibleRange({ from: 0, to: 100 });
-      } catch { /* ignore */ }
+        chart
+          .priceScale('right', paneIndex)
+          .setVisibleRange({ from: 0, to: 100 });
+      } catch {
+        /* ignore */
+      }
     }
 
     // Crosshair move handler
@@ -334,7 +410,11 @@ export function useUnifiedChartSetup({
       setHoverIndex(idx >= 0 ? idx : null);
       onCrosshairMoveRef.current?.(time, idx >= 0 ? idx : null);
     };
-    try { chart.subscribeCrosshairMove(onMove); } catch { /* ignore */ }
+    try {
+      chart.subscribeCrosshairMove(onMove);
+    } catch {
+      /* ignore */
+    }
 
     // Visible range change handler
     const onRange = (range: LogicalRange | null) => {
@@ -343,7 +423,11 @@ export function useUnifiedChartSetup({
       const isAtEnd = dataEnd <= 0 ? true : range.to >= dataEnd * 0.995;
       onVisibleRangeChangeRef.current?.(isAtEnd);
     };
-    try { chart.timeScale().subscribeVisibleLogicalRangeChange(onRange); } catch { /* ignore */ }
+    try {
+      chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    } catch {
+      /* ignore */
+    }
 
     // 执行 resize 的核心逻辑
     const doResize = () => {
@@ -353,7 +437,9 @@ export function useUnifiedChartSetup({
       try {
         chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
         computePaneOffsets(chart, panePlan);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     // ResizeObserver 的 resize 处理（使用 rAF 防抖）
@@ -397,9 +483,21 @@ export function useUnifiedChartSetup({
       }
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleWindowResize);
-      try { chart.unsubscribeCrosshairMove(onMove); } catch { /* ignore */ }
-      try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange); } catch { /* ignore */ }
-      try { chart.remove(); } catch { /* ignore */ }
+      try {
+        chart.unsubscribeCrosshairMove(onMove);
+      } catch {
+        /* ignore */
+      }
+      try {
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
+      } catch {
+        /* ignore */
+      }
+      try {
+        chart.remove();
+      } catch {
+        /* ignore */
+      }
       chartRef.current = null;
     };
   }, [panePlan, containerRef, candlesRef, computePaneOffsets]);

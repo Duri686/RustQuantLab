@@ -3,7 +3,13 @@
  * 将应用数据格式转换为 Lightweight Charts 格式
  */
 
-import type { CandlestickData, LineData, HistogramData, Time, WhitespaceData } from 'lightweight-charts';
+import type {
+  CandlestickData,
+  LineData,
+  HistogramData,
+  Time,
+  WhitespaceData,
+} from 'lightweight-charts';
 import type { Candle } from '../../../../../types/index';
 import { CHART_COLORS } from './chartColors';
 
@@ -77,7 +83,7 @@ export function candlesToVolumeData(candles: Candle[]): HistogramData[] {
  */
 export function indicatorToLineData(
   candles: Candle[],
-  values: (number | null)[]
+  values: (number | null)[],
 ): Array<LineData | WhitespaceData> {
   return candles.map((candle, index) => {
     const value = values[index];
@@ -97,7 +103,7 @@ export function indicatorToLineData(
  */
 export function macdHistToHistogramData(
   candles: Candle[],
-  values: (number | null)[]
+  values: (number | null)[],
 ): Array<HistogramData | WhitespaceData> {
   return candles.map((candle, index) => {
     const value = values[index];
@@ -111,7 +117,8 @@ export function macdHistToHistogramData(
     return {
       time,
       value,
-      color: value >= 0 ? CHART_COLORS.MACD_HIST_UP : CHART_COLORS.MACD_HIST_DOWN,
+      color:
+        value >= 0 ? CHART_COLORS.MACD_HIST_UP : CHART_COLORS.MACD_HIST_DOWN,
     };
   });
 }
@@ -127,7 +134,10 @@ export function findCandleIndexByTime(candles: Candle[], time: Time): number {
 /**
  * 计算涨跌幅
  */
-export function calculateChange(open: number, close: number): { change: number; changePercent: number } {
+export function calculateChange(
+  open: number,
+  close: number,
+): { change: number; changePercent: number } {
   const change = close - open;
   const changePercent = open !== 0 ? (change / open) * 100 : 0;
   return { change, changePercent };
@@ -157,8 +167,8 @@ export function formatPrice(price: number, decimals = 2): string {
  * 目前默认保留 2 位小数；如需根据交易对动态调整精度，再在这里扩展。
  */
 export function formatAxisPrice(price: number, decimals = 2): string {
-  // 价格轴：大数用 K/M/B，但固定保留 decimals 位小数（默认 2 位）
-  return formatCompactWithSuffix(price, decimals);
+  // 价格轴：不使用 K/M/B 紧凑格式，直接展示原始数值（保留 decimals 位小数，去掉无意义的 0）
+  return trimTrailingZeros(price.toFixed(decimals));
 }
 
 /**
@@ -184,4 +194,3 @@ export function formatPercent(percent: number, decimals = 2): string {
   const sign = percent >= 0 ? '+' : '';
   return `${sign}${percent.toFixed(decimals)}%`;
 }
-

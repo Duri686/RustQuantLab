@@ -107,46 +107,61 @@ function DataSourceSwitch({
   dataSource,
   connectionStatus,
   onChange,
+  isSwitching,
 }: {
   dataSource: DataSource;
   connectionStatus?: string;
   onChange: (source: DataSource) => void;
+  isSwitching?: boolean;
 }) {
   const isBinance = dataSource === 'binance';
   const isConnected = connectionStatus === 'connected';
+  const disabled = !!isSwitching;
 
   return (
     <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
       {/* Mock 按钮 */}
       <button
         onClick={() => onChange('mock')}
+        disabled={disabled}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
           !isBinance
             ? 'bg-[var(--color-warning-alt)]/20 text-[var(--color-warning-alt)] border border-[var(--color-warning-alt)]/30'
             : 'text-gray-500 hover:text-gray-300'
-        }`}
+        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="模拟数据 (开发模式)"
       >
-        MOCK
+        <span className="flex items-center gap-1">
+          <span>MOCK</span>
+          {disabled && !isBinance && (
+            <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-warning-alt)] rounded-full animate-spin" />
+          )}
+        </span>
       </button>
 
       {/* Binance 按钮 */}
       <button
         onClick={() => onChange('binance')}
+        disabled={disabled}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${
           isBinance
             ? 'bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30'
             : 'text-gray-500 hover:text-gray-300'
-        }`}
+        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="Binance 实时数据"
       >
         <span>LIVE</span>
         {isBinance && (
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              isConnected ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-500'
+              isConnected
+                ? 'bg-[var(--color-success)] animate-pulse'
+                : 'bg-gray-500'
             }`}
           />
+        )}
+        {disabled && isBinance && (
+          <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-success)] rounded-full animate-spin" />
         )}
       </button>
     </div>
@@ -163,6 +178,7 @@ function Header({
   dataSource = 'mock',
   onDataSourceChange,
   connectionStatus,
+  isSwitching,
 }: HeaderProps) {
   return (
     <header className="h-11 md:h-12 flex-shrink-0 bg-[var(--color-bg-dark)] border-b border-[var(--color-border-dark)] px-2 md:px-4 flex items-center justify-between">
@@ -194,6 +210,7 @@ function Header({
             dataSource={dataSource}
             connectionStatus={connectionStatus}
             onChange={onDataSourceChange}
+            isSwitching={isSwitching}
           />
         )}
 
@@ -203,15 +220,23 @@ function Header({
           <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-600'
+                connectionStatus === 'connected'
+                  ? 'bg-[var(--color-success)] animate-pulse'
+                  : 'bg-gray-600'
               }`}
             />
             <span
               className={`text-[11px] font-mono ${
-                connectionStatus === 'connected' ? 'text-[var(--color-success)]' : 'text-gray-500'
+                connectionStatus === 'connected'
+                  ? 'text-[var(--color-success)]'
+                  : 'text-gray-500'
               }`}
             >
-              {connectionStatus === 'connected' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONNECTING' : 'DISCONNECTED'}
+              {connectionStatus === 'connected'
+                ? 'LIVE'
+                : connectionStatus === 'connecting'
+                ? 'CONNECTING'
+                : 'DISCONNECTED'}
             </span>
           </div>
         ) : (
@@ -219,7 +244,9 @@ function Header({
             <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  isRunning ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-600'
+                  isRunning
+                    ? 'bg-[var(--color-success)] animate-pulse'
+                    : 'bg-gray-600'
                 }`}
               />
               <span
@@ -235,11 +262,12 @@ function Header({
             {onToggle && (
               <button
                 onClick={onToggle}
+                disabled={!!isSwitching}
                 className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
                   isRunning
                     ? 'bg-[var(--color-bg-surface)] hover:bg-[var(--color-border-dark)] text-[var(--color-warning-alt)] border border-[var(--color-border-dark)]'
                     : 'bg-[var(--color-success)] hover:opacity-80 text-black'
-                }`}
+                } ${isSwitching ? 'opacity-60 cursor-not-allowed' : ''}`}
                 title={isRunning ? '暂停数据流' : '启动数据流'}
               >
                 {isRunning ? (
@@ -250,6 +278,14 @@ function Header({
               </button>
             )}
           </>
+        )}
+
+        {/* 切换中提示 */}
+        {isSwitching && (
+          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] text-[11px] font-mono text-gray-400">
+            <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-warning-alt)] rounded-full animate-spin" />
+            <span>SWITCHING...</span>
+          </div>
         )}
 
         {/* GitHub 链接 */}
