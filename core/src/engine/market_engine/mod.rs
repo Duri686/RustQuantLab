@@ -170,7 +170,7 @@ impl MarketEngine {
     ///
     /// @param candles_js - 1s K 线数组 (JS 格式)
     /// @returns 各周期加载的 K 线数量
-    pub fn load_history_1m_and_aggregate(&mut self, candles_js: JsValue) -> Result<JsValue, JsValue> {
+    pub fn load_history_1s_and_aggregate(&mut self, candles_js: JsValue) -> Result<JsValue, JsValue> {
         let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析 1s K 线失败")?;
 
         if candles.is_empty() {
@@ -184,7 +184,7 @@ impl MarketEngine {
         }
 
         // 聚合到所有周期
-        let results = CandleAggregator::aggregate_history_from_1m(&mut self.candle_cache, candles);
+        let results = CandleAggregator::aggregate_history_from_1s(&mut self.candle_cache, candles);
 
         to_js!(results)
     }

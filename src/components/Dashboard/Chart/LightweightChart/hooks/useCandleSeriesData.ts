@@ -11,7 +11,6 @@ import { candlesToChartData } from '../utils/dataTransform';
 import type { MainSeriesRefs } from './useUnifiedChartSetup';
 
 export interface UseCandleSeriesDataOptions {
-  chart: IChartApi | null;
   candles: Candle[];
   mainSeriesRefs: React.RefObject<MainSeriesRefs>;
   chartEpoch: number;
@@ -19,7 +18,6 @@ export interface UseCandleSeriesDataOptions {
 }
 
 export function useCandleSeriesData({
-  chart,
   candles,
   mainSeriesRefs,
   chartEpoch,
@@ -29,14 +27,16 @@ export function useCandleSeriesData({
 
   // Update candle data
   useEffect(() => {
-    if (!chart || candles.length === 0) return;
+    // 使用 getSafeChart 确保 chart 未被销毁
+    const safeChart = getSafeChart();
+    if (!safeChart || candles.length === 0) return;
     const refs = mainSeriesRefs.current;
     if (!refs) return;
     const candleSeries = refs.candle;
     if (!candleSeries) return;
 
     try { candleSeries.setData(candlesToChartData(candles)); } catch { /* ignore */ }
-  }, [chart, candles, mainSeriesRefs, chartEpoch]);
+  }, [candles, mainSeriesRefs, chartEpoch, getSafeChart]);
 
   // Fit content once after chart creation
   useEffect(() => {

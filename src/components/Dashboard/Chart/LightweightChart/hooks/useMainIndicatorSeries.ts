@@ -5,33 +5,64 @@
  */
 
 import { useEffect } from 'react';
-import { LineSeries, LineStyle, type IChartApi } from 'lightweight-charts';
+import { LineSeries, LineStyle, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import type { Candle, IndicatorData } from '../../../../../types';
 import { CHART_COLORS } from '../utils/chartColors';
 import { indicatorToLineData } from '../utils/dataTransform';
 import type { MainSeriesRefs } from './useUnifiedChartSetup';
 
 export interface UseMainIndicatorSeriesOptions {
-  chart: IChartApi | null;
   candles: Candle[];
   indicatorData: IndicatorData;
   activeMainIndicators: string[];
   mainSeriesRefs: React.RefObject<MainSeriesRefs>;
   chartEpoch: number;
+  getSafeChart: () => IChartApi | null;
 }
 
 export function useMainIndicatorSeries({
-  chart,
   candles,
   indicatorData,
   activeMainIndicators,
   mainSeriesRefs,
   chartEpoch,
+  getSafeChart,
 }: UseMainIndicatorSeriesOptions): void {
   useEffect(() => {
+    // 获取安全的 chart 引用
+    const chart = getSafeChart();
     if (!chart || candles.length === 0) return;
+    
     const refs = mainSeriesRefs.current;
     if (!refs || !refs.candle) return;
+
+    /**
+     * 安全地添加 series
+     * 在 HMR 期间，chart 可能在 addSeries 调用后、渲染前被销毁
+     */
+    const safeAddSeries = (
+      options: Parameters<typeof chart.addSeries>[1],
+      paneIndex: number
+    ): ISeriesApi<'Line'> | null => {
+      const c = getSafeChart();
+      if (!c) return null;
+      try {
+        return c.addSeries(LineSeries, options, paneIndex);
+      } catch {
+        return null;
+      }
+    };
+
+    /**
+     * 安全地移除 series
+     */
+    const safeRemoveSeries = (series: ISeriesApi<'Line'>) => {
+      const c = getSafeChart();
+      if (!c) return;
+      try {
+        c.removeSeries(series);
+      } catch { /* ignore */ }
+    };
 
     // === MA ===
     const wantMA = activeMainIndicators.includes('MA');
@@ -52,24 +83,27 @@ export function useMainIndicatorSeries({
     ];
 
     if (!wantMA) {
-      refs.ma.forEach((s) => {
-        try { chart.removeSeries(s); } catch { /* ignore */ }
-      });
+      refs.ma.forEach((s) => safeRemoveSeries(s));
       refs.ma.clear();
     } else {
       maConfigs.forEach(({ key, color, values }) => {
         let s = refs.ma.get(key);
         if (!s) {
-          s = chart.addSeries(LineSeries, {
+          const newSeries = safeAddSeries({
             color,
             lineWidth: 1,
             priceScaleId: 'right',
             lastValueVisible: false,
             priceLineVisible: false,
           }, 0);
-          refs.ma.set(key, s);
+          if (newSeries) {
+            s = newSeries;
+            refs.ma.set(key, s);
+          }
         }
-        try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        if (s) {
+          try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        }
       });
     }
 
@@ -81,24 +115,27 @@ export function useMainIndicatorSeries({
     ];
 
     if (!wantEMA) {
-      refs.ema.forEach((s) => {
-        try { chart.removeSeries(s); } catch { /* ignore */ }
-      });
+      refs.ema.forEach((s) => safeRemoveSeries(s));
       refs.ema.clear();
     } else {
       emaConfigs.forEach(({ key, color, values }) => {
         let s = refs.ema.get(key);
         if (!s) {
-          s = chart.addSeries(LineSeries, {
+          const newSeries = safeAddSeries({
             color,
             lineWidth: 1,
             priceScaleId: 'right',
             lastValueVisible: false,
             priceLineVisible: false,
           }, 0);
-          refs.ema.set(key, s);
+          if (newSeries) {
+            s = newSeries;
+            refs.ema.set(key, s);
+          }
         }
-        try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        if (s) {
+          try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        }
       });
     }
 
@@ -111,15 +148,13 @@ export function useMainIndicatorSeries({
     ];
 
     if (!wantBOLL) {
-      refs.boll.forEach((s) => {
-        try { chart.removeSeries(s); } catch { /* ignore */ }
-      });
+      refs.boll.forEach((s) => safeRemoveSeries(s));
       refs.boll.clear();
     } else {
       bollConfigs.forEach(({ key, color, values, lineStyle }) => {
         let s = refs.boll.get(key);
         if (!s) {
-          s = chart.addSeries(LineSeries, {
+          const newSeries = safeAddSeries({
             color,
             lineWidth: 1,
             lineStyle,
@@ -128,10 +163,15 @@ export function useMainIndicatorSeries({
             lastValueVisible: false,
             priceLineVisible: false,
           }, 0);
-          refs.boll.set(key, s);
+          if (newSeries) {
+            s = newSeries;
+            refs.boll.set(key, s);
+          }
         }
-        try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        if (s) {
+          try { s.setData(indicatorToLineData(candles, values)); } catch { /* ignore */ }
+        }
       });
     }
-  }, [chart, candles, indicatorData, activeMainIndicators, mainSeriesRefs, chartEpoch]);
+  }, [candles, indicatorData, activeMainIndicators, mainSeriesRefs, chartEpoch, getSafeChart]);
 }

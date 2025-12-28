@@ -341,9 +341,9 @@ export function useWasmEngine(tickInterval: number = 100): UseWasmEngineReturn {
     try {
       const startTime = performance.now();
 
-      // 加载 1m K 线并自动聚合到所有高周期 (5m/15m/1H/4H/1D)
+      // 加载 1s K 线并自动聚合到所有高周期 (1m/5m/15m/1H/4H/1D)
       const results =
-        engineRef.current.load_history_1m_and_aggregate(historyCandles);
+        engineRef.current.load_history_1s_and_aggregate(historyCandles);
       historyLoadedRef.current = true;
 
       const loadTime = performance.now() - startTime;

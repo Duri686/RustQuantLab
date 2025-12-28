@@ -66,7 +66,6 @@ const UnifiedMultiPaneChart = forwardRef<UnifiedMultiPaneChartHandle, UnifiedMul
 
     // === Hook: Chart Setup ===
     const {
-      chart,
       chartEpoch,
       mainSeriesRefs,
       subSeriesRefs,
@@ -84,7 +83,6 @@ const UnifiedMultiPaneChart = forwardRef<UnifiedMultiPaneChartHandle, UnifiedMul
 
     // === Hook: Candle Series Data ===
     useCandleSeriesData({
-      chart,
       candles,
       mainSeriesRefs,
       chartEpoch,
@@ -93,12 +91,12 @@ const UnifiedMultiPaneChart = forwardRef<UnifiedMultiPaneChartHandle, UnifiedMul
 
     // === Hook: Main Indicator Series (MA/EMA/BOLL) ===
     useMainIndicatorSeries({
-      chart,
       candles,
       indicatorData,
       activeMainIndicators,
       mainSeriesRefs,
       chartEpoch,
+      getSafeChart,
     });
 
     // === Hook: Sub Pane Series (VOL/MACD/RSI) ===

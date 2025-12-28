@@ -1,135 +1,421 @@
-# RustQuantLab
+# RustQuantLab 产品需求文档
 
-## 1. 项目背景与目标
+> **文档状态**: Active  
+> **版本**: v0.2.0  
+> **最后更新**: 2025-12-28
 
-**背景**：在证券交易Web端，面临高频行情推送（每秒数十/上百次更新）时，JavaScript 在主线程进行大量数据的序列化、反序列化、排序、聚合以及金融指标（如均线）计算时，容易造成 UI 掉帧、卡顿。
+---
 
-**目标**：
+## 1. 项目概述
 
-- 搭建 `Vite` + `React` + `Rust` (`wasm-pack`) 的完整开发工作流。
-- 通过 Rust 接管核心的数据清洗、聚合与指标计算逻辑。
-- 通过 **Mock Generator** 模拟高频“服务端”推送，验证 **Wasm** 相比纯 JS 的性能优势。
-- 实现一个流畅的、即时响应的简易交易盘口与 K 线图表。
+### 1.1 产品定位
 
-## 2. 技术栈架构
+**RustQuantLab** 是一款**高性能 Web 永续合约模拟交易终端**，基于 Rust/WebAssembly 技术实现客户端重计算架构（Client-Side Heavy Computing）。
 
-- **构建工具**：`Vite` (插件: `vite-plugin-rsw` 或 `vite-plugin-wasm-pack`)
-- **前端框架**：`React 18+` (Hooks, Context API)
-- **核心逻辑**：`Rust` (编译为 **WebAssembly**)
-- **通信桥梁**：`wasm-bindgen` (JS <-> Rust 交互)
-- **数据模拟**：`JavaScript` `setInterval` + `Web Worker` (模拟独立线程的 WebSocket 推送)
-- **图表库**：`Apache ECharts` 或简单的 `HTML Canvas` (由 React 管理，数据由 Rust 提供)
+### 1.2 核心价值
 
-## 3. 功能模块需求 (Functional Requirements)
+| 问题 | 方案 | 价值 |
+|------|------|------|
+| JavaScript 高频数据处理造成 UI 卡顿 | Rust/Wasm 接管所有计算密集型任务 | 毫秒级响应，60FPS 流畅渲染 |
+| 用户需要零延迟的交易训练环境 | 客户端完整模拟引擎 | 无需后端，本地即时反馈 |
+| 传统模拟行情过于简单 | Wyckoff 周期 + 市场操纵特征模拟 | 贴近真实市场行为 |
 
-我们将项目分为三个核心层：**数据源层 (Mock)**、**计算层 (Rust Core)**、**展示层 (React UI)**。
+### 1.3 目标用户
+
+- 量化交易学习者
+- 合约交易新手（杠杆风险理解）
+- 前端 Rust/Wasm 技术探索者
+
+---
+
+## 2. 技术架构
+
+### 2.1 技术栈
+
+| 层级 | 技术选型 | 版本 | 职责 |
+|------|----------|------|------|
+| **Logic Layer** | Rust → WebAssembly | 2021 Edition | 有状态交易引擎：K 线聚合、技术指标、交易撮合、风控强平 |
+| **UI Layer** | React + TypeScript | 18.3 / 5.6 | 状态管理、组件渲染、用户交互 |
+| **View Layer** | TradingView Lightweight Charts | 5.1 | 专业级 K 线图表渲染 |
+| **Style Layer** | Tailwind CSS | 4.0 | 原子化样式，深色交易主题 |
+| **Build Layer** | Vite + wasm-pack | 5.4 | 构建工具链 |
+
+### 2.2 系统架构图
+
+```mermaid
+flowchart LR
+    subgraph Worker["⚙️ Web Worker"]
+        A[mockWorker<br/>Wyckoff + 操纵模拟]
+    end
+    
+    subgraph Wasm["🦀 Rust/Wasm 核心"]
+        B[MarketEngine<br/>• K线聚合<br/>• 技术指标<br/>• 订单簿处理]
+        C[TradingEngine<br/>• 仓位管理<br/>• 盈亏计算<br/>• 限价单撮合<br/>• 风控监控]
+    end
+    
+    subgraph Hooks["⚛️ React Hooks"]
+        D[useWasmEngine<br/>统一编排入口]
+        E[useTradingActions<br/>交易操作封装]
+        F[useCandleData<br/>K线数据适配]
+    end
+    
+    subgraph UI["🖥️ UI 组件"]
+        H[LightweightChart<br/>TradingView 渲染]
+        I[TradeForm<br/>开仓/挂单]
+        J[PositionCard<br/>实时盈亏]
+        K[OrderBook<br/>深度盘口]
+    end
+    
+    A -->|"Tick 流"| D
+    D -->|"价格更新"| B
+    D -->|"价格更新"| C
+    B -->|"指标/K线"| D
+    C -->|"交易状态"| D
+    D --> F --> H
+    D --> I
+    D --> J
+    D --> K
+    I -->|"开仓/挂单"| E --> C
+```
+
+### 2.3 数据流
+
+| 阶段 | 组件 | 职责 |
+|------|------|------|
+| **1. 行情生成** | `mockWorker.ts` | Wyckoff 周期 + 市场操纵特征模拟 |
+| **2. 统一入口** | `useWasmEngine` | Wasm 单例、Tick 分发、状态聚合 |
+| **3. 市场引擎** | `MarketEngine` (Rust) | K 线聚合、技术指标、订单簿 |
+| **4. 交易引擎** | `TradingEngine` (Rust) | 仓位、盈亏、限价单、风控 |
+| **5. 操作封装** | `useTradingActions` | 开仓/平仓/挂单/撤单 API |
+| **6. 渲染** | React + TradingView | 60FPS K 线图、交易 UI |
+
+---
+
+## 3. 功能模块
 
 ### 3.1 模块一：高频行情模拟器 (Mock Data Generator)
 
-**目的**：模拟后端压力，产生让纯 JS "汗流浃背" 的数据量。
+**实现位置**: `src/workers/marketSimulation/`
 
-**功能描述**：
+#### 3.1.1 功能描述
 
-- 在前端启动一个 **Web Worker**。
-- 每隔 `100ms` (可调快至 `10ms` 进行压力测试) 生成一次行情快照。
-- **数据内容**：包含 `timestamp`（时间戳）、`price`（当前价）、`volume`（成交量）、`depth`（深度数据，包含买一到买五十、卖一到卖五十的数组）。
-- **数据格式**：为了模拟真实场景，Worker 发送给主线程（或 Wasm）的应该是一个扁平的 `Uint8Array` (二进制流) 或者一个巨大的 JSON 字符串，刻意制造解析成本。
+- 基于 **Wyckoff 市场周期** 生成价格走势
+- 模拟真实市场操纵特征（Scam Wicks, Bart Pattern, Stop Hunts）
+- 支持 **情绪速度不对称性**（下跌如电梯，上涨如爬楼梯）
+- 技术指标响应（80% 遵循，20% 破坏）
 
-### 3.2 模块二：Rust 核心计算引擎 (The Wasm Module)
+#### 3.1.2 业务规则
 
-**目的**：实战 Rust 的内存管理、算法性能与 JS 互操作。
+| 规则编号 | 规则描述 |
+|---------|---------|
+| R-001 | 默认推送间隔 **100ms**，可调节 |
+| R-002 | 每次推送包含：`timestamp`、`price`、`volume`、`bids[]`、`asks[]` |
+| R-003 | 订单簿深度：买卖各 **20 档** |
+| R-004 | 价格精度：**2 位小数** |
+| R-005 | 历史数据生成：支持 **1 分钟 K 线**，自动聚合到高周期 |
 
-此模块需暴露给 JS 以下 API：
+#### 3.1.3 市场模拟特征
 
-#### 3.2.1 行情清洗与深度聚合 (Order Book Aggregation)
+```
+Wyckoff 周期: ACCUMULATION → MARKUP → DISTRIBUTION → MARKDOWN → 循环
 
-- **输入**：接收 Mock 生成的原始深度数据（假设是一个包含 1000 个挂单的乱序数组）。
-- **处理**：
-  - **解析**：将输入数据转换为 Rust 结构体。
-  - **排序**：对买单进行降序排序，对卖单进行升序排序。
-  - **聚合**：合并相同价格的挂单量。
-  - **截取**：只保留前 20 档数据用于显示。
-- **输出**：返回给 JS 一个干净的 JavaScript Object（包含 `bids` 和 `asks` 数组）。
+操纵事件:
+- Scam Wick (插针): 快速刺穿支撑/阻力后回撤
+- Bart Pattern: 横盘后的快速拉升/砸盘
+- Cascade Liquidation: 连续触发止损引发的瀑布式清算
+- Stop Hunt: 精准猎杀密集止损区
+```
 
-#### 3.2.2 实时指标计算 (Technical Indicator Calculation)
+---
 
-- **输入**：
-  - 历史 K 线数据缓存（维护在 Rust 内存中，例如 `Vec<Candle>`）。
-  - 最新的一笔实时价格 Tick。
-- **处理**：
-  - 更新 K 线状态。
-  - **计算 SMA (移动平均线)**：计算 `SMA(5)`, `SMA(10)`, `SMA(20)`。需要遍历数组进行累加平均。
-  - **计算 MACD (指数平滑异同移动平均线)**：这是一个涉及递归和 EMA 计算的经典算法，非常适合测试 Wasm 性能。
-- **输出**：返回计算后的最新指标值，供图表渲染。
+### 3.2 模块二：Rust 核心计算引擎 (MarketEngine)
 
-### 3.3 模块三：React 交易界面 (UI Presentation)
+**实现位置**: `core/src/engine/`
 
-**目的**：验证数据渲染是否流畅，体验“计算与渲染分离”。
+#### 3.2.1 K 线聚合系统
 
-- **`OrderBook` 组件**：
-  - 使用 `Flex` 或 `Grid` 布局渲染买卖 20 档。
-  - 接收来自 Wasm 处理好的数据进行渲染。
-  - **挑战点**：高频更新下的 React Re-render 优化（使用 `memo` 或直接操作 DOM）。
-- **`Chart` 组件**：
-  - 简单渲染一个 `SVG` 或 `Canvas` 的折线图。
-  - 显示价格走势 + Wasm 计算出的 SMA 均线。
-- **控制面板**：
-  - **开关**：开启/关闭 Wasm 模式（用于对比纯 JS 模式）。
-  - **滑条**：调节 Mock 数据的推送频率（模拟从正常交易到市场崩盘时的流量）。
+- **多周期支持**: 1s, 1m, 5m, 15m, 1H, 4H, 1D
+- **实时聚合**: 每个 Tick 自动更新当前 K 线
+- **历史加载**: 支持批量导入 1s K 线并自动聚合到所有高周期 (1m/5m/15m/1H/4H/1D)
 
-## 4. 关键实战路径 (Implementation Roadmap)
+**API**:
+```rust
+fn on_tick(&mut self, order_book: OrderBook) -> AnalysisResult;
+fn set_timeframe(&mut self, timeframe: &str) -> bool;
+fn get_active_candles(&self) -> CandleHistory;
+fn load_history_1s_and_aggregate(&mut self, candles: Vec<Candle>) -> Vec<(String, usize)>;
+```
 
-建议按照以下 4 个阶段进行开发，每个阶段解决一个具体的 `Rust+Wasm` 知识点。
+#### 3.2.2 技术指标计算
 
-### 阶段一：环境搭建与 Hello World
+**实现位置**: `core/src/indicators/`
 
-- **任务**：
-  - 初始化 `Vite` + `React` TS 项目。
-  - 初始化 `Rust` 项目 (`cargo new --lib`)。
-  - 配置 `wasm-pack` 构建流程，确保 React 能 `import` 编译后的 `.wasm` 文件。
-  - 实现一个简单的 `add(a, b)` 函数，证明 JS 可以调用 Rust。
+| 指标 | 描述 | 参数 |
+|------|------|------|
+| **SMA** | 简单移动平均线 | period: 5, 10, 20 |
+| **EMA** | 指数移动平均线 | period: 12, 26 |
+| **BOLL** | 布林带 | period: 20, multiplier: 2 |
+| **MACD** | 指数平滑异同移动平均线 | fast: 12, slow: 26, signal: 9 |
+| **RSI** | 相对强弱指数 | period: 14 |
 
-### 阶段二：数据流模拟与结构体传递 (JSON vs Struct)
+**设计原则**:
+- **纯函数**: 无状态，相同输入始终相同输出
+- **优雅降级**: 数据不足时返回 `None`
+- **f64 精度**: 保证金融计算准确性
 
-- **任务**：
-  - 编写 JS 的 Mock Worker，生成乱序的订单数组。
-  - **Rust 侧**：定义 `Order` 和 `OrderBook` 结构体，使用 `#[wasm_bindgen]` 宏导出。
-- **挑战**：在 Rust 中实现 `process_orders(data: &JsValue)`。
-- 学习如何使用 `serde-wasm-bindgen` 在 JS 对象和 Rust 结构体之间转换。
+---
 
-### 阶段三：计算密集型任务实装 (核心)
+### 3.3 模块三：交易引擎 (Trading Engine)
 
-- **任务**：
-  - 在 Rust 中实现排序算法（利用 Rust 高效的 `sort_by`）。
-  - 实现 `SMA/MACD` 算法。
-  - **对比测试**：写一段同样的 JS 逻辑。在 React 中设置一个 Toggle 按钮，分别记录“JS处理耗时”和“Wasm处理耗时”并在界面显示。
-- **预期结果**：在数据量小的时候 JS 可能更快（因为 Wasm 有内存拷贝开销），但在处理 10万+ 数组循环时，Wasm 将展现优势。
+**实现位置**: `core/src/trading/` + `core/src/engine/trading/`
 
-### 阶段四：内存优化 (进阶)
+#### 3.3.1 账户管理
 
-- **任务**：
-  - 避免频繁的 `JsValue` 序列化。
-  - 尝试使用 **Shared Memory** 模式（如果浏览器支持）或者直接传递 `Uint8Array` (Byte Array) 到 Rust 内存中，Rust 通过指针读取数据，实现“零拷贝”解析。
+| 功能 | 描述 | 规则 |
+|------|------|------|
+| **初始余额** | 模拟账户起始资金 | 默认 10,000 USDT |
+| **杠杆设置** | 支持 1x - 125x | 有仓位时不可调整（逐仓模式） |
+| **可用余额** | 余额 - 已用保证金 | 实时计算 |
+| **账户重置** | 一键恢复初始状态 | 清空仓位、挂单、历史 |
 
-## 5. 项目目录结构建议
+#### 3.3.2 仓位管理
 
-```bash
-rust-quant-lab/
-├── api/                 # 模拟后端数据生成
-│   └── mockWorker.js    # Web Worker
-├── src/                 # React 源码
-│   ├── components/
-│   │   ├── OrderBook.tsx
-│   │   └── Chart.tsx
-│   ├── hooks/
-│   │   └── useWasm.ts   # 封装调用 Wasm 的逻辑
-│   ├── App.tsx
-│   └── main.tsx
-├── core/                # Rust 源码 (Crate)
-│   ├── Cargo.toml
+**开仓规则**:
+
+| 规则编号 | 规则描述 |
+|---------|---------|
+| R-201 | 支持 **多空双向** 持仓（LONG / SHORT） |
+| R-202 | 保证金模式：**全仓** 或 **逐仓** |
+| R-203 | 开仓检查：可用余额 ≥ 所需保证金 |
+| R-204 | 仓位 ID 格式：`{SYMBOL}_{SIDE}` (如 BTCUSDT_Long) |
+
+**平仓规则**:
+
+| 规则编号 | 规则描述 |
+|---------|---------|
+| R-211 | 支持 **全部平仓** 或 **部分平仓** |
+| R-212 | 盈亏结算到余额 |
+| R-213 | 逐仓模式：剩余保证金返还 |
+
+**盈亏计算**:
+```
+多仓 PnL = (当前价 - 开仓价) × 数量
+空仓 PnL = (开仓价 - 当前价) × 数量
+ROE% = PnL / 保证金 × 100%
+```
+
+#### 3.3.3 限价单系统
+
+| 功能 | 描述 |
+|------|------|
+| **挂单** | 指定价格开仓，冻结保证金 |
+| **撮合** | 价格触及时自动成交 |
+| **撤单** | 解冻保证金，返还余额 |
+| **批量撤单** | 一键取消所有挂单 |
+
+---
+
+### 3.4 模块四：风控与强平引擎 (Risk Engine)
+
+**实现位置**: `core/src/risk/`
+
+#### 3.4.1 风险评估
+
+| 指标 | 计算方式 |
+|------|----------|
+| **保证金率** | 仓位价值 / (仓位价值 - 未实现亏损) |
+| **维持保证金** | 仓位价值 × 维持保证金率 |
+| **强平价格** | 基于杠杆和方向计算的清算触发价 |
+
+#### 3.4.2 风险等级
+
+```rust
+enum RiskLevel {
+    Safe,      // 安全：保证金率 > 50%
+    Warning,   // 预警：保证金率 25% - 50%
+    Danger,    // 危险：保证金率 10% - 25%
+    Critical,  // 临界：保证金率 < 10%
+}
+```
+
+#### 3.4.3 强平逻辑
+
+| 规则编号 | 规则描述 |
+|---------|---------|
+| R-301 | 当 **保证金率 ≤ 维持保证金率** 时触发强平 |
+| R-302 | 强平以 **当前市价** 执行 |
+| R-303 | 强平后发送 **LIQUIDATION** 事件通知 UI |
+| R-304 | 逐仓模式：仅强平该仓位，不影响其他仓位 |
+
+#### 3.4.4 逐仓增加保证金
+
+- 支持为单个仓位增加保证金
+- 降低强平风险，调整强平价格
+- 从可用余额扣除
+
+---
+
+### 3.5 模块五：React 交易界面 (UI Layer)
+
+**实现位置**: `src/components/Dashboard/`
+
+#### 3.5.1 图表组件 (Chart)
+
+| 组件 | 功能 |
+|------|------|
+| **LightweightChart** | TradingView K 线渲染 |
+| **ChartToolbar** | 时间周期、指标切换、截图 |
+| **IndicatorPane** | 副图指标（VOL/MACD/RSI） |
+
+**支持功能**:
+- 多时间周期切换：1s, 1m, 5m, 15m, 1H, 4H, 1D
+- 主图指标：MA, EMA, BOLL（单选）
+- 副图指标：VOL, MACD, RSI（多选）
+- 实时 K 线更新（当前 K 线动态刷新）
+- 图表截图导出
+
+#### 3.5.2 订单簿组件 (OrderBook)
+
+| 功能 | 描述 |
+|------|------|
+| **深度展示** | 买卖各 20 档 |
+| **价格颜色** | 买绿卖红，涨跌变色 |
+| **数量柱状图** | 横向柱状背景 |
+| **最新成交价** | 中间显示，带趋势箭头 |
+
+#### 3.5.3 交易表单 (TradeForm)
+
+| 功能 | 描述 |
+|------|------|
+| **下单类型** | 市价单 / 限价单 |
+| **方向选择** | 开多 (LONG) / 开空 (SHORT) |
+| **数量输入** | 支持滑条快速选择 |
+| **杠杆调节** | 1x - 125x 滑条 |
+| **仓位卡片** | 显示未实现盈亏、ROE%、强平价 |
+| **挂单列表** | 显示待成交订单，支持撤单 |
+
+#### 3.5.4 响应式布局
+
+| 断点 | 布局 |
+|------|------|
+| **Mobile** (<768px) | 垂直堆叠，底部固定交易栏 |
+| **Tablet** (768-1280px) | 2 列网格 |
+| **Desktop** (1280px+) | 3 列专业布局 |
+| **4K** (2560px+) | 最大宽度限制，居中显示 |
+
+---
+
+## 4. 状态流转
+
+### 4.1 仓位生命周期
+
+```mermaid
+stateDiagram-v2
+    [*] --> NoPosition: 初始状态
+    NoPosition --> Opening: 开仓请求
+    Opening --> HasPosition: 开仓成功
+    Opening --> NoPosition: 余额不足/校验失败
+    HasPosition --> Closing: 平仓请求
+    HasPosition --> Liquidating: 触发强平
+    Closing --> NoPosition: 平仓完成（全部）
+    Closing --> HasPosition: 部分平仓
+    Liquidating --> NoPosition: 强平执行
+```
+
+### 4.2 限价单生命周期
+
+```
+Pending → [价格触及] → Filled
+Pending → [用户取消] → Cancelled
+Pending → [余额不足] → Rejected
+```
+
+### 4.3 引擎事件类型
+
+| 事件 | 触发条件 | UI 响应 |
+|------|----------|---------|
+| `POSITION_OPENED` | 开仓成功 | Toast 通知 + 仓位卡片更新 |
+| `POSITION_CLOSED` | 平仓成功 | Toast 通知 + 盈亏结算 |
+| `ORDER_FILLED` | 限价单成交 | Toast 通知 + 仓位更新 |
+| `ORDER_CANCELLED` | 挂单取消 | Toast 通知 + 保证金返还 |
+| `LIQUIDATION` | 强平触发 | 警告 Toast + 仓位清零 |
+| `MARGIN_ADDED` | 增加保证金 | Toast 通知 + 强平价更新 |
+
+---
+
+## 5. 项目结构
+
+```
+RustQuantLab/
+├── core/                        # 🦀 Rust/Wasm 核心引擎
 │   └── src/
-│       ├── lib.rs       # 入口，暴露给 JS 的函数
-│       ├── models.rs    # 数据结构定义
-│       └── calc.rs      # 金融指标算法 (SMA, MACD)
-├── vite.config.ts       # 配置 Wasm 插件
+│       ├── lib.rs               # Wasm 导出 API
+│       ├── engine/              # 引擎模块
+│       │   ├── market_engine/   # MarketEngine (K线/指标/订单簿)
+│       │   ├── trading/         # 交易逻辑 (开仓/平仓/限价单)
+│       │   └── data/            # K线聚合、Tick 处理
+│       ├── trading/             # 交易领域模型 (仓位/订单/余额)
+│       ├── indicators/          # 技术指标 (SMA/EMA/MACD/RSI/BOLL)
+│       └── risk/                # 风控算法 (强平/保证金)
+├── src/                         # ⚛️ React 前端
+│   ├── components/Dashboard/
+│   │   ├── Chart/               # TradingView Lightweight Charts
+│   │   ├── Trade/               # 交易组件 (表单/仓位卡片)
+│   │   └── OrderBook.tsx        # 订单簿
+│   ├── hooks/
+│   │   ├── useWasmEngine.ts     # 🎯 统一 Wasm 引擎入口
+│   │   ├── tradingEngine/       # 交易操作封装
+│   │   └── candle/              # K线数据处理
+│   ├── workers/
+│   │   └── marketSimulation/    # Wyckoff 行情模拟
+│   └── App.tsx
 └── package.json
+```
+
+---
+
+## 6. 验收标准
+
+| 验收项 | 标准 | 状态 |
+|-------|------|------|
+| **K 线渲染** | 60FPS 流畅拖拽，无卡顿 | ✅ |
+| **多周期支持** | 1s/1m/5m/15m/1H/4H/1D 无缝切换 | ✅ |
+| **技术指标** | SMA/EMA/BOLL/MACD/RSI 计算正确 | ✅ |
+| **模拟交易** | 开仓/平仓/限价单完整流程 | ✅ |
+| **风控强平** | 强平价计算准确，自动触发 | ✅ |
+| **响应式 UI** | Mobile/Tablet/Desktop 自适应 | ✅ |
+| **历史数据** | 支持加载并聚合历史 K 线 | ✅ |
+
+---
+
+## 7. 技术路线图
+
+### 7.1 已完成 ✅
+
+| 功能 | 说明 |
+|------|------|
+| Rust/Wasm 引擎 | 完整的市场分析 + 交易引擎 |
+| 技术指标 | SMA/EMA/BOLL/MACD/RSI |
+| 模拟交易 | 开仓/平仓/限价单/逐仓增加保证金 |
+| 风控引擎 | 强平价格/保证金率/风险等级 |
+| 专业 UI | TradingView 图表 + Binance 风格 |
+| 行情模拟 | Wyckoff 周期 + 市场操纵特征 |
+
+### 7.2 规划中 🚧
+
+| 优先级 | 功能 | 目标 |
+|:---:|------|------|
+| P1 | 多交易对支持 | 同时持有多个品种仓位 |
+| P2 | 历史交易记录 | IndexedDB 持久化 |
+| P3 | 策略回测框架 | 基于历史 K 线验证策略 |
+| P4 | 真实行情对接 | Binance WebSocket 接入 |
+
+---
+
+## 8. 版本历史
+
+| 日期 | 版本 | 变更说明 |
+|------|------|----------|
+| 2025-12-28 | v0.2.0 | 完整交易引擎、风控强平、限价单、逐仓保证金 |
+| 2025-12-20 | v0.1.0 | 初始版本：技术指标、K 线图表、基础交易 |
+

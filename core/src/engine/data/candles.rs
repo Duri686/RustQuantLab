@@ -109,7 +109,7 @@ impl CandleAggregator {
     ///
     /// 接收 1s K 线数据，自动聚合到 1m/5m/15m/1H/4H/1D
     /// 返回各周期加载的 K 线数量
-    pub fn aggregate_history_from_1m(
+    pub fn aggregate_history_from_1s(
         candle_cache: &mut HashMap<Timeframe, CandleCache>,
         candles_s1: Vec<Candle>,
     ) -> Vec<(String, usize)> {

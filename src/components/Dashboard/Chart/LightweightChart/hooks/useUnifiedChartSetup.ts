@@ -170,7 +170,6 @@ export function useUnifiedChartSetup({
 
     // Create chart
     const chart = createChart(containerRef.current, {
-      attributionLogo: false,
       layout: {
         background: { type: ColorType.Solid, color: CHART_COLORS.BACKGROUND },
         textColor: CHART_COLORS.TEXT_SECONDARY,
@@ -346,21 +345,43 @@ export function useUnifiedChartSetup({
     };
     try { chart.timeScale().subscribeVisibleLogicalRangeChange(onRange); } catch { /* ignore */ }
 
-    // ResizeObserver
-    const resizeObserver = new ResizeObserver(() => {
+    // 执行 resize 的核心逻辑
+    const doResize = () => {
+      if (disposedRef.current) return;
+      const el = containerRef.current;
+      if (!el) return;
+      try {
+        chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+        computePaneOffsets(chart, panePlan);
+      } catch { /* ignore */ }
+    };
+
+    // ResizeObserver 的 resize 处理（使用 rAF 防抖）
+    const handleResizeObserver = () => {
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
         rafIdRef.current = null;
-        if (disposedRef.current) return;
-        const el = containerRef.current;
-        if (!el) return;
-        try {
-          chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
-          computePaneOffsets(chart, panePlan);
-        } catch { /* ignore */ }
+        doResize();
       });
-    });
+    };
+
+    // Window resize 的处理（使用 setTimeout 防抖，等待布局稳定）
+    let windowResizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleWindowResize = () => {
+      if (windowResizeTimer !== null) clearTimeout(windowResizeTimer);
+      // 响应式断点切换时，CSS 布局需要时间稳定，延迟 150ms 后再更新
+      windowResizeTimer = setTimeout(() => {
+        windowResizeTimer = null;
+        doResize();
+      }, 150);
+    };
+
+    // ResizeObserver: 监听容器尺寸变化（直接响应）
+    const resizeObserver = new ResizeObserver(handleResizeObserver);
     resizeObserver.observe(containerRef.current);
+
+    // Window resize: 处理响应式断点切换（延迟响应）
+    window.addEventListener('resize', handleWindowResize);
 
     setChartEpoch((x) => x + 1);
 
@@ -370,7 +391,12 @@ export function useUnifiedChartSetup({
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
+      if (windowResizeTimer !== null) {
+        clearTimeout(windowResizeTimer);
+        windowResizeTimer = null;
+      }
       resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
       try { chart.unsubscribeCrosshairMove(onMove); } catch { /* ignore */ }
       try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange); } catch { /* ignore */ }
       try { chart.remove(); } catch { /* ignore */ }
