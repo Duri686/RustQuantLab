@@ -17,10 +17,7 @@ export interface MobileTradebarProps {
    Constants
    ============================================ */
 
-const COLORS = {
-  buyGreen: '#0ECB81',
-  sellRed: '#F6465D',
-} as const;
+// 使用 CSS 变量，移除硬编码颜色常量
 
 /** 快捷下单金额滑动范围 */
 const MIN_AMOUNT = 100;
@@ -53,7 +50,7 @@ function MobileTradebar({
       className="
         fixed bottom-0 left-0 right-0 z-50
         xl:hidden
-        bg-[#0b0e11] border-t border-[#2b2f36]
+        bg-[var(--color-bg-dark)] border-t border-[var(--color-border-dark)]
         px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]
       "
     >
@@ -71,13 +68,13 @@ function MobileTradebar({
         {/* 滑动条 */}
         <div className="flex-1">
           <div className="relative h-2 group">
-            <div className="absolute inset-0 rounded-full bg-[#2b2f36]" />
+            <div className="absolute inset-0 rounded-full bg-[var(--color-border-dark)]" />
             <div
               className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
               style={{
                 width: `${percentage}%`,
-                background: 'linear-gradient(90deg, #FCD535 0%, #F0B90B 100%)',
-                boxShadow: '0 0 8px rgba(252, 213, 53, 0.4)',
+                background: `linear-gradient(90deg, var(--color-warning) 0%, var(--color-warning-alt) 100%)`,
+                boxShadow: '0 0 8px color-mix(in srgb, var(--color-warning) 40%, transparent)',
               }}
             />
             <input
@@ -90,10 +87,10 @@ function MobileTradebar({
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FCD535] border-2 border-[#0b0e11] shadow-lg transition-all duration-75 pointer-events-none"
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[var(--color-warning)] border-2 border-[var(--color-bg-dark)] shadow-lg transition-all duration-75 pointer-events-none"
               style={{
                 left: `calc(${percentage}% - 8px)`,
-                boxShadow: '0 0 12px rgba(252, 213, 53, 0.6)',
+                boxShadow: '0 0 12px color-mix(in srgb, var(--color-warning) 60%, transparent)',
               }}
             />
           </div>
@@ -105,7 +102,7 @@ function MobileTradebar({
         </div>
 
         {/* 当前选择金额气泡 */}
-        <div className="shrink-0 px-2 py-1 rounded bg-[#1e2026] border border-[#2b2f36] text-[10px] font-mono text-gray-300">
+        <div className="shrink-0 px-2 py-1 rounded bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] text-[10px] font-mono text-gray-300">
           ${selectedAmount}
         </div>
       </div>
@@ -118,10 +115,10 @@ function MobileTradebar({
             h-11 min-h-[44px] rounded-lg
             font-semibold text-sm text-white
             transition-all active:scale-[0.98]
+            bg-[var(--color-success)]
           "
           style={{
-            backgroundColor: COLORS.buyGreen,
-            boxShadow: `0 2px 8px ${COLORS.buyGreen}40`,
+            boxShadow: '0 2px 8px color-mix(in srgb, var(--color-success) 25%, transparent)',
           }}
         >
           Buy / Long
@@ -132,10 +129,10 @@ function MobileTradebar({
             h-11 min-h-[44px] rounded-lg
             font-semibold text-sm text-white
             transition-all active:scale-[0.98]
+            bg-[var(--color-danger)]
           "
           style={{
-            backgroundColor: COLORS.sellRed,
-            boxShadow: `0 2px 8px ${COLORS.sellRed}40`,
+            boxShadow: '0 2px 8px color-mix(in srgb, var(--color-danger) 25%, transparent)',
           }}
         >
           Sell / Short

@@ -510,8 +510,8 @@ export function useWasmEngine(
   }, [latestData]);
 
   const priceColorClass = useMemo(() => {
-    if (priceTrend === 'up') return 'text-[#00f090]';
-    if (priceTrend === 'down') return 'text-[#ff3b30]';
+    if (priceTrend === 'up') return 'text-[var(--color-neon-green)]';
+    if (priceTrend === 'down') return 'text-[var(--color-neon-red)]';
     return 'text-white';
   }, [priceTrend]);
 

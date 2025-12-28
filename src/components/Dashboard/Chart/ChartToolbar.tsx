@@ -74,7 +74,7 @@ function ToolbarButton({
         px-2 py-1 text-[11px] font-medium rounded transition-colors
         ${
           active
-            ? 'text-[#FCD535] bg-[#FCD535]/10'
+            ? 'text-[var(--color-warning)] bg-[var(--color-warning)]/10'
             : 'text-gray-400 hover:text-white hover:bg-white/5'
         }
       `}
@@ -105,7 +105,7 @@ function IconButton({ icon, onClick, title }: IconButtonProps) {
 
 /** Vertical divider */
 function Divider() {
-  return <div className="w-px h-5 bg-[#2b2f36] mx-1" />;
+  return <div className="w-px h-5 bg-[var(--color-border-dark)] mx-1" />;
 }
 
 /* ============================================
@@ -129,7 +129,7 @@ function ChartToolbar({
   onScreenshotClick,
 }: ChartToolbarProps) {
   return (
-    <div className="h-9 md:h-10 bg-[#161a1e] border-b border-[#2b2f36] px-1 md:px-2 flex items-center justify-between overflow-hidden">
+    <div className="h-9 md:h-10 bg-[var(--color-bg-surface-alt)] border-b border-[var(--color-border-dark)] px-1 md:px-2 flex items-center justify-between overflow-hidden">
       {/* ========== Left Section: 横向滚动容器 ========== */}
       <div className="flex-1 overflow-x-auto scrollbar-hide">
         <div className="flex items-center gap-1 min-w-max">

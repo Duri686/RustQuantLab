@@ -70,8 +70,8 @@ function StatsPanel({
   return (
     <div
       className="
-        shrink-0 h-10 md:h-12 bg-[#0d0d0d] border-t border-[#2b2f36]
-        grid grid-cols-3 divide-x divide-[#2b2f36]
+        shrink-0 h-10 md:h-12 bg-[var(--color-bg-black)] border-t border-[var(--color-border-dark)]
+        grid grid-cols-3 divide-x divide-[var(--color-border-dark)]
       "
     >
       {/* Last Price */}
@@ -85,14 +85,14 @@ function StatsPanel({
       <StatCell
         label="Spread"
         value={`$${analysisResult?.spread?.toFixed(4) ?? '--'}`}
-        colorClass="text-[#F0B90B]"
+        colorClass="text-[var(--color-warning-alt)]"
       />
 
       {/* SMA5 */}
       <StatCell
         label="SMA (5)"
         value={formatSma5()}
-        colorClass="text-[#00B8D9]"
+        colorClass="text-[var(--color-cyan)]"
       />
     </div>
   );

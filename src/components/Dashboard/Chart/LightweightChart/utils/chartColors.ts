@@ -3,12 +3,20 @@
  * 仿币安永续合约 K 线图表风格
  */
 
+/**
+ * 图表颜色配置
+ * 注意：由于 Canvas 渲染需要具体的颜色值，这里保留硬编码
+ * 但主要 Binance 色系与 CSS 变量保持一致：
+ * - UP/DOWN 对应 --color-success/--color-danger
+ * - BACKGROUND 对应 --color-bg-surface-alt
+ * - PANE_SEPARATOR 对应 --color-border-dark
+ */
 export const CHART_COLORS = {
-  // K 线颜色
+  // K 线颜色 (对应 CSS 变量 --color-success 和 --color-danger)
   UP: '#0ECB81',           // 涨 - 绿色
   DOWN: '#F6465D',         // 跌 - 红色
   
-  // 背景和网格
+  // 背景和网格 (对应 CSS 变量 --color-bg-surface-alt)
   BACKGROUND: '#161a1e',   // 背景色
   GRID: 'rgba(255, 255, 255, 0.04)', // 网格线
   CROSSHAIR: 'rgba(136, 136, 136, 0.8)', // 十字光标
@@ -16,7 +24,7 @@ export const CHART_COLORS = {
   // MA 均线
   MA7: '#F7931A',          // MA7 - 橙色
   MA25: '#9B59B6',         // MA25 - 紫色
-  MA99: '#00D4FF',         // MA99 - 青色
+  MA99: '#00D4FF',         // MA99 - 青色 (对应 --color-neon-cyan)
   
   // EMA 均线
   EMA7: '#E91E63',         // EMA7 - 粉色
@@ -27,7 +35,7 @@ export const CHART_COLORS = {
   BOLL_MID: '#9B59B6',     // 中轨 - 紫色
   BOLL_LOWER: '#00D4FF',   // 下轨 - 青色
   
-  // MACD
+  // MACD (对应 CSS 变量 --color-success 和 --color-danger)
   MACD_DIF: '#F7931A',     // DIF 线 - 橙色
   MACD_DEA: '#9B59B6',     // DEA 线 - 紫色
   MACD_HIST_UP: '#0ECB81', // 柱状图正值 - 绿色
@@ -40,7 +48,7 @@ export const CHART_COLORS = {
   RSI_OVERBOUGHT_LINE: 'rgba(246, 70, 93, 0.5)', // 超买线
   RSI_OVERSOLD_LINE: 'rgba(14, 203, 129, 0.5)',  // 超卖线
   
-  // 成交量
+  // 成交量 (对应 CSS 变量 --color-success 和 --color-danger)
   VOLUME_UP: 'rgba(14, 203, 129, 0.5)',   // 涨时成交量
   VOLUME_DOWN: 'rgba(246, 70, 93, 0.5)',  // 跌时成交量
   
@@ -52,7 +60,7 @@ export const CHART_COLORS = {
   // 边框
   BORDER: '#333333',
   
-  // 窗格分隔线
+  // 窗格分隔线 (对应 CSS 变量 --color-border-dark)
   PANE_SEPARATOR: '#2b2f36',
 } as const;
 

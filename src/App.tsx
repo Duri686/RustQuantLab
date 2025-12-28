@@ -215,7 +215,7 @@ function App() {
   // Main Layout: Mobile-First Responsive Futures Terminal
   // 断点策略: Mobile (<768) | Tablet (768-1280) | Desktop (1280+) | 4K (2560+)
   return (
-    <div className="h-screen w-screen bg-[#161a1e] flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[var(--color-bg-surface-alt)] flex flex-col overflow-hidden">
       <Header
         isRunning={isRunning}
         onToggle={dataSource === 'mock' ? toggleFeed : undefined} // LIVE 模式下禁用切换
@@ -255,7 +255,7 @@ function App() {
           className={`
             flex flex-col
             md:grid md:h-full
-            gap-px bg-[#2b2f36]
+            gap-px bg-[var(--color-border-dark)]
             ${
               dataSource === 'mock'
                 ? 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_240px_300px]'
@@ -279,7 +279,7 @@ function App() {
             {/* K-Line Chart Area - 移动端图表占高度*/}
             <div className="flex flex-col h-[60vh] md:flex-1 md:h-auto min-h-0">
               {/* Chart Sub-Header */}
-              <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 flex items-center justify-between border-b border-[#2b2f36] bg-[#0d0d0d]">
+              <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 flex items-center justify-between border-b border-[var(--color-border-dark)] bg-[var(--color-bg-black)]">
                 <div className="flex items-center gap-2 md:gap-3">
                   <h2 className="text-[10px] md:text-[11px] font-medium text-gray-400 truncate max-w-[120px] md:max-w-none">
                     {latestData?.symbol ?? 'BTC-USDT'} · Perp
@@ -290,8 +290,8 @@ function App() {
                 </div>
                 <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-gray-500">
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 bg-[#0ECB81] rounded-sm" />
-                    <span className="w-2 h-2 bg-[#F6465D] rounded-sm" />
+                    <span className="w-2 h-2 bg-[var(--color-success)] rounded-sm" />
+                    <span className="w-2 h-2 bg-[var(--color-danger)] rounded-sm" />
                   </span>
                   <span>OHLC</span>
                 </div>
@@ -323,7 +323,7 @@ function App() {
           {/* MOCK 模式: 固定宽度 240px | LIVE 模式: 自动宽度占满剩余空间 */}
           <section
             className={`
-              h-[214px] md:h-full min-h-0 bg-terminal-bg border-t md:border-t-0 md:border-l border-[#2b2f36]
+              h-[214px] md:h-full min-h-0 bg-terminal-bg border-t md:border-t-0 md:border-l border-[var(--color-border-dark)]
               ${dataSource === 'binance' ? 'xl:min-w-[200px]' : ''}
             `}
           >
@@ -340,7 +340,7 @@ function App() {
           {/* ========== 交易表单区域 (仅 MOCK 模式下显示) ========== */}
           {/* LIVE 模式下隐藏交易表单，只展示数据 */}
           {dataSource === 'mock' && (
-            <section className="hidden xl:block h-full min-h-0 border-l border-[#2b2f36]">
+            <section className="hidden xl:block h-full min-h-0 border-l border-[var(--color-border-dark)]">
               <TradeForm
                 symbol="BTC"
                 currentPrice={latestData?.price ?? 40000}

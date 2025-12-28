@@ -80,13 +80,13 @@ function FpsMonitor() {
   // FPS 颜色：绿色 >= 50, 黄色 >= 30, 红色 < 30
   const fpsColor =
     fps >= 50
-      ? 'text-[#0ECB81]'
+      ? 'text-[var(--color-success)]'
       : fps >= 30
-      ? 'text-[#F0B90B]'
-      : 'text-[#F6465D]';
+      ? 'text-[var(--color-warning-alt)]'
+      : 'text-[var(--color-danger)]';
 
   return (
-    <div className="hidden md:flex items-center gap-2 px-2 py-0.5 rounded bg-[#1e2026]/80 border border-[#2b2f36] text-[9px] font-mono">
+    <div className="hidden md:flex items-center gap-2 px-2 py-0.5 rounded bg-[var(--color-bg-surface)]/80 border border-[var(--color-border-dark)] text-[9px] font-mono">
       <span className={`${fpsColor} font-semibold`}>{fps} FPS</span>
       <span className="text-gray-500">|</span>
       <span className="text-gray-400">{frameTime}ms</span>
@@ -116,13 +116,13 @@ function DataSourceSwitch({
   const isConnected = connectionStatus === 'connected';
 
   return (
-    <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+    <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
       {/* Mock 按钮 */}
       <button
         onClick={() => onChange('mock')}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
           !isBinance
-            ? 'bg-[#F0B90B]/20 text-[#F0B90B] border border-[#F0B90B]/30'
+            ? 'bg-[var(--color-warning-alt)]/20 text-[var(--color-warning-alt)] border border-[var(--color-warning-alt)]/30'
             : 'text-gray-500 hover:text-gray-300'
         }`}
         title="模拟数据 (开发模式)"
@@ -135,7 +135,7 @@ function DataSourceSwitch({
         onClick={() => onChange('binance')}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${
           isBinance
-            ? 'bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30'
+            ? 'bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30'
             : 'text-gray-500 hover:text-gray-300'
         }`}
         title="Binance 实时数据"
@@ -144,7 +144,7 @@ function DataSourceSwitch({
         {isBinance && (
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              isConnected ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-500'
+              isConnected ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-500'
             }`}
           />
         )}
@@ -165,10 +165,10 @@ function Header({
   connectionStatus,
 }: HeaderProps) {
   return (
-    <header className="h-11 md:h-12 flex-shrink-0 bg-[#0b0e11] border-b border-[#2b2f36] px-2 md:px-4 flex items-center justify-between">
+    <header className="h-11 md:h-12 flex-shrink-0 bg-[var(--color-bg-dark)] border-b border-[var(--color-border-dark)] px-2 md:px-4 flex items-center justify-between">
       {/* Logo + FPS Monitor */}
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-[#1e2026] border border-[#2b2f36] flex items-center justify-center">
+        <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] flex items-center justify-center">
           <span className="text-sm md:text-base">🦀</span>
         </div>
         <div className="hidden md:block">
@@ -200,15 +200,15 @@ function Header({
         {/* Live 指示器 - 移动端简化为圆点 */}
         {/* LIVE 模式下显示连接状态，MOCK 模式下显示运行状态 */}
         {dataSource === 'binance' ? (
-          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
+                connectionStatus === 'connected' ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-600'
               }`}
             />
             <span
               className={`text-[11px] font-mono ${
-                connectionStatus === 'connected' ? 'text-[#0ECB81]' : 'text-gray-500'
+                connectionStatus === 'connected' ? 'text-[var(--color-success)]' : 'text-gray-500'
               }`}
             >
               {connectionStatus === 'connected' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONNECTING' : 'DISCONNECTED'}
@@ -216,15 +216,15 @@ function Header({
           </div>
         ) : (
           <>
-            <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[#1e2026] border border-[#2b2f36]">
+            <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  isRunning ? 'bg-[#0ECB81] animate-pulse' : 'bg-gray-600'
+                  isRunning ? 'bg-[var(--color-success)] animate-pulse' : 'bg-gray-600'
                 }`}
               />
               <span
                 className={`text-[11px] font-mono ${
-                  isRunning ? 'text-[#0ECB81]' : 'text-gray-500'
+                  isRunning ? 'text-[var(--color-success)]' : 'text-gray-500'
                 }`}
               >
                 {isRunning ? 'LIVE' : 'PAUSED'}
@@ -237,8 +237,8 @@ function Header({
                 onClick={onToggle}
                 className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
                   isRunning
-                    ? 'bg-[#1e2026] hover:bg-[#2b2f36] text-[#F0B90B] border border-[#2b2f36]'
-                    : 'bg-[#0ECB81] hover:bg-[#0bb375] text-black'
+                    ? 'bg-[var(--color-bg-surface)] hover:bg-[var(--color-border-dark)] text-[var(--color-warning-alt)] border border-[var(--color-border-dark)]'
+                    : 'bg-[var(--color-success)] hover:opacity-80 text-black'
                 }`}
                 title={isRunning ? '暂停数据流' : '启动数据流'}
               >
@@ -257,7 +257,7 @@ function Header({
           href="https://github.com/Duri686/RustQuantLab"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors bg-[#1e2026] hover:bg-[#2b2f36] text-gray-400 hover:text-white border border-[#2b2f36]"
+          className="w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors bg-[var(--color-bg-surface)] hover:bg-[var(--color-border-dark)] text-gray-400 hover:text-white border border-[var(--color-border-dark)]"
           title="GitHub 仓库"
         >
           <GitHubIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />

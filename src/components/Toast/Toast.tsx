@@ -29,24 +29,24 @@ const TOAST_STYLES: Record<
   { bg: string; border: string; icon: string }
 > = {
   success: {
-    bg: 'bg-[#0ECB81]/10',
-    border: 'border-[#0ECB81]/30',
-    icon: '#0ECB81',
+    bg: 'bg-[var(--color-success)]/10',
+    border: 'border-[var(--color-success)]/30',
+    icon: 'var(--color-success)',
   },
   error: {
-    bg: 'bg-[#F6465D]/10',
-    border: 'border-[#F6465D]/30',
-    icon: '#F6465D',
+    bg: 'bg-[var(--color-danger)]/10',
+    border: 'border-[var(--color-danger)]/30',
+    icon: 'var(--color-danger)',
   },
   warning: {
-    bg: 'bg-[#FCD535]/10',
-    border: 'border-[#FCD535]/30',
-    icon: '#FCD535',
+    bg: 'bg-[var(--color-warning)]/10',
+    border: 'border-[var(--color-warning)]/30',
+    icon: 'var(--color-warning)',
   },
   info: {
-    bg: 'bg-[#3B82F6]/10',
-    border: 'border-[#3B82F6]/30',
-    icon: '#3B82F6',
+    bg: 'bg-[var(--color-info)]/10',
+    border: 'border-[var(--color-info)]/30',
+    icon: 'var(--color-info)',
   },
 };
 
@@ -103,7 +103,7 @@ function Toast({ id, type, message, duration = 3000, onClose }: ToastProps) {
         }
       `}
     >
-      <Icon size={18} style={{ color: style.icon }} className="shrink-0" />
+      <Icon size={18} className="shrink-0" style={{ color: style.icon }} />
       <span className="text-sm text-white flex-1">{message}</span>
       <button
         onClick={handleClose}

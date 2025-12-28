@@ -2,17 +2,24 @@ import { memo, useMemo, useState, useEffect, useRef } from 'react';
 import type { OrderBookProps } from '../../types/index';
 
 /* ============================================
-   Binance 风格颜色常量
+   CSS 变量辅助函数
    ============================================ */
+
+/**
+ * 获取 CSS 变量值（用于内联样式）
+ */
+function getCssVar(varName: string): string {
+  if (typeof window === 'undefined') return '';
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(varName)
+    .trim();
+}
+
+// Binance 颜色常量（从 CSS 变量获取，用于内联样式）
 const COLORS = {
-  /** Binance 红（卖单） */
-  askRed: '#F6465D',
-  /** Binance 绿（买单） */
-  bidGreen: '#0ECB81',
-  /** 文字灰色 */
+  bidGreen: '#0ECB81', // var(--color-success)
+  askRed: '#F6465D',   // var(--color-danger)
   textGray: '#9ca3af',
-  /** 暗灰色 */
-  textDark: '#6b7280',
 } as const;
 
 /** 视图模式类型 */
@@ -51,14 +58,14 @@ interface ViewModeButtonProps {
 /** 纯 CSS 实现的视图模式按钮 */
 function ViewModeButton({ mode, active, onClick, title }: ViewModeButtonProps) {
   // 未选中时颜色降低透明度，但保留红绿色调
-  const askColor = active ? COLORS.askRed : 'rgba(246, 70, 93, 0.35)';
-  const bidColor = active ? COLORS.bidGreen : 'rgba(14, 203, 129, 0.35)';
+  const askColor = active ? 'var(--color-danger)' : 'color-mix(in srgb, var(--color-danger) 35%, transparent)';
+  const bidColor = active ? 'var(--color-success)' : 'color-mix(in srgb, var(--color-success) 35%, transparent)';
 
   return (
     <button
       onClick={onClick}
       className={`w-6 h-6 rounded flex flex-col items-center justify-center gap-0.5 p-1 transition-colors ${
-        active ? 'bg-[#2b2f36]' : 'hover:bg-white/5'
+        active ? 'bg-[var(--color-border-dark)]' : 'hover:bg-white/5'
       }`}
       title={title}
     >
@@ -135,24 +142,22 @@ function OrderRow({
         className="absolute top-0.5 bottom-0.5 right-0 pointer-events-none"
         style={{
           width: `${depthPercent}%`,
-          backgroundColor: isBid ? COLORS.bidGreen : COLORS.askRed,
+          backgroundColor: isBid ? 'var(--color-success)' : 'var(--color-danger)',
           opacity: 0.12,
         }}
       />
 
       {/* 价格列 - 左对齐 */}
       <span
-        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-left"
-        style={{ color: isBid ? COLORS.bidGreen : COLORS.askRed }}
+        className={`relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-left ${
+          isBid ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
+        }`}
       >
         {price.toFixed(pricePrecision)}
       </span>
 
       {/* 数量列 - 右对齐 */}
-      <span
-        className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right"
-        style={{ color: COLORS.textGray }}
-      >
+      <span className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right text-gray-400">
         {amount.toFixed(5)}
       </span>
     </div>
@@ -253,8 +258,8 @@ function OrderBook({
    * 获取价格趋势颜色
    */
   const priceColor = useMemo(() => {
-    if (priceTrend === 'up') return COLORS.bidGreen;
-    if (priceTrend === 'down') return COLORS.askRed;
+    if (priceTrend === 'up') return 'var(--color-success)';
+    if (priceTrend === 'down') return 'var(--color-danger)';
     return '#ffffff';
   }, [priceTrend]);
 
@@ -269,7 +274,7 @@ function OrderBook({
     <div className="bg-terminal-bg flex flex-col h-full overflow-hidden">
       {/* ========== 工具栏 ========== */}
       {/* 高度与 ChartToolbar 对齐: h-9 md:h-10 */}
-      <div className="shrink-0 h-9 md:h-10 px-2 md:px-3 flex items-center justify-between border-b border-[#2b2f36]">
+      <div className="shrink-0 h-9 md:h-10 px-2 md:px-3 flex items-center justify-between border-b border-[var(--color-border-dark)]">
         {/* 小数精度选择器 */}
         <button
           onClick={cyclePrecision}
@@ -315,7 +320,7 @@ function OrderBook({
 
       {/* ========== 表头 ========== */}
       {/* 高度与图表子标题对齐: h-7 md:h-8 */}
-      <div className="shrink-0 h-7 md:h-8 grid grid-cols-[1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[#2b2f36] bg-[#0d0d0d]">
+      <div className="shrink-0 h-7 md:h-8 grid grid-cols-[1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[var(--color-border-dark)] bg-[var(--color-bg-black)]">
         <span className="text-left">Price</span>
         <span className="text-right">Amount</span>
       </div>
@@ -342,7 +347,7 @@ function OrderBook({
       )}
 
       {/* ========== 中间价格 Ticker (Sticky) ========== */}
-      <div className="shrink-0 h-8 md:h-10 px-2 md:px-3 bg-[#131722] flex items-center gap-1.5 md:gap-2 border-y border-[#2b2f36]">
+      <div className="shrink-0 h-8 md:h-10 px-2 md:px-3 bg-[var(--color-bg-surface-alt)] flex items-center gap-1.5 md:gap-2 border-y border-[var(--color-border-dark)]">
         {/* 当前价格 - 使用 clamp 流体字体 */}
         <span
           className="font-mono text-[clamp(14px,4vw,18px)] md:text-lg font-semibold tabular-nums flex items-center gap-1"
@@ -351,12 +356,12 @@ function OrderBook({
           {price?.toFixed(2) ?? '-.--'}
           {priceTrend === 'up' && (
             <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 md:w-3 md:h-3">
-              <path d="M6 2l4 8H2z" fill={COLORS.bidGreen} />
+              <path d="M6 2l4 8H2z" fill="var(--color-success)" />
             </svg>
           )}
           {priceTrend === 'down' && (
             <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 md:w-3 md:h-3">
-              <path d="M6 10l4-8H2z" fill={COLORS.askRed} />
+              <path d="M6 10l4-8H2z" fill="var(--color-danger)" />
             </svg>
           )}
         </span>

@@ -25,6 +25,25 @@
   --color-neon-cyan: #00d4ff;
   --color-neon-amber: #ffb800;
 
+  /* Binance Color Palette */
+  --color-success: #0ECB81;
+  --color-danger: #F6465D;
+  --color-warning: #FCD535;
+  --color-warning-alt: #F0B90B;
+  --color-info: #3B82F6;
+  --color-cyan: #00B8D9;
+
+  /* Binance Background Colors */
+  --color-bg-dark: #0b0e11;
+  --color-bg-surface: #1e2026;
+  --color-bg-surface-alt: #161a1e;
+  --color-bg-surface-elevated: #161a25;
+  --color-bg-black: #0d0d0d;
+
+  /* Binance Border Colors */
+  --color-border-dark: #2b2f36;
+  --color-border-medium: #252a36;
+
   /* Legacy Compat */
   --color-primary: #00d4ff;
   --color-primary-hover: #00b8e6;

@@ -12,14 +12,14 @@ interface ErrorScreenProps {
  */
 function ErrorScreen({ message }: ErrorScreenProps) {
   return (
-    <div className="h-screen w-screen bg-[#0b0e11] flex items-center justify-center p-6">
-      <div className="bg-[#1e2026] border border-[#F6465D]/30 rounded-lg p-8 max-w-md text-center">
-        <div className="text-[#F6465D] text-4xl mb-4">⚠</div>
-        <h2 className="text-[#F6465D] text-xl font-bold mb-2">加载失败</h2>
+    <div className="h-screen w-screen bg-[var(--color-bg-dark)] flex items-center justify-center p-6">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-danger)]/30 rounded-lg p-8 max-w-md text-center">
+        <div className="text-[var(--color-danger)] text-4xl mb-4">⚠</div>
+        <h2 className="text-[var(--color-danger)] text-xl font-bold mb-2">加载失败</h2>
         <p className="text-gray-400 mb-4">{message}</p>
         <p className="text-gray-600 text-sm font-mono">
           请运行{' '}
-          <code className="bg-[#2b2f36] px-2 py-1 rounded">
+          <code className="bg-[var(--color-border-dark)] px-2 py-1 rounded">
             npm run build:wasm
           </code>
         </p>

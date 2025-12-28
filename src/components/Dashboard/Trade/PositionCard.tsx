@@ -30,19 +30,14 @@ export interface WasmPositionCardProps {
   onAddMargin?: (positionId: string, amount: number) => void;
 }
 
-const COLORS = {
-  long: '#0ecb81',
-  short: '#f6465d',
-  warning: '#f0b90b',
-} as const;
-
+// 使用 CSS 变量，移除硬编码颜色常量
 /** 风险等级颜色映射 */
 const RISK_COLORS: Record<RiskLevel, string> = {
-  Safe: '#0ecb81',
-  Low: '#3b82f6',
-  Medium: '#f0b90b',
-  High: '#f97316',
-  Critical: '#f6465d',
+  Safe: 'var(--color-success)',
+  Low: 'var(--color-info)',
+  Medium: 'var(--color-warning-alt)',
+  High: '#f97316', // 橙色，暂时保留，后续可添加到 CSS 变量
+  Critical: 'var(--color-danger)',
 };
 
 /* ============================================
@@ -105,13 +100,13 @@ function WasmPositionCard({
   const isLiqNear = distanceToLiq < 10;
   const isCritical = riskLevel === 'Critical' || riskLevel === 'High';
 
-  const borderColor = isLong ? COLORS.long : COLORS.short;
-  const pnlColor = isProfit ? COLORS.long : COLORS.short;
+  const borderColor = isLong ? 'var(--color-success)' : 'var(--color-danger)';
+  const pnlColor = isProfit ? 'var(--color-success)' : 'var(--color-danger)';
   const riskColor = RISK_COLORS[riskLevel];
 
   return (
     <div
-      className={`p-2.5 rounded bg-[#161a25] border-l-2 hover:bg-[#1c2030] transition-colors ${
+      className={`p-2.5 rounded bg-[var(--color-bg-surface-elevated)] border-l-2 hover:opacity-90 transition-colors ${
         isCritical ? 'animate-pulse' : ''
       }`}
       style={{ borderLeftColor: borderColor }}
@@ -135,13 +130,11 @@ function WasmPositionCard({
       {/* Row 2: Badges */}
       <div className="flex items-center gap-1.5 mb-2">
         <span
-          className="px-1 py-px text-[10px] font-semibold rounded"
-          style={{
-            backgroundColor: isLong
-              ? 'rgba(14,203,129,0.15)'
-              : 'rgba(246,70,93,0.15)',
-            color: isLong ? COLORS.long : COLORS.short,
-          }}
+          className={`px-1 py-px text-[10px] font-semibold rounded ${
+            isLong
+              ? 'bg-[var(--color-success)]/15 text-[var(--color-success)]'
+              : 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
+          }`}
         >
           {isLong ? 'Long' : 'Short'}
         </span>
@@ -182,7 +175,7 @@ function WasmPositionCard({
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Mark</span>
-          <span className="text-[#f0b90b] font-mono tabular-nums">
+          <span className="text-[var(--color-warning-alt)] font-mono tabular-nums">
             {currentPrice.toFixed(2)}
           </span>
         </div>
@@ -191,8 +184,9 @@ function WasmPositionCard({
         <div className="flex justify-between">
           <span className="text-gray-500">Liq. Price</span>
           <span
-            className="font-mono tabular-nums"
-            style={{ color: isLiqNear ? COLORS.short : '#848e9c' }}
+            className={`font-mono tabular-nums ${
+              isLiqNear ? 'text-[var(--color-danger)]' : 'text-gray-500'
+            }`}
           >
             {liquidationPrice.toFixed(2)}
             {isLiqNear && <span className="ml-1">⚠</span>}
@@ -215,8 +209,8 @@ function WasmPositionCard({
 
       {/* Risk Warning Banner */}
       {isCritical && riskAssessment?.warningMessage && (
-        <div className="mb-2 px-2 py-1.5 rounded bg-[#f6465d]/10 border border-[#f6465d]/30 flex items-center justify-center">
-          <span className="text-[10px] text-[#f6465d] leading-none">
+        <div className="mb-2 px-2 py-1.5 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30 flex items-center justify-center">
+          <span className="text-[10px] text-[var(--color-danger)] leading-none">
             ⚠️ {riskAssessment.warningMessage}
           </span>
         </div>
@@ -224,7 +218,7 @@ function WasmPositionCard({
 
       {/* 增加保证金输入 (仅逐仓模式) - 融合设计 */}
       {showAddMargin && !isCrossMode && (
-        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-[#0ECB81]/50">
+        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-[var(--color-success)]/50">
           <input
             type="number"
             value={marginAmount}
@@ -243,10 +237,10 @@ function WasmPositionCard({
               }
             }}
             placeholder="0.00"
-            className="flex-1 h-full px-2 text-[10px] bg-[#161a25] text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
+            className="flex-1 h-full px-2 text-[10px] bg-[var(--color-bg-surface-elevated)] text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
             autoFocus
           />
-          <span className="px-1.5 text-[9px] text-gray-500 bg-[#161a25]">
+          <span className="px-1.5 text-[9px] text-gray-500 bg-[var(--color-bg-surface-elevated)]">
             USDT
           </span>
           <button
@@ -258,7 +252,7 @@ function WasmPositionCard({
                 setShowAddMargin(false);
               }
             }}
-            className="h-full px-3 text-[9px] font-semibold text-white bg-[#0ECB81] hover:bg-[#0ECB81]/80 transition-colors"
+            className="h-full px-3 text-[9px] font-semibold text-white bg-[var(--color-success)] hover:bg-[var(--color-success)]/80 transition-colors"
           >
             OK
           </button>
@@ -266,7 +260,7 @@ function WasmPositionCard({
       )}
 
       {/* Row 4: Actions */}
-      <div className="flex items-center justify-between pt-1.5 border-t border-[#252a36]">
+      <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-border-medium)]">
         <span className="text-[9px] text-gray-600 font-mono">
           距强平 {distanceToLiq.toFixed(1)}%
         </span>
@@ -280,8 +274,8 @@ function WasmPositionCard({
               }}
               className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${
                 showAddMargin
-                  ? 'text-[#0ECB81] bg-[#0ECB81]/20 border border-[#0ECB81]/50'
-                  : 'text-[#0ECB81] bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 border border-transparent'
+                  ? 'text-[var(--color-success)] bg-[var(--color-success)]/20 border border-[var(--color-success)]/50'
+                  : 'text-[var(--color-success)] bg-[var(--color-success)]/10 hover:bg-[var(--color-success)]/20 border border-transparent'
               }`}
             >
               Add Margin
@@ -289,7 +283,7 @@ function WasmPositionCard({
           )}
           <button
             onClick={() => onClose?.()}
-            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[#252a36] hover:bg-[#f6465d]/20 hover:text-[#f6465d] rounded transition-colors"
+            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[var(--color-border-medium)] hover:bg-[var(--color-danger)]/20 hover:text-[var(--color-danger)] rounded transition-colors"
           >
             Close
           </button>
@@ -306,7 +300,7 @@ function WasmPositionCard({
 export function EmptyPositionState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8">
-      <div className="w-12 h-12 rounded-full bg-[#1e2026] flex items-center justify-center">
+      <div className="w-12 h-12 rounded-full bg-[var(--color-bg-surface)] flex items-center justify-center">
         <svg
           className="w-6 h-6 text-gray-600"
           fill="none"
