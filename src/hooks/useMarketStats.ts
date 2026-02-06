@@ -1,0 +1,158 @@
+/**
+ * @fileoverview 24h 市场统计数据 Hook
+ *
+ * 从 K 线历史和实时 Tick 数据中计算 24h 统计指标：
+ * - 24h 涨跌幅（绝对值 + 百分比）
+ * - 24h 最高价 / 最低价
+ * - 24h 成交量
+ * - Mark Price / Index Price（模拟环境 ≈ 当前价格）
+ * - 模拟资金费率
+ *
+ * @module hooks/useMarketStats
+ */
+
+import { useMemo, useRef, useEffect } from 'react';
+import type { Candle, OrderBook } from '../types/index';
+
+// ============================================================================
+// 类型定义
+// ============================================================================
+
+/** 24h 市场统计数据 */
+export interface MarketStats {
+  /** 24h 价格变动（绝对值） */
+  priceChange: number;
+  /** 24h 价格变动百分比 */
+  priceChangePercent: number;
+  /** 24h 最高价 */
+  high24h: number;
+  /** 24h 最低价 */
+  low24h: number;
+  /** 24h 成交量 (BTC) */
+  volume24h: number;
+  /** 24h 成交额 (USDT) */
+  turnover24h: number;
+  /** Mark Price（标记价格） */
+  markPrice: number;
+  /** Index Price（指数价格） */
+  indexPrice: number;
+  /** 资金费率 (模拟值) */
+  fundingRate: number;
+  /** 下次资金费率结算倒计时 (秒) */
+  fundingCountdown: number;
+}
+
+/** Hook 配置 */
+interface UseMarketStatsOptions {
+  /** K 线历史（用于计算 24h 统计） */
+  candleHistory: Candle[];
+  /** 最新 Tick 数据 */
+  latestData: OrderBook | null;
+  /** 当前价格 */
+  currentPrice?: number;
+}
+
+// ============================================================================
+// 常量
+// ============================================================================
+
+/** 模拟资金费率：0.01%（每 8 小时） */
+const SIMULATED_FUNDING_RATE = 0.0001;
+
+/** 资金费率结算周期（8 小时 = 28800 秒） */
+const FUNDING_INTERVAL_SECONDS = 28800;
+
+// ============================================================================
+// Hook 实现
+// ============================================================================
+
+/**
+ * 计算 24h 市场统计数据
+ *
+ * 在模拟环境下：
+ * - Mark Price = 当前中间价（bids[0] + asks[0]) / 2
+ * - Index Price = 当前成交价
+ * - Funding Rate = 固定模拟值 0.01%
+ */
+export function useMarketStats({
+  candleHistory,
+  latestData,
+  currentPrice,
+}: UseMarketStatsOptions): MarketStats {
+  const price = currentPrice ?? latestData?.price ?? 0;
+
+  // 使用 ref 追踪 24h 前的价格（首根 K 线的开盘价）
+  const openPrice24hRef = useRef<number>(0);
+
+  // 初始化 24h 开盘价：取 K 线历史第一根的开盘价
+  useEffect(() => {
+    if (candleHistory.length > 0 && openPrice24hRef.current === 0) {
+      openPrice24hRef.current = candleHistory[0].open;
+    }
+  }, [candleHistory]);
+
+  // 资金费率倒计时（实时更新）
+  const fundingCountdown = useMemo(() => {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return FUNDING_INTERVAL_SECONDS - (nowSeconds % FUNDING_INTERVAL_SECONDS);
+  }, [latestData?.timestamp]); // 随 tick 更新
+
+  return useMemo(() => {
+    if (candleHistory.length === 0 || price === 0) {
+      return {
+        priceChange: 0,
+        priceChangePercent: 0,
+        high24h: price,
+        low24h: price,
+        volume24h: 0,
+        turnover24h: 0,
+        markPrice: price,
+        indexPrice: price,
+        fundingRate: SIMULATED_FUNDING_RATE,
+        fundingCountdown,
+      };
+    }
+
+    // 从 K 线历史计算 24h 统计
+    const openPrice = openPrice24hRef.current || candleHistory[0].open;
+    let high = -Infinity;
+    let low = Infinity;
+    let totalVolume = 0;
+    let totalTurnover = 0;
+
+    for (let i = 0; i < candleHistory.length; i++) {
+      const c = candleHistory[i];
+      if (c.high > high) high = c.high;
+      if (c.low < low) low = c.low;
+      totalVolume += c.volume;
+      // 估算成交额 = volume × 平均价
+      totalTurnover += c.volume * ((c.high + c.low) / 2);
+    }
+
+    // 如果当前价超出历史范围，更新
+    if (price > high) high = price;
+    if (price < low) low = price;
+
+    const priceChange = price - openPrice;
+    const priceChangePercent = openPrice > 0 ? (priceChange / openPrice) * 100 : 0;
+
+    // Mark Price = order book 中间价（模拟环境）
+    let markPrice = price;
+    if (latestData?.bids?.length && latestData?.asks?.length) {
+      markPrice = (latestData.bids[0][0] + latestData.asks[0][0]) / 2;
+    }
+
+    return {
+      priceChange,
+      priceChangePercent,
+      high24h: high,
+      low24h: low,
+      volume24h: totalVolume,
+      turnover24h: totalTurnover,
+      markPrice,
+      indexPrice: price,
+      fundingRate: SIMULATED_FUNDING_RATE,
+      fundingCountdown,
+    };
+  }, [candleHistory, price, latestData, fundingCountdown]);
+}

@@ -17,6 +17,7 @@ import DepthChart from './components/Dashboard/Chart/DepthChart';
 import { TradeForm, MobileTradebar } from './components/Dashboard/Trade';
 import { useUiStore } from './hooks/ui/useUiStore';
 import type { UiState } from './hooks/ui/useUiStore';
+import { useMarketStats } from './hooks/useMarketStats';
 
 /* ============================================
    Constants
@@ -175,6 +176,13 @@ function App() {
     return () => clearTimeout(t);
   }, [isSwitching]);
 
+  // ========== 24h 市场统计 ==========
+  const marketStats = useMarketStats({
+    candleHistory,
+    latestData,
+    currentPrice: latestData?.price,
+  });
+
   // ========== 图表引用 ==========
   const chartRef = useRef<KLineChartHandle>(null);
 
@@ -298,6 +306,7 @@ function App() {
         onDataSourceChange={handleDataSourceChange}
         connectionStatus={connectionStatus}
         isSwitching={isSwitching}
+        marketStats={marketStats}
       />
 
       {/* ========== 主内容区域 ========== */}
@@ -421,9 +430,8 @@ function App() {
 
             {/* Stats Panel - 单行 3 列 */}
             <StatsPanel
-              latestData={latestData}
               analysisResult={analysisResult}
-              priceColorClass={priceColorClass}
+              marketStats={marketStats}
             />
           </section>
 

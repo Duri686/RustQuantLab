@@ -101,7 +101,7 @@ interface OrderRowProps {
 
 /**
  * 订单行子组件
- * Binance 风格：3 列网格 + 深度背景条
+ * Binance 风格：2 列网格 (Price | Amount) + 深度背景条
  */
 function OrderRow({
   price,
@@ -135,10 +135,11 @@ function OrderRow({
         {price.toFixed(pricePrecision)}
       </span>
 
-      {/* 数量列 - 右对齐 */}
+      {/* 数量列 - 右对齐，智能精度 */}
       <span className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right text-gray-400">
-        {amount.toFixed(5)}
+        {amount >= 1000 ? amount.toFixed(2) : amount >= 1 ? amount.toFixed(4) : amount.toFixed(5)}
       </span>
+
     </div>
   );
 }

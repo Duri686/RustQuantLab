@@ -429,14 +429,13 @@ export interface HeaderProps {
 
 /**
  * StatsPanel 组件 Props
+ * 合约交易信息条：Mark Price / Index Price / Funding Rate / 24h Change / Spread
  */
 export interface StatsPanelProps {
-  /** 最新市场数据 */
-  latestData: OrderBook | null;
-  /** Wasm 分析结果 */
+  /** Wasm 分析结果（用于 Spread） */
   analysisResult: AnalysisResult | null;
-  /** 价格颜色类 */
-  priceColorClass: string;
+  /** 24h 市场统计（来自 useMarketStats） */
+  marketStats?: import('../hooks/useMarketStats').MarketStats;
 }
 
 /**
