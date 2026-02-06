@@ -424,36 +424,36 @@ function App() {
                     <div className="bg-terminal-bg p-2 md:p-3">
                       <div className="h-full flex flex-col justify-end">
                         <div className="space-y-1 animate-pulse">
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
                         </div>
                       </div>
                     </div>
                     {/* 买单区骨架（顶部对齐） */}
                     <div className="bg-terminal-bg p-2 md:p-3">
                       <div className="space-y-1 animate-pulse">
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
+                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
                       </div>
                     </div>
                   </div>
@@ -474,7 +474,7 @@ function App() {
           {/* ========== 交易表单区域 (仅 MOCK 模式下显示) ========== */}
           {/* LIVE 模式下隐藏交易表单，只展示数据 */}
           {dataSource === 'mock' && (
-            <section className="hidden xl:block h-full min-h-0 border-l border-[var(--color-border-dark)]">
+            <section className="hidden xl:block h-full min-h-0 border-l border-border-dark">
               <TradeForm
                 symbol="BTC"
                 currentPrice={latestData?.price ?? 40000}

@@ -29,23 +29,23 @@ const TOAST_STYLES: Record<
   { bg: string; border: string; icon: string }
 > = {
   success: {
-    bg: 'bg-[var(--color-success)]/10',
-    border: 'border-[var(--color-success)]/30',
+    bg: 'bg-success/10',
+    border: 'border-success/30',
     icon: 'var(--color-success)',
   },
   error: {
-    bg: 'bg-[var(--color-danger)]/10',
-    border: 'border-[var(--color-danger)]/30',
+    bg: 'bg-danger/10',
+    border: 'border-danger/30',
     icon: 'var(--color-danger)',
   },
   warning: {
-    bg: 'bg-[var(--color-warning)]/10',
-    border: 'border-[var(--color-warning)]/30',
+    bg: 'bg-warning/10',
+    border: 'border-warning/30',
     icon: 'var(--color-warning)',
   },
   info: {
-    bg: 'bg-[var(--color-info)]/10',
-    border: 'border-[var(--color-info)]/30',
+    bg: 'bg-info/10',
+    border: 'border-info/30',
     icon: 'var(--color-info)',
   },
 };

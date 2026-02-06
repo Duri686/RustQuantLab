@@ -50,7 +50,7 @@ function MobileTradebar({
       className="
         fixed bottom-0 left-0 right-0 z-50
         xl:hidden
-        bg-[var(--color-bg-dark)] border-t border-[var(--color-border-dark)]
+        bg-bg-dark border-t border-border-dark
         px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]
       "
     >
@@ -68,13 +68,12 @@ function MobileTradebar({
         {/* 滑动条 */}
         <div className="flex-1">
           <div className="relative h-2 group">
-            <div className="absolute inset-0 rounded-full bg-[var(--color-border-dark)]" />
+            <div className="absolute inset-0 rounded-full bg-border-dark" />
             <div
               className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
               style={{
                 width: `${percentage}%`,
                 background: `linear-gradient(90deg, var(--color-warning) 0%, var(--color-warning-alt) 100%)`,
-                boxShadow: '0 0 8px color-mix(in srgb, var(--color-warning) 40%, transparent)',
               }}
             />
             <input
@@ -87,11 +86,8 @@ function MobileTradebar({
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[var(--color-warning)] border-2 border-[var(--color-bg-dark)] shadow-lg transition-all duration-75 pointer-events-none"
-              style={{
-                left: `calc(${percentage}% - 8px)`,
-                boxShadow: '0 0 12px color-mix(in srgb, var(--color-warning) 60%, transparent)',
-              }}
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-warning border-2 border-bg-dark shadow-lg transition-all duration-75 pointer-events-none"
+              style={{ left: `calc(${percentage}% - 8px)` }}
             />
           </div>
           <div className="flex justify-between mt-0.5 text-[10px] text-gray-500 font-mono">
@@ -102,7 +98,7 @@ function MobileTradebar({
         </div>
 
         {/* 当前选择金额气泡 */}
-        <div className="shrink-0 px-2 py-1 rounded bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] text-[10px] font-mono text-gray-300">
+        <div className="shrink-0 px-2 py-1 rounded bg-bg-surface border border-border-dark text-[10px] font-mono text-gray-300">
           ${selectedAmount}
         </div>
       </div>
@@ -115,7 +111,7 @@ function MobileTradebar({
             h-11 min-h-[44px] rounded-lg
             font-semibold text-sm text-white
             transition-all active:scale-[0.98]
-            bg-[var(--color-success)]
+            bg-success
           "
           style={{
             boxShadow: '0 2px 8px color-mix(in srgb, var(--color-success) 25%, transparent)',
@@ -129,7 +125,7 @@ function MobileTradebar({
             h-11 min-h-[44px] rounded-lg
             font-semibold text-sm text-white
             transition-all active:scale-[0.98]
-            bg-[var(--color-danger)]
+            bg-danger
           "
           style={{
             boxShadow: '0 2px 8px color-mix(in srgb, var(--color-danger) 25%, transparent)',

@@ -106,7 +106,7 @@ function WasmPositionCard({
 
   return (
     <div
-      className={`p-2.5 rounded bg-[var(--color-bg-surface-elevated)] border-l-2 hover:opacity-90 transition-colors ${
+      className={`p-2.5 rounded bg-bg-surface-elevated border-l-2 hover:opacity-90 transition-colors ${
         isCritical ? 'animate-pulse' : ''
       }`}
       style={{ borderLeftColor: borderColor }}
@@ -132,8 +132,8 @@ function WasmPositionCard({
         <span
           className={`px-1 py-px text-[10px] font-semibold rounded ${
             isLong
-              ? 'bg-[var(--color-success)]/15 text-[var(--color-success)]'
-              : 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
+              ? 'bg-success/15 text-success'
+              : 'bg-danger/15 text-danger'
           }`}
         >
           {isLong ? 'Long' : 'Short'}
@@ -141,7 +141,6 @@ function WasmPositionCard({
         <span className="text-[10px] text-gray-500 font-mono">
           {position.leverage}x
         </span>
-        {/* 风险等级 Badge */}
         <span
           className="text-[10px] px-1 py-px rounded font-medium"
           style={{
@@ -175,7 +174,7 @@ function WasmPositionCard({
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Mark</span>
-          <span className="text-[var(--color-warning-alt)] font-mono tabular-nums">
+          <span className="text-warning-alt font-mono tabular-nums">
             {currentPrice.toFixed(2)}
           </span>
         </div>
@@ -185,7 +184,7 @@ function WasmPositionCard({
           <span className="text-gray-500">Liq. Price</span>
           <span
             className={`font-mono tabular-nums ${
-              isLiqNear ? 'text-[var(--color-danger)]' : 'text-gray-500'
+              isLiqNear ? 'text-danger' : 'text-gray-500'
             }`}
           >
             {liquidationPrice.toFixed(2)}
@@ -209,8 +208,8 @@ function WasmPositionCard({
 
       {/* Risk Warning Banner */}
       {isCritical && riskAssessment?.warningMessage && (
-        <div className="mb-2 px-2 py-1.5 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30 flex items-center justify-center">
-          <span className="text-[10px] text-[var(--color-danger)] leading-none">
+        <div className="mb-2 px-2 py-1.5 rounded bg-danger/10 border border-danger/30 flex items-center justify-center">
+          <span className="text-[10px] text-danger leading-none">
             ⚠️ {riskAssessment.warningMessage}
           </span>
         </div>
@@ -218,7 +217,7 @@ function WasmPositionCard({
 
       {/* 增加保证金输入 (仅逐仓模式) - 融合设计 */}
       {showAddMargin && !isCrossMode && (
-        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-[var(--color-success)]/50">
+        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-success/50">
           <input
             type="number"
             value={marginAmount}
@@ -237,10 +236,10 @@ function WasmPositionCard({
               }
             }}
             placeholder="0.00"
-            className="flex-1 h-full px-2 text-[10px] bg-[var(--color-bg-surface-elevated)] text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
+            className="flex-1 h-full px-2 text-[10px] bg-bg-surface-elevated text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
             autoFocus
           />
-          <span className="px-1.5 text-[9px] text-gray-500 bg-[var(--color-bg-surface-elevated)]">
+          <span className="px-1.5 text-[9px] text-gray-500 bg-bg-surface-elevated">
             USDT
           </span>
           <button
@@ -252,7 +251,7 @@ function WasmPositionCard({
                 setShowAddMargin(false);
               }
             }}
-            className="h-full px-3 text-[9px] font-semibold text-white bg-[var(--color-success)] hover:bg-[var(--color-success)]/80 transition-colors"
+            className="h-full px-3 text-[9px] font-semibold text-white bg-success hover:bg-success/80 transition-colors"
           >
             OK
           </button>
@@ -260,7 +259,7 @@ function WasmPositionCard({
       )}
 
       {/* Row 4: Actions */}
-      <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-border-medium)]">
+      <div className="flex items-center justify-between pt-1.5 border-t border-border-medium">
         <span className="text-[9px] text-gray-600 font-mono">
           距强平 {distanceToLiq.toFixed(1)}%
         </span>
@@ -274,8 +273,8 @@ function WasmPositionCard({
               }}
               className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${
                 showAddMargin
-                  ? 'text-[var(--color-success)] bg-[var(--color-success)]/20 border border-[var(--color-success)]/50'
-                  : 'text-[var(--color-success)] bg-[var(--color-success)]/10 hover:bg-[var(--color-success)]/20 border border-transparent'
+                  ? 'text-success bg-success/20 border border-success/50'
+                  : 'text-success bg-success/10 hover:bg-success/20 border border-transparent'
               }`}
             >
               Add Margin
@@ -283,7 +282,7 @@ function WasmPositionCard({
           )}
           <button
             onClick={() => onClose?.()}
-            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-[var(--color-border-medium)] hover:bg-[var(--color-danger)]/20 hover:text-[var(--color-danger)] rounded transition-colors"
+            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-border-medium hover:bg-danger/20 hover:text-danger rounded transition-colors"
           >
             Close
           </button>
@@ -300,7 +299,7 @@ function WasmPositionCard({
 export function EmptyPositionState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8">
-      <div className="w-12 h-12 rounded-full bg-[var(--color-bg-surface)] flex items-center justify-center">
+      <div className="w-12 h-12 rounded-full bg-bg-surface flex items-center justify-center">
         <svg
           className="w-6 h-6 text-gray-600"
           fill="none"

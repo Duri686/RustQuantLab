@@ -1,5 +1,10 @@
 # Pre-commit Hook: 本地测试必须通过才能提交
 
+# Husky 运行环境 PATH 受限，需手动加载 Cargo 环境
+if [ -f "$HOME/.cargo/env" ]; then
+  . "$HOME/.cargo/env"
+fi
+
 echo ""
 echo "================================================"
 echo "🧪 Running Rust tests before commit..."

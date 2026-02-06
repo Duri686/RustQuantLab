@@ -80,13 +80,13 @@ function FpsMonitor() {
   // FPS 颜色：绿色 >= 50, 黄色 >= 30, 红色 < 30
   const fpsColor =
     fps >= 50
-      ? 'text-[var(--color-success)]'
+      ? 'text-success'
       : fps >= 30
-      ? 'text-[var(--color-warning-alt)]'
-      : 'text-[var(--color-danger)]';
+      ? 'text-warning-alt'
+      : 'text-danger';
 
   return (
-    <div className="hidden md:flex items-center gap-2 px-2 py-0.5 rounded bg-[var(--color-bg-surface)]/80 border border-[var(--color-border-dark)] text-[9px] font-mono">
+    <div className="hidden md:flex items-center gap-2 px-2 py-0.5 rounded bg-bg-surface/80 border border-border-dark text-[9px] font-mono">
       <span className={`${fpsColor} font-semibold`}>{fps} FPS</span>
       <span className="text-gray-500">|</span>
       <span className="text-gray-400">{frameTime}ms</span>
@@ -119,14 +119,14 @@ function DataSourceSwitch({
   const disabled = !!isSwitching;
 
   return (
-    <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
+    <div className="hidden sm:flex items-center gap-1 px-1 py-0.5 rounded-md bg-bg-surface border border-border-dark">
       {/* Mock 按钮 */}
       <button
         onClick={() => onChange('mock')}
         disabled={disabled}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
           !isBinance
-            ? 'bg-[var(--color-warning-alt)]/20 text-[var(--color-warning-alt)] border border-[var(--color-warning-alt)]/30'
+            ? 'bg-warning-alt/20 text-warning-alt border border-warning-alt/30'
             : 'text-gray-500 hover:text-gray-300'
         } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="模拟数据 (开发模式)"
@@ -134,7 +134,7 @@ function DataSourceSwitch({
         <span className="flex items-center gap-1">
           <span>MOCK</span>
           {disabled && !isBinance && (
-            <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-warning-alt)] rounded-full animate-spin" />
+            <span className="w-3 h-3 border-2 border-border-dark border-t-warning-alt rounded-full animate-spin" />
           )}
         </span>
       </button>
@@ -145,7 +145,7 @@ function DataSourceSwitch({
         disabled={disabled}
         className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${
           isBinance
-            ? 'bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30'
+            ? 'bg-success/20 text-success border border-success/30'
             : 'text-gray-500 hover:text-gray-300'
         } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="Binance 实时数据"
@@ -155,13 +155,13 @@ function DataSourceSwitch({
           <span
             className={`w-1.5 h-1.5 rounded-full ${
               isConnected
-                ? 'bg-[var(--color-success)] animate-pulse'
+                ? 'bg-success animate-pulse'
                 : 'bg-gray-500'
             }`}
           />
         )}
         {disabled && isBinance && (
-          <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-success)] rounded-full animate-spin" />
+          <span className="w-3 h-3 border-2 border-border-dark border-t-success rounded-full animate-spin" />
         )}
       </button>
     </div>
@@ -181,10 +181,10 @@ function Header({
   isSwitching,
 }: HeaderProps) {
   return (
-    <header className="h-11 md:h-12 flex-shrink-0 bg-[var(--color-bg-dark)] border-b border-[var(--color-border-dark)] px-2 md:px-4 flex items-center justify-between">
+    <header className="h-11 md:h-12 shrink-0 bg-bg-dark border-b border-border-dark px-2 md:px-4 flex items-center justify-between">
       {/* Logo + FPS Monitor */}
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] flex items-center justify-center">
+        <div className="w-6 h-6 md:w-7 md:h-7 rounded-md bg-bg-surface border border-border-dark flex items-center justify-center">
           <span className="text-sm md:text-base">🦀</span>
         </div>
         <div className="hidden md:block">
@@ -217,18 +217,18 @@ function Header({
         {/* Live 指示器 - 移动端简化为圆点 */}
         {/* LIVE 模式下显示连接状态，MOCK 模式下显示运行状态 */}
         {dataSource === 'binance' ? (
-          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
+          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-bg-surface border border-border-dark">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 connectionStatus === 'connected'
-                  ? 'bg-[var(--color-success)] animate-pulse'
+                  ? 'bg-success animate-pulse'
                   : 'bg-gray-600'
               }`}
             />
             <span
               className={`text-[11px] font-mono ${
                 connectionStatus === 'connected'
-                  ? 'text-[var(--color-success)]'
+                  ? 'text-success'
                   : 'text-gray-500'
               }`}
             >
@@ -241,17 +241,17 @@ function Header({
           </div>
         ) : (
           <>
-            <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)]">
+            <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-bg-surface border border-border-dark">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
                   isRunning
-                    ? 'bg-[var(--color-success)] animate-pulse'
+                    ? 'bg-success animate-pulse'
                     : 'bg-gray-600'
                 }`}
               />
               <span
                 className={`text-[11px] font-mono ${
-                  isRunning ? 'text-[var(--color-success)]' : 'text-gray-500'
+                  isRunning ? 'text-success' : 'text-gray-500'
                 }`}
               >
                 {isRunning ? 'LIVE' : 'PAUSED'}
@@ -265,8 +265,8 @@ function Header({
                 disabled={!!isSwitching}
                 className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
                   isRunning
-                    ? 'bg-[var(--color-bg-surface)] hover:bg-[var(--color-border-dark)] text-[var(--color-warning-alt)] border border-[var(--color-border-dark)]'
-                    : 'bg-[var(--color-success)] hover:opacity-80 text-black'
+                    ? 'bg-bg-surface hover:bg-border-dark text-warning-alt border border-border-dark'
+                    : 'bg-success hover:opacity-80 text-black'
                 } ${isSwitching ? 'opacity-60 cursor-not-allowed' : ''}`}
                 title={isRunning ? '暂停数据流' : '启动数据流'}
               >
@@ -282,8 +282,8 @@ function Header({
 
         {/* 切换中提示 */}
         {isSwitching && (
-          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] text-[11px] font-mono text-gray-400">
-            <span className="w-3 h-3 border-2 border-[var(--color-border-dark)] border-t-[var(--color-warning-alt)] rounded-full animate-spin" />
+          <div className="hidden md:flex items-center gap-2 px-2 py-1 rounded-md bg-bg-surface border border-border-dark text-[11px] font-mono text-gray-400">
+            <span className="w-3 h-3 border-2 border-border-dark border-t-warning-alt rounded-full animate-spin" />
             <span>SWITCHING...</span>
           </div>
         )}
@@ -293,7 +293,7 @@ function Header({
           href="https://github.com/Duri686/RustQuantLab"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors bg-[var(--color-bg-surface)] hover:bg-[var(--color-border-dark)] text-gray-400 hover:text-white border border-[var(--color-border-dark)]"
+          className="w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors bg-bg-surface hover:bg-border-dark text-gray-400 hover:text-white border border-border-dark"
           title="GitHub 仓库"
         >
           <GitHubIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />

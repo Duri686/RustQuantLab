@@ -120,7 +120,7 @@ function TradeInput({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
-          className="w-full h-10 px-3 pr-14 bg-[var(--color-bg-surface)] border border-[var(--color-border-dark)] rounded text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:border-[var(--color-warning)]/50 transition-colors disabled:opacity-50"
+          className="w-full h-10 px-3 pr-14 bg-bg-surface border border-border-dark rounded text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:border-warning/50 transition-colors disabled:opacity-50"
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-mono">
           {suffix}
@@ -285,9 +285,9 @@ function TradeForm({
   );
 
   return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-dark)]">
+    <div className="h-full flex flex-col bg-bg-dark">
       {/* ========== Header: Balance Display ========== */}
-      <div className="shrink-0 h-11 px-4 flex items-center justify-between border-b border-[var(--color-border-dark)]">
+      <div className="shrink-0 h-11 px-4 flex items-center justify-between border-b border-border-dark">
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500">Balance</span>
           <span className="text-xs font-mono font-medium text-white">
@@ -297,7 +297,7 @@ function TradeForm({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500">Avail</span>
-          <span className="text-xs font-mono font-medium text-[var(--color-success)]">
+          <span className="text-xs font-mono font-medium text-success">
             {availableBalance.toLocaleString('en-US', {
               minimumFractionDigits: 2,
             })}
@@ -306,7 +306,7 @@ function TradeForm({
       </div>
 
       {/* ========== Main Content ========== */}
-      <div className="flex-1 min-h-0 flex flex-col px-4 py-4 gap-4">
+      <div className="flex-1 min-h-0 flex flex-col px-4 py-3 gap-3">
         {/* Leverage Slider - 🔴 全仓模式可调整杠杆 */}
         <div className="shrink-0">
           <LeverageSlider
@@ -322,7 +322,7 @@ function TradeForm({
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[var(--color-border-dark)] shrink-0" />
+        <div className="h-px bg-border-dark shrink-0" />
 
         {/* 🔴 保证金模式切换 (Cross/Isolated) - 新订单默认模式 */}
         <div className="shrink-0">
@@ -332,7 +332,7 @@ function TradeForm({
               {marginMode === 'cross' ? '全仓: 共享余额' : '逐仓: 独立保证金'}
             </span>
           </div>
-          <div className="flex rounded bg-[var(--color-bg-surface)] p-0.5">
+          <div className="flex rounded bg-bg-surface p-0.5">
             {MARGIN_MODES.map((mode) => (
               <button
                 key={mode.value}
@@ -342,8 +342,8 @@ function TradeForm({
                   ${
                     marginMode === mode.value
                       ? mode.value === 'cross'
-                        ? 'bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30'
-                        : 'bg-[var(--color-warning)]/20 text-[var(--color-warning)] border border-[var(--color-warning)]/30'
+                        ? 'bg-success/20 text-success border border-success/30'
+                        : 'bg-warning/20 text-warning border border-warning/30'
                       : 'text-gray-500 hover:text-gray-300 border border-transparent'
                   }
                 `}
@@ -355,10 +355,10 @@ function TradeForm({
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[var(--color-border-dark)] shrink-0" />
+        <div className="h-px bg-border-dark shrink-0" />
 
         {/* Order Type Tabs */}
-        <div className="flex rounded bg-[var(--color-bg-surface)] p-0.5 shrink-0">
+        <div className="flex rounded bg-bg-surface p-0.5 shrink-0">
           {ORDER_TYPES.map((type) => (
             <button
               key={type}
@@ -367,7 +367,7 @@ function TradeForm({
                 flex-1 py-2 text-xs font-medium rounded transition-colors
                 ${
                   orderType === type
-                    ? 'bg-[var(--color-border-dark)] text-white'
+                    ? 'bg-border-dark text-white'
                     : 'text-gray-500 hover:text-gray-300'
                 }
               `}
@@ -411,8 +411,8 @@ function TradeForm({
                 flex-1 py-1.5 text-[10px] font-mono rounded transition-colors
                 ${
                   sizePercent === percent
-                    ? 'bg-[var(--color-warning)]/20 text-[var(--color-warning)] border border-[var(--color-warning)]/50'
-                    : 'bg-[var(--color-bg-surface)] text-gray-500 border border-[var(--color-border-dark)] hover:text-gray-300'
+                    ? 'bg-warning/20 text-warning border border-warning/50'
+                    : 'bg-bg-surface text-gray-500 border border-border-dark hover:text-gray-300'
                 }
               `}
             >
@@ -422,7 +422,7 @@ function TradeForm({
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[var(--color-border-dark)] shrink-0" />
+        <div className="h-px bg-border-dark shrink-0" />
 
         {/* 当前仓位提示 */}
         {currentSymbolPosition && (
@@ -431,8 +431,8 @@ function TradeForm({
             <span
               className={
                 currentSymbolPosition.side === 'Long'
-                  ? 'text-[var(--color-success)]'
-                  : 'text-[var(--color-danger)]'
+                  ? 'text-success'
+                  : 'text-danger'
               }
             >
               {currentSymbolPosition.side === 'Long' ? '多' : '空'}{' '}
@@ -503,7 +503,7 @@ function TradeForm({
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[var(--color-border-dark)] shrink-0" />
+        <div className="h-px bg-border-dark shrink-0" />
 
         {/* ========== Position Display (多仓位模式) ========== */}
         <div className="flex-1 min-h-[120px] flex flex-col">
@@ -513,7 +513,7 @@ function TradeForm({
                 Positions
               </span>
               {positions.length > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[var(--color-success)]/20 text-[var(--color-success)]">
+                <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-success/20 text-success">
                   {positions.length} ACTIVE
                 </span>
               )}
@@ -532,16 +532,16 @@ function TradeForm({
               {pendingOrders.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 pb-1">
-                    <span className="text-[10px] text-[var(--color-warning)]">挂单</span>
-                    <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-[var(--color-warning)]/20 text-[var(--color-warning)]">
+                    <span className="text-[10px] text-warning">挂单</span>
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-warning/20 text-warning">
                       {pendingOrders.length}
                     </span>
-                    <div className="flex-1 h-px bg-[var(--color-border-dark)]" />
+                    <div className="flex-1 h-px bg-border-dark" />
                   </div>
                   {pendingOrders.map((order) => (
                     <div
                       key={order.id}
-                      className="p-2 rounded bg-[var(--color-bg-surface)] border-l-2 border-[var(--color-warning)]"
+                      className="p-2 rounded bg-bg-surface border-l-2 border-warning"
                     >
                       <div className="flex items-center justify-between text-[10px]">
                         <div className="flex items-center gap-1.5">
@@ -549,8 +549,8 @@ function TradeForm({
                           <span
                             className={
                               order.side === 'Long'
-                                ? 'text-[var(--color-success)]'
-                                : 'text-[var(--color-danger)]'
+                                ? 'text-success'
+                                : 'text-danger'
                             }
                           >
                             {order.side === 'Long' ? '多' : '空'}
@@ -558,7 +558,7 @@ function TradeForm({
                           <span className="text-gray-500">
                             {order.leverage}x
                           </span>
-                          <span className="px-1 rounded text-[9px] bg-[var(--color-warning)]/20 text-[var(--color-warning)]">
+                          <span className="px-1 rounded text-[9px] bg-warning/20 text-warning">
                             {order.triggerDirection === 'above'
                               ? '等涨'
                               : '等跌'}
@@ -604,7 +604,7 @@ function TradeForm({
                 <>
                   <div className="flex items-center gap-2 pt-2 pb-1">
                     <span className="text-[10px] text-gray-600">已平仓</span>
-                    <div className="flex-1 h-px bg-[var(--color-border-dark)]" />
+                    <div className="flex-1 h-px bg-border-dark" />
                   </div>
                   {closedPositions
                     .slice(-5)
@@ -612,7 +612,7 @@ function TradeForm({
                     .map((pos, idx) => (
                       <div
                         key={`closed-${idx}`}
-                        className="p-2 rounded bg-[var(--color-bg-surface-elevated)]/50 border-l-2 border-gray-600 opacity-60"
+                        className="p-2 rounded bg-bg-surface-elevated/50 border-l-2 border-gray-600 opacity-60"
                       >
                         <div className="flex items-center justify-between text-[10px]">
                           <div className="flex items-center gap-1.5">
@@ -620,8 +620,8 @@ function TradeForm({
                             <span
                               className={
                                 pos.side === 'Long'
-                                  ? 'text-[var(--color-success)]/60'
-                                  : 'text-[var(--color-danger)]/60'
+                                  ? 'text-success/60'
+                                  : 'text-danger/60'
                               }
                             >
                               {pos.side}
@@ -632,7 +632,7 @@ function TradeForm({
                             <span
                               className={`px-1 rounded text-[9px] ${
                                 pos.status === 'liquidated'
-                                  ? 'bg-[var(--color-danger)]/20 text-[var(--color-danger)]'
+                                  ? 'bg-danger/20 text-danger'
                                   : 'bg-gray-700 text-gray-400'
                               }`}
                             >
@@ -644,8 +644,8 @@ function TradeForm({
                           <span
                             className={`font-mono ${
                               (pos.realizedPnl ?? 0) >= 0
-                                ? 'text-[var(--color-success)]/60'
-                                : 'text-[var(--color-danger)]/60'
+                                ? 'text-success/60'
+                                : 'text-danger/60'
                             }`}
                           >
                             {(pos.realizedPnl ?? 0) >= 0 ? '+' : ''}

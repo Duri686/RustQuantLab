@@ -35,7 +35,6 @@ function StatCell({
       <div className="flex items-baseline gap-0.5 md:gap-1">
         <span
           className={`text-[clamp(12px,3vw,16px)] md:text-base font-bold font-mono tabular-nums leading-none ${colorClass}`}
-          style={{ textShadow: '0 0 8px currentColor' }}
         >
           {value}
         </span>
@@ -70,8 +69,8 @@ function StatsPanel({
   return (
     <div
       className="
-        shrink-0 h-10 md:h-12 bg-[var(--color-bg-black)] border-t border-[var(--color-border-dark)]
-        grid grid-cols-3 divide-x divide-[var(--color-border-dark)]
+        shrink-0 h-10 md:h-12 bg-bg-black border-t border-border-dark
+        grid grid-cols-3 divide-x divide-border-dark
       "
     >
       {/* Last Price */}
@@ -85,14 +84,14 @@ function StatsPanel({
       <StatCell
         label="Spread"
         value={`$${analysisResult?.spread?.toFixed(4) ?? '--'}`}
-        colorClass="text-[var(--color-warning-alt)]"
+        colorClass="text-warning-alt"
       />
 
       {/* SMA5 */}
       <StatCell
         label="SMA (5)"
         value={formatSma5()}
-        colorClass="text-[var(--color-cyan)]"
+        colorClass="text-cyan"
       />
     </div>
   );
