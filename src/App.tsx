@@ -13,6 +13,7 @@ import KLineChart, {
   type KLineChartHandle,
 } from './components/Dashboard/Chart';
 import ChartToolbar from './components/Dashboard/Chart/ChartToolbar';
+import DepthChart from './components/Dashboard/Chart/DepthChart';
 import { TradeForm, MobileTradebar } from './components/Dashboard/Trade';
 import { useUiStore } from './hooks/ui/useUiStore';
 import type { UiState } from './hooks/ui/useUiStore';
@@ -347,7 +348,7 @@ function App() {
               onScreenshotClick={handleScreenshot}
             />
 
-            {/* K-Line Chart Area - 移动端图表占高度*/}
+            {/* Chart Area - 移动端图表占高度*/}
             <div className="flex flex-col h-[60vh] md:flex-1 md:h-auto min-h-0">
               {/* Chart Sub-Header */}
               <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 flex items-center justify-between border-b border-border-dark bg-bg-black">
@@ -356,22 +357,37 @@ function App() {
                     {latestData?.symbol ?? 'BTC-USDT'} · Perp
                   </h2>
                   <span className="text-[9px] md:text-[10px] font-mono text-gray-600">
-                    {candleHistory.length} candles
+                    {activeChartType === 'Depth'
+                      ? 'Market Depth'
+                      : `${candleHistory.length} candles`}
                   </span>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 bg-success rounded-sm" />
-                    <span className="w-2 h-2 bg-danger rounded-sm" />
-                  </span>
-                  <span>OHLC</span>
+                  {activeChartType === 'Depth' ? (
+                    <>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 bg-success rounded-sm" />
+                        <span>BID</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 bg-danger rounded-sm" />
+                        <span>ASK</span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 bg-success rounded-sm" />
+                        <span className="w-2 h-2 bg-danger rounded-sm" />
+                      </span>
+                      <span>OHLC</span>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Chart Body */}
               <div className="flex-1 min-h-0 overflow-hidden relative">
-                {/* TODO: AI待确认: 完善图表区域 Skeleton（骨架屏样式/密度/渐变），支持不同布局 */}
-                {/* TODO: AI待确认: 增强移动端切换视觉反馈（震动/Toast/顶部提示条），与桌面端一致 */}
                 {switchVisible && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-black/60 backdrop-blur-[1px]">
                     <div className="flex flex-col items-center gap-2">
@@ -384,14 +400,22 @@ function App() {
                     </div>
                   </div>
                 )}
-                <KLineChart
-                  ref={chartRef}
-                  candleHistory={candleHistory}
-                  currentLiveCandle={currentLiveCandle}
-                  indicatorData={indicatorData}
-                  activeMainIndicators={activeMainIndicators}
-                  activeSubIndicators={activeSubIndicators}
-                />
+                {activeChartType === 'Depth' ? (
+                  <DepthChart
+                    bids={latestData?.bids ?? []}
+                    asks={latestData?.asks ?? []}
+                    price={latestData?.price}
+                  />
+                ) : (
+                  <KLineChart
+                    ref={chartRef}
+                    candleHistory={candleHistory}
+                    currentLiveCandle={currentLiveCandle}
+                    indicatorData={indicatorData}
+                    activeMainIndicators={activeMainIndicators}
+                    activeSubIndicators={activeSubIndicators}
+                  />
+                )}
               </div>
             </div>
 

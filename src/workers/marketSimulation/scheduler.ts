@@ -12,7 +12,7 @@ import {
   getIsRunning,
   setIsRunning,
 } from './state';
-import { generateOrderBook } from './orderbook';
+import { generateOrderBook, resetBook } from './orderbook';
 
 /**
  * 计算下次更新延迟
@@ -80,6 +80,7 @@ export function startGeneration(
   postMessage: PostMessageFn,
 ): void {
   stopGeneration();
+  resetBook();
 
   initializeState(startPrice);
   setIsRunning(true);

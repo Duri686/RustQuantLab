@@ -59,6 +59,6 @@ export {
 
 // 输出模块
 export { generateHistoricalCandles } from './history';
-export { generateOrderBook } from './orderbook';
+export { generateOrderBook, resetBook } from './orderbook';
 export { startGeneration, stopGeneration } from './scheduler';
 
