@@ -42,6 +42,8 @@ export interface ChartToolbarProps {
   onSettingsClick?: () => void;
   /** Callback when screenshot is clicked */
   onScreenshotClick?: () => void;
+  /** K 线收盘倒计时（秒） */
+  candleCountdown?: number;
 }
 
 /* ============================================
@@ -118,6 +120,14 @@ function Divider() {
  * Professional trading chart toolbar mimicking Binance/TradingView style.
  * Provides controls for timeframes, indicators, chart types, and actions.
  */
+/** 格式化倒计时秒数为 HH:MM:SS */
+function formatCountdown(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function ChartToolbar({
   activeTimeframe = '1H',
   onTimeframeChange,
@@ -127,6 +137,7 @@ function ChartToolbar({
   onChartTypeChange,
   onSettingsClick,
   onScreenshotClick,
+  candleCountdown,
 }: ChartToolbarProps) {
   return (
     <div className="h-9 md:h-10 bg-bg-surface-alt border-b border-border-dark px-1 md:px-2 flex items-center justify-between overflow-hidden">
@@ -146,6 +157,16 @@ function ChartToolbar({
               </ToolbarButton>
             ))}
           </div>
+
+          {/* K 线收盘倒计时 */}
+          {candleCountdown != null && (
+            <span
+              className="px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-gray-400 bg-white/5 rounded select-none"
+              title={`${activeTimeframe} K 线收盘倒计时`}
+            >
+              {formatCountdown(candleCountdown)}
+            </span>
+          )}
 
           <Divider />
 

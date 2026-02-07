@@ -11,7 +11,8 @@
  * @module hooks/useMarketStats
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { useCountDown } from 'ahooks';
 import type { Candle, OrderBook } from '../types/index';
 
 // ============================================================================
@@ -40,6 +41,8 @@ export interface MarketStats {
   fundingRate: number;
   /** 下次资金费率结算倒计时 (秒) */
   fundingCountdown: number;
+  /** 当前 K 线收盘倒计时 (秒)，基于选中的时间周期 */
+  candleCountdown: number;
 }
 
 /** Hook 配置 */
@@ -50,6 +53,8 @@ interface UseMarketStatsOptions {
   latestData: OrderBook | null;
   /** 当前价格 */
   currentPrice?: number;
+  /** 当前时间周期（用于 K 线收盘倒计时） */
+  timeframe?: string;
 }
 
 // ============================================================================
@@ -61,6 +66,17 @@ const SIMULATED_FUNDING_RATE = 0.0001;
 
 /** 资金费率结算周期（8 小时 = 28800 秒） */
 const FUNDING_INTERVAL_SECONDS = 28800;
+
+/** 各时间周期对应的秒数 */
+const TIMEFRAME_SECONDS: Record<string, number> = {
+  '1s': 1,
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '1H': 3600,
+  '4H': 14400,
+  '1D': 86400,
+};
 
 // ============================================================================
 // Hook 实现
@@ -78,6 +94,7 @@ export function useMarketStats({
   candleHistory,
   latestData,
   currentPrice,
+  timeframe = '1H',
 }: UseMarketStatsOptions): MarketStats {
   const price = currentPrice ?? latestData?.price ?? 0;
 
@@ -97,6 +114,26 @@ export function useMarketStats({
     return FUNDING_INTERVAL_SECONDS - (nowSeconds % FUNDING_INTERVAL_SECONDS);
   }, [latestData?.timestamp]); // 随 tick 更新
 
+  // K 线收盘倒计时（基于当前时间周期，ahooks useCountDown 驱动）
+  const calcNextClose = useCallback((tf: string) => {
+    const intervalSec = TIMEFRAME_SECONDS[tf] ?? 3600;
+    const nowSec = Math.floor(Date.now() / 1000);
+    return (Math.floor(nowSec / intervalSec) + 1) * intervalSec * 1000;
+  }, []);
+
+  const [targetDate, setTargetDate] = useState(() => calcNextClose(timeframe));
+
+  // 切换 timeframe 时重算目标时间
+  useEffect(() => {
+    setTargetDate(calcNextClose(timeframe));
+  }, [timeframe, calcNextClose]);
+
+  const [countdown] = useCountDown({
+    targetDate,
+    onEnd: () => setTargetDate(calcNextClose(timeframe)),
+  });
+  const candleCountdown = Math.ceil(countdown / 1000);
+
   return useMemo(() => {
     if (candleHistory.length === 0 || price === 0) {
       return {
@@ -110,6 +147,7 @@ export function useMarketStats({
         indexPrice: price,
         fundingRate: SIMULATED_FUNDING_RATE,
         fundingCountdown,
+        candleCountdown,
       };
     }
 
@@ -153,6 +191,7 @@ export function useMarketStats({
       indexPrice: price,
       fundingRate: SIMULATED_FUNDING_RATE,
       fundingCountdown,
+      candleCountdown,
     };
-  }, [candleHistory, price, latestData, fundingCountdown]);
+  }, [candleHistory, price, latestData, fundingCountdown, candleCountdown]);
 }

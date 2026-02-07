@@ -13,20 +13,20 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 # 序列化支持：用于 JS <-> Rust 数据转换
 serde = { version = "1.0", features = ["derive"] }
-serde-wasm-bindgen = "0.4"
+serde-wasm-bindgen = "0.6"
 # JavaScript API 绑定
 js-sys = "0.3"
 web-sys = { version = "0.3", features = ["console"] }
 
 [profile.release]
 # 优化 wasm 体积
-opt-level = "z"        # 最小体积优先
+opt-level = "s"        # 平衡体积与运行速度
 lto = true              # 链接时优化
 codegen-units = 1       # 单代码单元，更好的优化
 strip = true            # 移除调试符号
 panic = "abort"         # 不需要 unwind 代码
 
-# 禁用 wasm-opt (旧版不支持 bulk memory 操作)
+# wasm-opt 禁用: 缓存的旧版 wasm-opt 不支持当前 WASM 输出
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 

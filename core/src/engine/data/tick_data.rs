@@ -52,9 +52,6 @@ impl TickDataManager {
     /// 添加价格数据
     pub fn push_price(&mut self, price: f64) {
         self.price_history.push(price);
-        self.cleanup_if_needed(&mut self.price_history.clone());
-        
-        // 实际清理
         let overflow = self.price_history.len().saturating_sub(self.max_size);
         if overflow >= BATCH_CLEANUP_THRESHOLD {
             self.price_history.drain(0..overflow);
@@ -104,10 +101,6 @@ impl TickDataManager {
         self.volume_history.clear();
     }
 
-    /// 内部: 判断是否需要清理
-    fn cleanup_if_needed(&self, _data: &mut Vec<f64>) {
-        // 占位函数，清理逻辑已内联到 push_* 方法
-    }
 }
 
 impl Default for TickDataManager {

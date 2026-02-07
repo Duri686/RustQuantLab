@@ -312,6 +312,23 @@ export interface WasmAnalysisResult {
   volMa5: number | null;
 }
 
+/**
+ * 合并的 Tick 处理结果
+ *
+ * 将 AnalysisResult + CandleHistory + TradingState 合并为单次 WASM 调用返回，
+ * 减少 3 次跨边界序列化为 1 次。
+ *
+ * @see TickFullResult in core/src/engine/types.rs
+ */
+export interface WasmTickFullResult {
+  /** 技术指标分析结果 */
+  analysis: WasmAnalysisResult;
+  /** 当前活跃周期的 K 线历史 + 指标 */
+  candles: WasmCandleHistory;
+  /** 交易状态快照 */
+  tradingState: import('./trading').TradingState;
+}
+
 /* ============================================================================
    Wasm 模块接口
    ============================================================================ */
@@ -347,6 +364,17 @@ export interface WasmMarketEngine {
    * @throws 解析失败时抛出错误
    */
   on_tick(data: WasmOrderBook): WasmAnalysisResult;
+
+  /**
+   * 处理 Tick 数据更新（合并版）
+   *
+   * 将 on_tick + get_active_candles + get_trading_state 合并为单次 WASM 调用，
+   * 减少 3 次跨边界序列化为 1 次。
+   *
+   * @param data - 订单簿数据
+   * @returns 合并的 TickFullResult { analysis, candles, tradingState }
+   */
+  on_tick_full(data: WasmOrderBook): WasmTickFullResult;
 
   /**
    * 获取当前价格历史长度

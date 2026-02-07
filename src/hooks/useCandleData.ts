@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useInterval } from 'ahooks';
 import type { Candle, OrderBook, IndicatorData } from '../types/index';
 import type {
   WasmAnalysisResult,
@@ -97,9 +98,6 @@ export function useCandleData(
     createEmptyPendingIndicators(),
   );
 
-  /** 定时器 ID */
-  const timerRef = useRef<number | null>(null);
-
   // ========== 使用指标历史 Hook ==========
 
   const { indicatorData, currentIndicators, appendIndicators } =
@@ -177,19 +175,8 @@ export function useCandleData(
   }, [finalizePendingCandle, appendIndicators]);
 
   // ========== 定时器管理 ==========
-
-  useEffect(() => {
-    if (useRustCandles) return; // Rust 模式不使用本地定时器
-
-    timerRef.current = window.setInterval(onIntervalTick, CANDLE_INTERVAL_MS);
-
-    return () => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [onIntervalTick, useRustCandles]);
+  // Rust 模式传 undefined 自动暂停
+  useInterval(onIntervalTick, useRustCandles ? undefined : CANDLE_INTERVAL_MS);
 
   // ========== 处理 Tick 数据 ==========
 

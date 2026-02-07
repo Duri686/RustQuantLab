@@ -14,7 +14,7 @@ import KLineChart, {
 } from './components/Dashboard/Chart';
 import ChartToolbar from './components/Dashboard/Chart/ChartToolbar';
 import DepthChart from './components/Dashboard/Chart/DepthChart';
-import { TradeForm, MobileTradebar } from './components/Dashboard/Trade';
+import { TradePanel } from './components/Dashboard/Trade';
 import { useUiStore } from './hooks/ui/useUiStore';
 import type { UiState } from './hooks/ui/useUiStore';
 import { useMarketStats } from './hooks/useMarketStats';
@@ -101,7 +101,7 @@ function App() {
 
     // 交易状态 (Rust 管理)
     tradingState,
-    position,
+    position: _position,
     riskAssessment,
     hasPosition,
     pendingOrders,
@@ -112,6 +112,7 @@ function App() {
     setLeverage,
     cancelOrder,
     addMargin,
+    estimateLiquidation,
   } = useWasmEngine({
     tickInterval: 100,
     dataSource,
@@ -176,13 +177,6 @@ function App() {
     return () => clearTimeout(t);
   }, [isSwitching]);
 
-  // ========== 24h 市场统计 ==========
-  const marketStats = useMarketStats({
-    candleHistory,
-    latestData,
-    currentPrice: latestData?.price,
-  });
-
   // ========== 图表引用 ==========
   const chartRef = useRef<KLineChartHandle>(null);
 
@@ -192,6 +186,14 @@ function App() {
   const [activeTimeframe, setActiveTimeframe] = useState<Timeframe>(
     (currentTimeframe as Timeframe) ?? '1H',
   );
+
+  // ========== 24h 市场统计 ==========
+  const marketStats = useMarketStats({
+    candleHistory,
+    latestData,
+    currentPrice: latestData?.price,
+    timeframe: activeTimeframe,
+  });
 
   /** 当前激活的指标列表 (UI 状态) */
   const [activeIndicators, setActiveIndicators] = useState<Indicator[]>([
@@ -355,6 +357,7 @@ function App() {
               activeChartType={activeChartType}
               onChartTypeChange={handleChartTypeChange}
               onScreenshotClick={handleScreenshot}
+              candleCountdown={marketStats?.candleCountdown}
             />
 
             {/* Chart Area - 移动端图表占高度*/}
@@ -503,29 +506,27 @@ function App() {
             </div>
           </section>
 
-          {/* ========== 交易表单区域 (仅 MOCK 模式下显示) ========== */}
-          {/* LIVE 模式下隐藏交易表单，只展示数据 */}
+          {/* ========== 交易面板区域 (仅 MOCK 模式下显示) ========== */}
+          {/* LIVE 模式下隐藏交易面板，只展示数据 */}
           {dataSource === 'mock' && (
             <section className="hidden xl:block h-full min-h-0 border-l border-border-dark">
-              <TradeForm
+              <TradePanel
                 symbol="BTC"
                 currentPrice={latestData?.price ?? 40000}
-                // Wasm Trading State
                 balance={tradingState?.balance ?? 10000}
                 availableBalance={tradingState?.availableBalance ?? 10000}
                 currentLeverage={tradingState?.leverage ?? 10}
-                position={position}
                 positions={tradingState?.positions ?? []}
                 closedPositions={tradingState?.closedPositions ?? []}
                 riskAssessment={riskAssessment}
                 hasPosition={hasPosition}
                 pendingOrders={pendingOrders}
-                // Wasm Actions
                 onPlaceOrder={placeOrder}
                 onClosePosition={(positionId) => closePosition(positionId)}
                 onSetLeverage={setLeverage}
                 onCancelOrder={cancelOrder}
                 onAddMargin={addMargin}
+                onEstimateLiquidation={estimateLiquidation}
               />
             </section>
           )}
@@ -533,19 +534,28 @@ function App() {
       </main>
 
       {/* ========== 移动端 Sticky 底部交易栏 (仅 MOCK 模式下显示) ========== */}
-      {/* LIVE 模式下隐藏交易栏，只展示数据 */}
+      {/* TradePanel 内部已包含移动端 Bottom Sheet，此处仅渲染移动端部分 */}
       {dataSource === 'mock' && (
-        <MobileTradebar
-          currentPrice={latestData?.price ?? 40000}
-          onBuy={() => {
-            // 移动端快速买入：市价单，固定数量
-            placeOrder('LONG', 0.01, tradingState?.leverage ?? 10);
-          }}
-          onSell={() => {
-            // 移动端快速卖出：市价单，固定数量
-            placeOrder('SHORT', 0.01, tradingState?.leverage ?? 10);
-          }}
-        />
+        <div className="xl:hidden">
+          <TradePanel
+            symbol="BTC"
+            currentPrice={latestData?.price ?? 40000}
+            balance={tradingState?.balance ?? 10000}
+            availableBalance={tradingState?.availableBalance ?? 10000}
+            currentLeverage={tradingState?.leverage ?? 10}
+            positions={tradingState?.positions ?? []}
+            closedPositions={tradingState?.closedPositions ?? []}
+            riskAssessment={riskAssessment}
+            hasPosition={hasPosition}
+            pendingOrders={pendingOrders}
+            onPlaceOrder={placeOrder}
+            onClosePosition={(positionId) => closePosition(positionId)}
+            onSetLeverage={setLeverage}
+            onCancelOrder={cancelOrder}
+            onAddMargin={addMargin}
+            onEstimateLiquidation={estimateLiquidation}
+          />
+        </div>
       )}
     </div>
   );

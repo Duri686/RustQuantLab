@@ -140,6 +140,7 @@ impl Candle {
     }
 
     /// 更新 K 线 (接收新 tick)
+    #[inline]
     pub fn update(&mut self, price: f64, volume: f64) {
         self.high = self.high.max(price);
         self.low = self.low.min(price);
@@ -199,6 +200,25 @@ pub struct IndicatorHistory {
     pub macd_hist: Vec<Option<f64>>,
     /// RSI(14) 历史
     pub rsi14: Vec<Option<f64>>,
+}
+
+impl IndicatorHistory {
+    /// 移除前 n 个元素（当 K 线历史溢出时同步裁剪）
+    pub fn drain_front(&mut self, n: usize) {
+        if n == 0 { return; }
+        self.ma7.drain(0..n.min(self.ma7.len()));
+        self.ma25.drain(0..n.min(self.ma25.len()));
+        self.ma99.drain(0..n.min(self.ma99.len()));
+        self.ema7.drain(0..n.min(self.ema7.len()));
+        self.ema25.drain(0..n.min(self.ema25.len()));
+        self.boll_upper.drain(0..n.min(self.boll_upper.len()));
+        self.boll_mid.drain(0..n.min(self.boll_mid.len()));
+        self.boll_lower.drain(0..n.min(self.boll_lower.len()));
+        self.macd_dif.drain(0..n.min(self.macd_dif.len()));
+        self.macd_dea.drain(0..n.min(self.macd_dea.len()));
+        self.macd_hist.drain(0..n.min(self.macd_hist.len()));
+        self.rsi14.drain(0..n.min(self.rsi14.len()));
+    }
 }
 
 // ============================================================================

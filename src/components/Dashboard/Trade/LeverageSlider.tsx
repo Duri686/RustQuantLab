@@ -1,15 +1,13 @@
 import { memo, useCallback } from 'react';
+import { LEVERAGE_CONFIG, getLeverageRiskLevel } from '../../../config/tradingConfig';
 
 /* ============================================
-   Constants
+   Constants (from tradingConfig)
    ============================================ */
 
-/** Leverage snap points for quick selection */
-const LEVERAGE_STEPS = [1, 10, 20, 50, 100, 125] as const;
-
-/** Min and max leverage values */
-const MIN_LEVERAGE = 1;
-const MAX_LEVERAGE = 125;
+const LEVERAGE_STEPS = LEVERAGE_CONFIG.steps;
+const MIN_LEVERAGE = LEVERAGE_CONFIG.min;
+const MAX_LEVERAGE = LEVERAGE_CONFIG.max;
 
 /* ============================================
    Props Interface
@@ -53,13 +51,16 @@ function LeverageSlider({ value, onChange, disabled = false }: LeverageSliderPro
     [onChange, disabled]
   );
 
+  const risk = getLeverageRiskLevel(value);
+  const isExtreme = risk.level === 'extreme';
+
   return (
     <div className="space-y-3">
       {/* Leverage Display */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-gray-400">Leverage</span>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold font-mono text-warning">
+          <span className={`text-lg font-bold font-mono ${risk.colorClass} ${isExtreme ? 'animate-pulse' : ''}`}>
             {value}x
           </span>
         </div>
@@ -125,10 +126,20 @@ function LeverageSlider({ value, onChange, disabled = false }: LeverageSliderPro
           <div className="w-1/3 h-full bg-warning-alt" />
           <div className="w-1/3 h-full bg-danger" />
         </div>
-        <span className="text-[9px] text-gray-500 font-mono">
-          {value <= 10 ? 'Low' : value <= 50 ? 'Medium' : 'High'} Risk
+        <span className={`text-[9px] font-mono ${risk.colorClass}`}>
+          {risk.label}
         </span>
       </div>
+
+      {/* 高杠杆内联警告 (>75x) */}
+      {value > LEVERAGE_CONFIG.dangerThreshold && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-danger/10 border border-danger/20">
+          <span className="text-danger text-[10px] shrink-0">⚠</span>
+          <span className="text-danger text-[10px] leading-tight">
+            极高风险: 爆仓价格将非常接近开仓价
+          </span>
+        </div>
+      )}
     </div>
   );
 }

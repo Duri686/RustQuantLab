@@ -75,7 +75,7 @@ impl LimitOrderHandler {
         pending_events.push(EngineEvent::LimitOrderCreated {
             order_id: order_id.clone(),
             symbol: req.symbol.clone(),
-            side: format!("{:?}", order_side),
+            side: order_side.to_string(),
             size: req.size,
             limit_price,
             leverage,

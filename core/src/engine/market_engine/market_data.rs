@@ -3,7 +3,7 @@
 //! 负责 Tick 数据处理、K 线构建、指标计算
 
 use crate::indicators;
-use crate::models::{AnalysisResult, CandleHistory, OrderBook, Timeframe};
+use crate::models::{AnalysisResult, CandleHistory, IndicatorHistory, OrderBook, Timeframe};
 use crate::engine::data::{CandleAggregator, CandleIndicatorCalculator};
 use super::MarketEngine;
 
@@ -14,24 +14,10 @@ impl MarketEngine {
         // 1. 更新 Tick 数据
         self.tick_data.push_price(order_book.price);
         
-        // 🔍 成交量追踪日志：Rust 引擎接收
         let volume = if let Some(provided_volume) = order_book.volume {
-            // 使用提供的成交量（来自 Binance K 线数据）
-            // 注意：这是该 K 线的累计成交量，不是增量
-            // 对于实时 K 线，我们需要计算增量
-            web_sys::console::log_1(&format!(
-                "[VOL追踪] 🦀 Rust process_tick: 使用提供的成交量={:.4}",
-                provided_volume
-            ).into());
             provided_volume
         } else {
-            // 回退到估算方法（用于 MOCK 数据）
-            let estimated = self.tick_data.estimate_volume(order_book);
-            web_sys::console::log_1(&format!(
-                "[VOL追踪] 🦀 Rust process_tick: 成交量未提供，使用估算值={:.4}",
-                estimated
-            ).into());
-            estimated
+            self.tick_data.estimate_volume(order_book)
         };
         
         self.tick_data.push_volume(volume);
@@ -50,17 +36,29 @@ impl MarketEngine {
 
     /// 构建 K 线历史数据
     ///
-    /// 指标历史包含已完成的 K 线 + 当前实时 K 线 (currentCandle)。
-    /// 这确保了最新一根 K 线的均线会随着实时 tick 动态更新。
+    /// 使用缓存的指标历史（与已完成 K 线对齐），仅对当前正在形成的 K 线
+    /// 增量计算一次指标值。相比之前的 O(n²) 全量重算，降为 O(n)。
+    ///
     /// 前端 allCandles = candles + currentCandle，指标数组长度与之对齐。
     pub(crate) fn build_candle_history(&self, tf: Timeframe, timeframe_str: &str) -> CandleHistory {
         let cache = self.candle_cache.get(&tf);
         let candles = cache.map(|c| c.history.clone()).unwrap_or_default();
         let current_candle = cache.and_then(|c| c.current.clone());
-        
-        // 指标历史包含 currentCandle，这样最新 K 线的均线会实时更新
-        // indicators 数组长度 = candles.len() + (current_candle.is_some() ? 1 : 0)
-        let indicators = CandleIndicatorCalculator::compute(&candles, current_candle.as_ref());
+
+        // 使用缓存的指标（已完成 K 线部分）+ 增量计算当前 K 线的指标
+        let indicators = match cache {
+            Some(c) => {
+                let mut ind = c.cached_indicators.clone();
+                if let Some(curr) = &current_candle {
+                    // 只为当前 K 线计算一次指标（O(n) 而非 O(n²)）
+                    let mut closes: Vec<f64> = candles.iter().map(|c| c.close).collect();
+                    closes.push(curr.close);
+                    CandleIndicatorCalculator::append_last(&mut ind, &closes);
+                }
+                ind
+            }
+            None => IndicatorHistory::default(),
+        };
 
         CandleHistory {
             timeframe: timeframe_str.to_string(),

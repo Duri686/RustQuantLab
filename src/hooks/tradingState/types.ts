@@ -35,6 +35,20 @@ export interface TradingWasmEngine {
   cancel_all_orders(): CancelOrderResult;
   // 逐仓保证金管理
   add_margin(positionId: string, amount: number): AddMarginResult;
+  // 预估强平价格 (UI 下单前风险预览)
+  estimate_liquidation_price(
+    side: string,
+    size: number,
+    leverage: number,
+    margin_mode: string,
+  ): EstimateLiquidationResult;
+}
+
+/** 预估强平价格结果 (对应 Rust EstimateLiquidationResult) */
+export interface EstimateLiquidationResult {
+  liquidationPrice: number;
+  margin: number;
+  maintenanceMargin: number;
 }
 
 /** 增加保证金结果 */

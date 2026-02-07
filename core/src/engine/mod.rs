@@ -13,6 +13,7 @@
 
 // 公共类型模块
 pub mod types;
+pub mod error;
 
 // 功能子模块
 pub mod data;

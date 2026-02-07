@@ -91,7 +91,7 @@ impl TradingExecutor {
 
         pending_events.push(EngineEvent::PositionOpened {
             symbol: display_symbol,
-            side: format!("{:?}", side),
+            side: side.to_string(),
             size,
             entry_price,
             leverage,
@@ -152,7 +152,7 @@ impl TradingExecutor {
 
         pending_events.push(EngineEvent::PositionMerged {
             symbol: symbol.to_string(),
-            side: format!("{:?}", side),
+            side: side.to_string(),
             added_size: add_size,
             new_size,
             old_entry_price: old_entry,

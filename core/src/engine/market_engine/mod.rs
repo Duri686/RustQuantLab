@@ -17,7 +17,8 @@ use crate::trading::{PendingOrderManager, PositionManager, TradingAccount};
 
 use super::data::{CandleAggregator, CandleCache, TickDataManager};
 use super::trading::SimOrderExecutor;
-use super::types::{AddMarginResult, CancelOrderResult, EngineEvent, OpenPositionRequest};
+use super::error::EngineError;
+use super::types::{AddMarginResult, CancelOrderResult, EngineEvent, EstimateLiquidationResult, OpenPositionRequest, TickFullResult, PRIMARY_SYMBOL};
 
 // 测试模块需要的额外导入
 #[cfg(test)]
@@ -27,7 +28,7 @@ use crate::trading::Position;
 macro_rules! to_js {
     ($expr:expr) => {
         serde_wasm_bindgen::to_value(&$expr)
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+            .map_err(|e| JsValue::from(EngineError::Serialize(e.to_string())))
     };
 }
 
@@ -35,7 +36,7 @@ macro_rules! to_js {
 macro_rules! from_js {
     ($val:expr, $ty:ty, $msg:expr) => {
         serde_wasm_bindgen::from_value::<$ty>($val)
-            .map_err(|e| JsValue::from_str(&format!("{}: {}", $msg, e)))
+            .map_err(|e| JsValue::from(EngineError::Deserialize(format!("{}: {}", $msg, e))))
     };
 }
 
@@ -51,27 +52,27 @@ macro_rules! from_js {
 #[wasm_bindgen]
 pub struct MarketEngine {
     /// Tick 数据管理器
-    pub(crate) tick_data: TickDataManager,
+    pub(super) tick_data: TickDataManager,
     /// 当前激活的时间周期
-    pub(crate) active_timeframe: Timeframe,
+    pub(super) active_timeframe: Timeframe,
     /// 各时间周期的 K 线历史
-    pub(crate) candle_cache: HashMap<Timeframe, CandleCache>,
+    pub(super) candle_cache: HashMap<Timeframe, CandleCache>,
     /// 风控配置
-    pub(crate) risk_config: RiskConfig,
+    pub(super) risk_config: RiskConfig,
     /// 交易账户
-    pub(crate) account: TradingAccount,
+    pub(super) account: TradingAccount,
     /// 当前市场价格
-    pub(crate) current_price: f64,
+    pub(super) current_price: f64,
     /// 各交易对的价格缓存
-    pub(crate) symbol_prices: HashMap<String, f64>,
+    pub(super) symbol_prices: HashMap<String, f64>,
     /// 仓位管理器
-    pub(crate) position_manager: PositionManager,
+    pub(super) position_manager: PositionManager,
     /// 挂单管理器
-    pub(crate) pending_order_manager: PendingOrderManager,
+    pub(super) pending_order_manager: PendingOrderManager,
     /// 最新风险评估结果
-    pub(crate) risk_assessment: Option<LiquidationResult>,
+    pub(super) risk_assessment: Option<LiquidationResult>,
     /// 待消费的事件队列
-    pub(crate) pending_events: Vec<EngineEvent>,
+    pub(super) pending_events: Vec<EngineEvent>,
 }
 
 // ============================================================================
@@ -104,6 +105,24 @@ impl MarketEngine {
         to_js!(self.compute_all_indicators(&order_book))
     }
 
+    /// 处理 Tick 数据更新（合并版）
+    ///
+    /// 将 on_tick + get_active_candles + get_trading_state 合并为单次 WASM 调用，
+    /// 减少 3 次跨边界序列化为 1 次。
+    ///
+    /// @returns TickFullResult { analysis, candles, tradingState }
+    pub fn on_tick_full(&mut self, val: JsValue) -> Result<JsValue, JsValue> {
+        let order_book: OrderBook = from_js!(val, OrderBook, "解析 OrderBook 失败")?;
+        self.process_tick(&order_book);
+
+        let analysis = self.compute_all_indicators(&order_book);
+        let tf = self.active_timeframe;
+        let candles = self.build_candle_history(tf, tf.as_str());
+        let trading_state = self.build_trading_state();
+
+        to_js!(TickFullResult { analysis, candles, trading_state })
+    }
+
     pub fn history_length(&self) -> usize { self.tick_data.len() }
 
     pub fn clear_history(&mut self) {
@@ -119,7 +138,7 @@ impl MarketEngine {
 
     pub fn get_candles(&self, timeframe_str: &str) -> Result<JsValue, JsValue> {
         let tf: Timeframe = timeframe_str.parse()
-            .map_err(|e: String| JsValue::from_str(&e))?;
+            .map_err(|e: String| JsValue::from(EngineError::Parse(e)))?;
         to_js!(self.build_candle_history(tf, timeframe_str))
     }
 
@@ -144,7 +163,7 @@ impl MarketEngine {
     pub fn load_history_candles(&mut self, timeframe_str: &str, candles_js: JsValue) -> Result<usize, JsValue> {
         // 解析时间周期
         let tf: Timeframe = timeframe_str.parse()
-            .map_err(|e: String| JsValue::from_str(&e))?;
+            .map_err(|e: String| JsValue::from(EngineError::Parse(e)))?;
 
         // 解析 K 线数据
         let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析历史 K 线失败")?;
@@ -174,7 +193,7 @@ impl MarketEngine {
         let candles: Vec<Candle> = from_js!(candles_js, Vec<Candle>, "解析 1s K 线失败")?;
 
         if candles.is_empty() {
-            return Err(JsValue::from_str("历史 K 线数据为空"));
+            return Err(JsValue::from(EngineError::Validation("历史 K 线数据为空".into())));
         }
 
         // 同步当前价格状态（使用最后一根 K 线的收盘价）
@@ -284,7 +303,7 @@ impl MarketEngine {
     }
 
     pub fn close_position_by_symbol(&mut self, symbol: Option<String>, exit_price: Option<f64>, close_size: Option<f64>) -> Result<JsValue, JsValue> {
-        let sym = symbol.unwrap_or_else(|| "BTCUSDT".to_string());
+        let sym = symbol.unwrap_or_else(|| PRIMARY_SYMBOL.to_string());
         let price = exit_price.unwrap_or(self.current_price);
         to_js!(self.close_position_internal(&sym, price, close_size, false))
     }
@@ -305,6 +324,71 @@ impl MarketEngine {
     pub fn cancel_all_orders(&mut self) -> Result<JsValue, JsValue> {
         let released = self.pending_order_manager.cancel_all();
         to_js!(CancelOrderResult { success: true, message: format!("已取消所有挂单，解冻保证金 {:.2} USDT", released), released_margin: released })
+    }
+
+    /// 预估开仓后的强平价格 (不实际开仓)
+    ///
+    /// 用于 UI 下单前的风险预览，复用 RiskCalculator 的计算逻辑
+    ///
+    /// @param side - "long" | "short"
+    /// @param size - 开仓数量 (BTC)
+    /// @param leverage - 杠杆倍数
+    /// @param margin_mode - "cross" | "isolated"
+    /// @returns EstimateLiquidationResult { liquidationPrice, margin, maintenanceMargin }
+    pub fn estimate_liquidation_price(
+        &self,
+        side: &str,
+        size: f64,
+        leverage: u8,
+        margin_mode: &str,
+    ) -> Result<JsValue, JsValue> {
+        use crate::risk::{PositionSide, RiskCalculator};
+
+        let price = self.current_price;
+        if price <= 0.0 || size <= 0.0 || leverage == 0 {
+            return to_js!(EstimateLiquidationResult {
+                liquidation_price: 0.0,
+                margin: 0.0,
+                maintenance_margin: 0.0,
+            });
+        }
+
+        let pos_side = if side.to_lowercase() == "long" {
+            PositionSide::Long
+        } else {
+            PositionSide::Short
+        };
+
+        // 计算名义价值和保证金
+        let notional = size * price;
+        let margin = notional / leverage as f64;
+        let mmr = self.risk_config.tiers.first()
+            .map(|t| t.maintenance_margin_rate)
+            .unwrap_or(0.005);
+        let maintenance_margin = notional * mmr;
+
+        // 根据保证金模式计算强平价格
+        let liq_price = if margin_mode.to_lowercase() == "cross" {
+            // 全仓模式：基于账户权益
+            let account_equity = self.account.balance()
+                + self.position_manager.total_unrealized_pnl();
+            RiskCalculator::calculate_cross_liquidation_price(
+                price,
+                account_equity,
+                maintenance_margin,
+                size,
+                pos_side,
+            )
+        } else {
+            // 逐仓模式：基于单仓位保证金
+            RiskCalculator::calculate_liquidation_price(price, leverage, pos_side, mmr)
+        };
+
+        to_js!(EstimateLiquidationResult {
+            liquidation_price: liq_price,
+            margin,
+            maintenance_margin,
+        })
     }
 }
 

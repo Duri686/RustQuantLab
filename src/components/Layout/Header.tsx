@@ -1,4 +1,5 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useCallback } from 'react';
+import { useInterval } from 'ahooks';
 import type { DataSource } from '../../types/index';
 import { useFpsMonitor } from '../../hooks/useFpsMonitor';
 import { getWasmMemoryUsage } from '../../hooks/tradingEngine/wasmSingleton';
@@ -72,12 +73,9 @@ function FpsMonitor() {
     pages: number;
   } | null>(null);
 
-  useEffect(() => {
-    const updateMemory = () => setWasmMemory(getWasmMemoryUsage());
-    updateMemory();
-    const interval = setInterval(updateMemory, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  useInterval(() => {
+    setWasmMemory(getWasmMemoryUsage());
+  }, 1000, { immediate: true });
 
   const fpsColor =
     fps >= 50 ? 'text-success' : fps >= 30 ? 'text-warning-alt' : 'text-danger';
@@ -289,7 +287,7 @@ function Header({
             colorClass={(marketStats?.fundingRate ?? 0) >= 0 ? 'text-success' : 'text-danger'}
           />
           <TickerCell
-            label="Countdown"
+            label="Funding Countdown"
             value={formatFundingCountdown(marketStats?.fundingCountdown ?? 0)}
             colorClass="text-gray-300"
           />

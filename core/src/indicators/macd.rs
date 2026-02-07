@@ -30,49 +30,36 @@ pub fn calculate_macd(
     let k_slow = 2.0 / (slow as f64 + 1.0);
     let k_signal = 2.0 / (signal as f64 + 1.0);
 
+    // Seed EMAs with SMA of initial periods
     let mut ema_fast: f64 = data[..fast].iter().sum::<f64>() / fast as f64;
-    for &price in &data[fast..] {
+    let mut ema_slow: f64 = data[..slow].iter().sum::<f64>() / slow as f64;
+
+    // Phase A: fast EMA 先行更新 (fast..slow 区间，slow EMA 尚未生效)
+    for &price in &data[fast..slow] {
         ema_fast = price * k_fast + ema_fast * (1.0 - k_fast);
     }
 
-    let mut ema_slow: f64 = data[..slow].iter().sum::<f64>() / slow as f64;
+    // Phase B: 同时更新两条 EMA 并收集 DIF 历史
+    let mut dif_history: Vec<f64> = Vec::with_capacity(data.len() - slow);
     for &price in &data[slow..] {
+        ema_fast = price * k_fast + ema_fast * (1.0 - k_fast);
         ema_slow = price * k_slow + ema_slow * (1.0 - k_slow);
+        dif_history.push(ema_fast - ema_slow);
     }
 
     let dif = ema_fast - ema_slow;
 
-    let mut dif_history: Vec<f64> = Vec::with_capacity(data.len() - slow);
-
-    let mut ema_fast_hist = data[..fast].iter().sum::<f64>() / fast as f64;
-    let mut ema_slow_hist = data[..slow].iter().sum::<f64>() / slow as f64;
-
-    for i in slow..data.len() {
-        if i >= fast {
-            ema_fast_hist = data[i] * k_fast + ema_fast_hist * (1.0 - k_fast);
-        }
-        ema_slow_hist = data[i] * k_slow + ema_slow_hist * (1.0 - k_slow);
-        dif_history.push(ema_fast_hist - ema_slow_hist);
-    }
-
     if dif_history.len() < signal {
-        return Some(MacdResult {
-            dif,
-            dea: dif,
-            hist: 0.0,
-        });
+        return Some(MacdResult { dif, dea: dif, hist: 0.0 });
     }
 
+    // 计算信号线 (DEA = EMA of DIF)
     let mut dea: f64 = dif_history[..signal].iter().sum::<f64>() / signal as f64;
     for &d in &dif_history[signal..] {
         dea = d * k_signal + dea * (1.0 - k_signal);
     }
 
-    Some(MacdResult {
-        dif,
-        dea,
-        hist: (dif - dea),
-    })
+    Some(MacdResult { dif, dea, hist: dif - dea })
 }
 
 #[cfg(test)]

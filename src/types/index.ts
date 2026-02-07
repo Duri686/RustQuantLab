@@ -272,6 +272,7 @@ export interface IndicatorData {
  */
 export interface MarketEngineInstance {
   on_tick: (data: OrderBook) => AnalysisResult;
+  on_tick_full: (data: OrderBook) => import('../types/wasm').WasmTickFullResult;
   history_length: () => number;
   clear_history: () => void;
   free: () => void;

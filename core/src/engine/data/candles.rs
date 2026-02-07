@@ -8,7 +8,7 @@
 //! - 基于 K 线的指标历史计算
 
 use std::collections::HashMap;
-use crate::indicators;
+use crate::indicators as indicators_mod;
 use crate::models::{Candle, IndicatorHistory, Timeframe};
 
 // ============================================================================
@@ -29,6 +29,8 @@ pub(crate) struct CandleCache {
     pub history: Vec<Candle>,
     /// 当前正在形成的 K 线
     pub current: Option<Candle>,
+    /// 缓存的指标历史（与 history 长度对齐，避免每 tick O(n²) 重算）
+    pub cached_indicators: IndicatorHistory,
 }
 
 impl CandleCache {
@@ -36,6 +38,7 @@ impl CandleCache {
         CandleCache {
             history: Vec::with_capacity(MAX_CANDLE_HISTORY),
             current: None,
+            cached_indicators: IndicatorHistory::default(),
         }
     }
 
@@ -67,6 +70,9 @@ impl CandleCache {
 
         // 其余放入历史
         self.history.extend(candles);
+
+        // 重建缓存的指标历史（仅在加载时执行一次，O(n²) 可接受）
+        self.cached_indicators = CandleIndicatorCalculator::compute(&self.history, None);
     }
 }
 
@@ -114,14 +120,9 @@ impl CandleAggregator {
         candles_s1: Vec<Candle>,
     ) -> Vec<(String, usize)> {
         let mut results = Vec::new();
-
-        // 1. 直接加载 1s 到缓存
         let s1_count = candles_s1.len();
-        let cache_s1 = candle_cache.entry(Timeframe::S1).or_insert_with(CandleCache::new);
-        cache_s1.load_history(candles_s1.clone());
-        results.push(("1s".to_string(), s1_count));
 
-        // 2. 聚合到高周期
+        // 1. 先聚合高周期（只需 &candles_s1，避免 clone）
         let higher_timeframes = [
             Timeframe::M1,
             Timeframe::M5,
@@ -138,6 +139,12 @@ impl CandleAggregator {
             cache.load_history(aggregated);
             results.push((tf.as_str().to_string(), count));
         }
+
+        // 2. 最后 move candles_s1 到 S1 缓存（零拷贝）
+        let cache_s1 = candle_cache.entry(Timeframe::S1).or_insert_with(CandleCache::new);
+        cache_s1.load_history(candles_s1);
+        // S1 放在结果最前面
+        results.insert(0, ("1s".to_string(), s1_count));
 
         results
     }
@@ -165,9 +172,8 @@ impl CandleAggregator {
                     curr.tick_count += candle.tick_count;
                 }
                 Some(curr) => {
-                    // 新周期，保存当前 K 线，开始新的
-                    result.push(curr.clone());
-                    *curr = Candle {
+                    // 新周期，保存当前 K 线，开始新的（用 replace 避免 clone）
+                    let completed = std::mem::replace(curr, Candle {
                         time: aligned_time,
                         open: candle.open,
                         high: candle.high,
@@ -175,7 +181,8 @@ impl CandleAggregator {
                         close: candle.close,
                         volume: candle.volume,
                         tick_count: candle.tick_count,
-                    };
+                    });
+                    result.push(completed);
                 }
                 None => {
                     // 首根 K 线
@@ -229,10 +236,15 @@ impl CandleAggregator {
                     let completed = current_candle.clone();
                     cache.history.push(completed);
 
-                    // 维护历史容量
+                    // 增量计算新完成 K 线的指标（O(n) 而非 O(n²)）
+                    let closes: Vec<f64> = cache.history.iter().map(|c| c.close).collect();
+                    CandleIndicatorCalculator::append_last(&mut cache.cached_indicators, &closes);
+
+                    // 维护历史容量（同步裁剪指标缓存）
                     if cache.history.len() > MAX_CANDLE_HISTORY {
                         let overflow = cache.history.len() - MAX_CANDLE_HISTORY;
                         cache.history.drain(0..overflow);
+                        cache.cached_indicators.drain_front(overflow);
                     }
 
                     // 创建新 K 线
@@ -255,7 +267,43 @@ impl CandleAggregator {
 pub(crate) struct CandleIndicatorCalculator;
 
 impl CandleIndicatorCalculator {
-    /// 基于 K 线收盘价计算完整的指标历史
+    /// 增量追加：只计算最后一个位置的指标值并 push 到已有 IndicatorHistory
+    ///
+    /// `closes` 包含到当前位置为止的所有收盘价。
+    /// 此方法用全量 slice 调用各指标函数（对 SMA/BOLL 是 O(period)，
+    /// 对 EMA/MACD/RSI 是 O(n)），但只执行一次而非 N 次。
+    /// 相比原始 O(n²) 循环，每 tick 降为 O(n)。
+    pub fn append_last(indicators: &mut IndicatorHistory, closes: &[f64]) {
+        indicators.ma7.push(indicators_mod::calculate_sma(closes, 7));
+        indicators.ma25.push(indicators_mod::calculate_sma(closes, 25));
+        indicators.ma99.push(indicators_mod::calculate_sma(closes, 99));
+        indicators.ema7.push(indicators_mod::calculate_ema(closes, 7));
+        indicators.ema25.push(indicators_mod::calculate_ema(closes, 25));
+
+        if let Some(boll) = indicators_mod::calculate_boll(closes, 20, 2.0) {
+            indicators.boll_upper.push(Some(boll.upper));
+            indicators.boll_mid.push(Some(boll.mid));
+            indicators.boll_lower.push(Some(boll.lower));
+        } else {
+            indicators.boll_upper.push(None);
+            indicators.boll_mid.push(None);
+            indicators.boll_lower.push(None);
+        }
+
+        if let Some(macd) = indicators_mod::calculate_macd(closes, 12, 26, 9) {
+            indicators.macd_dif.push(Some(macd.dif));
+            indicators.macd_dea.push(Some(macd.dea));
+            indicators.macd_hist.push(Some(macd.hist));
+        } else {
+            indicators.macd_dif.push(None);
+            indicators.macd_dea.push(None);
+            indicators.macd_hist.push(None);
+        }
+
+        indicators.rsi14.push(indicators_mod::calculate_rsi(closes, 14));
+    }
+
+    /// 基于 K 线收盘价计算完整的指标历史（用于历史加载时的初始化）
     ///
     /// 此方法为每根 K 线计算对应位置的指标值，确保指标数据与 K 线数据长度对齐
     pub fn compute(candles: &[Candle], current: Option<&Candle>) -> IndicatorHistory {
@@ -289,16 +337,16 @@ impl CandleIndicatorCalculator {
             let slice = &closes[..=i];
             
             // MA
-            ma7.push(indicators::calculate_sma(slice, 7));
-            ma25.push(indicators::calculate_sma(slice, 25));
-            ma99.push(indicators::calculate_sma(slice, 99));
+            ma7.push(indicators_mod::calculate_sma(slice, 7));
+            ma25.push(indicators_mod::calculate_sma(slice, 25));
+            ma99.push(indicators_mod::calculate_sma(slice, 99));
 
             // EMA
-            ema7.push(indicators::calculate_ema(slice, 7));
-            ema25.push(indicators::calculate_ema(slice, 25));
+            ema7.push(indicators_mod::calculate_ema(slice, 7));
+            ema25.push(indicators_mod::calculate_ema(slice, 25));
 
             // BOLL
-            if let Some(boll) = indicators::calculate_boll(slice, 20, 2.0) {
+            if let Some(boll) = indicators_mod::calculate_boll(slice, 20, 2.0) {
                 boll_upper.push(Some(boll.upper));
                 boll_mid.push(Some(boll.mid));
                 boll_lower.push(Some(boll.lower));
@@ -309,7 +357,7 @@ impl CandleIndicatorCalculator {
             }
 
             // MACD
-            if let Some(macd) = indicators::calculate_macd(slice, 12, 26, 9) {
+            if let Some(macd) = indicators_mod::calculate_macd(slice, 12, 26, 9) {
                 macd_dif.push(Some(macd.dif));
                 macd_dea.push(Some(macd.dea));
                 macd_hist.push(Some(macd.hist));
@@ -320,7 +368,7 @@ impl CandleIndicatorCalculator {
             }
 
             // RSI
-            rsi14.push(indicators::calculate_rsi(slice, 14));
+            rsi14.push(indicators_mod::calculate_rsi(slice, 14));
         }
 
         IndicatorHistory {

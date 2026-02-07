@@ -128,6 +128,8 @@ export interface UseWasmEngineReturn {
   cancelOrder: UseTradingActionsReturn['cancelOrder'];
   /** 增加保证金 (逐仓模式) */
   addMargin: UseTradingActionsReturn['addMargin'];
+  /** 预估强平价格 (Wasm 引擎计算) */
+  estimateLiquidation: UseTradingActionsReturn['estimateLiquidation'];
 }
 
 // ============================================================================
@@ -317,43 +319,18 @@ export function useWasmEngine(
         return;
       }
 
-      // 1. 调用 Rust on_tick 处理市场数据
-      // 🔍 成交量追踪日志：传递给 WASM 引擎
-      console.log(`[VOL追踪] 🚀 useWasmEngine → on_tick:`, {
-        hasVolume: latestData.volume !== undefined,
-        volume: latestData.volume,
-        volumeType: typeof latestData.volume,
-        price: latestData.price.toFixed(2),
-        dataSource,
-        timestamp: latestData.timestamp,
-      });
+      // 合并调用: on_tick + get_active_candles + get_trading_state → 单次 WASM 跨边界
+      const { analysis, candles, tradingState } = engineRef.current.on_tick_full(latestData);
 
-      const result = engineRef.current.on_tick(latestData);
-      setAnalysisResult(result);
+      setAnalysisResult(analysis);
       prevPriceRef.current = latestData.price;
+      setRustCandleHistory(candles);
+      setTradingState(tradingState);
 
-      // 2. 获取 K 线数据
-      try {
-        const candles = engineRef.current.get_active_candles();
-        setRustCandleHistory(candles);
-      } catch {
-        // K 线获取失败不影响主流程
-      }
-
-      // 3. 同步交易状态 (Rust 内部已处理价格更新和风险检查)
-      try {
-        const state = (
-          engineRef.current as unknown as TradingWasmEngine
-        ).get_trading_state();
-        setTradingState(state);
-
-        // 处理事件
-        if (state.pendingEvents && state.pendingEvents.length > 0) {
-          handleEngineEvents(state.pendingEvents, toast);
-          setLastEvents(state.pendingEvents);
-        }
-      } catch {
-        // 交易状态获取失败不影响主流程
+      // 处理事件
+      if (tradingState.pendingEvents && tradingState.pendingEvents.length > 0) {
+        handleEngineEvents(tradingState.pendingEvents, toast);
+        setLastEvents(tradingState.pendingEvents);
       }
 
       // 重置错误计数
