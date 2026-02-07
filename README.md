@@ -54,13 +54,15 @@ flowchart LR
     subgraph Hooks["⚛️ React Hooks 层"]
         D[useWasmEngine<br/>统一编排入口]
         D1[useMarketData<br/>数据源抽象]
+        D2[useDataSource<br/>数据源切换]
         E[useTradingActions<br/>交易操作封装]
         F[useCandleData<br/>K线数据适配]
-        G[wasmSingleton<br/>引擎单例管理]
+        G[useMarketStats<br/>24h 市场统计]
     end
     
     subgraph UI["🖥️ UI 组件"]
-        H[LightweightChart<br/>多窗格 K线/指标]
+        H[UnifiedMultiPaneChart<br/>多窗格 K线/指标]
+        H1[ChartToolbar<br/>周期/指标切换]
         H2[DepthChart<br/>市场深度图]
         I[TradePanel<br/>开仓/挂单表单]
         J[PositionCard<br/>实时盈亏/风控]
@@ -70,17 +72,19 @@ flowchart LR
     
     A1 -->|"Tick 流"| D1
     A2 -->|"Tick 流"| D1
+    D2 --> D1
     D1 --> D
     D -->|"价格更新"| B
     D -->|"价格更新"| C
     B -->|"指标/K线"| D
     C -->|"交易状态"| D
     D --> F --> H
+    D --> G --> L
     D --> H2
     D --> I
     D --> J
     D --> K
-    D --> L
+    H1 --> H
     I -->|"开仓/挂单"| E --> C
     
     style A1 fill:#2d333b,stroke:#00d4ff,color:#fff
@@ -89,10 +93,12 @@ flowchart LR
     style C fill:#4a2c0a,stroke:#f7931e,color:#fff
     style D fill:#1a365d,stroke:#61dafb,color:#fff
     style D1 fill:#1a365d,stroke:#61dafb,color:#fff
+    style D2 fill:#1a365d,stroke:#61dafb,color:#fff
     style E fill:#1a365d,stroke:#61dafb,color:#fff
     style F fill:#1a365d,stroke:#61dafb,color:#fff
     style G fill:#1a365d,stroke:#61dafb,color:#fff
     style H fill:#3c1f3c,stroke:#aa344d,color:#fff
+    style H1 fill:#3c1f3c,stroke:#aa344d,color:#fff
     style H2 fill:#3c1f3c,stroke:#aa344d,color:#fff
     style I fill:#1e3a2f,stroke:#0ecb81,color:#fff
     style J fill:#1e3a2f,stroke:#0ecb81,color:#fff
