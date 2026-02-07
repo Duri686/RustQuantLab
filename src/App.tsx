@@ -11,7 +11,7 @@ import ChartView from './components/Dashboard/Chart/ChartView';
 import DepthChart from './components/Dashboard/Chart/DepthChart';
 import { TradePanel } from './components/Dashboard/Trade';
 import TradePanelConnected from './components/TradePanelConnected';
-import OnboardingTour from './components/Onboarding/OnboardingTour';
+
 import { ChartTabs, TradeDrawer } from './components/Layout';
 import FloatingTradeButton from './components/Layout/FloatingTradeButton';
 import { useUiStore, type UiState } from './hooks/ui/useUiStore';
@@ -227,9 +227,6 @@ function App() {
           onEstimateLiquidation={estimateLiquidation}
         />
       </TradeDrawer>
-
-      {/* 新手引导 */}
-      {dataSource === 'mock' && <OnboardingTour />}
     </div>
   );
 }
