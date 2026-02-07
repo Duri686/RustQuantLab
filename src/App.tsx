@@ -14,7 +14,8 @@ import KLineChart, {
 } from './components/Dashboard/Chart';
 import ChartToolbar from './components/Dashboard/Chart/ChartToolbar';
 import DepthChart from './components/Dashboard/Chart/DepthChart';
-import { TradePanel } from './components/Dashboard/Trade';
+import { TradePanel, LiveModeNotice } from './components/Dashboard/Trade';
+import OnboardingTour from './components/Onboarding/OnboardingTour';
 import { useUiStore } from './hooks/ui/useUiStore';
 import type { UiState } from './hooks/ui/useUiStore';
 import { useMarketStats } from './hooks/useMarketStats';
@@ -158,7 +159,7 @@ function App() {
       } else {
         (navigator as any)?.vibrate?.(20);
       }
-    } catch {}
+    } catch { }
   }, [isSwitching]);
 
   useEffect(() => {
@@ -339,10 +340,9 @@ function App() {
             flex flex-col
             md:grid md:h-full
             gap-px bg-border-dark
-            ${
-              dataSource === 'mock'
-                ? 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_240px_300px]'
-                : 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_auto]'
+            ${dataSource === 'mock'
+              ? 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_240px_300px]'
+              : 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_auto]'
             }
           `}
         >
@@ -506,10 +506,9 @@ function App() {
             </div>
           </section>
 
-          {/* ========== 交易面板区域 (仅 MOCK 模式下显示) ========== */}
-          {/* LIVE 模式下隐藏交易面板，只展示数据 */}
-          {dataSource === 'mock' && (
-            <section className="hidden xl:block h-full min-h-0 border-l border-border-dark">
+          {/* ========== 交易面板区域 ========== */}
+          <section className="hidden xl:block h-full min-h-0 border-l border-border-dark">
+            {dataSource === 'mock' ? (
               <TradePanel
                 symbol="BTC"
                 currentPrice={latestData?.price ?? 40000}
@@ -528,14 +527,19 @@ function App() {
                 onAddMargin={addMargin}
                 onEstimateLiquidation={estimateLiquidation}
               />
-            </section>
-          )}
+            ) : (
+              <div className="bg-gray-900/50 rounded-xl border border-gray-800 m-2 h-[calc(100%-1rem)]">
+                <LiveModeNotice
+                  onSwitchToMock={() => setDataSource('mock')}
+                />
+              </div>
+            )}
+          </section>
         </div>
       </main>
 
-      {/* ========== 移动端 Sticky 底部交易栏 (仅 MOCK 模式下显示) ========== */}
-      {/* TradePanel 内部已包含移动端 Bottom Sheet，此处仅渲染移动端部分 */}
-      {dataSource === 'mock' && (
+      {/* ========== 移动端 Sticky 底部交易栏 ========== */}
+      {dataSource === 'mock' ? (
         <div className="xl:hidden">
           <TradePanel
             symbol="BTC"
@@ -556,7 +560,25 @@ function App() {
             onEstimateLiquidation={estimateLiquidation}
           />
         </div>
+      ) : (
+        <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 px-4 py-3 safe-area-inset-bottom">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-400">ⓘ</span>
+              <span className="text-sm text-gray-400">实时行情仅供观察</span>
+            </div>
+            <button
+              onClick={() => setDataSource('mock')}
+              className="text-sm text-yellow-400 font-medium"
+            >
+              切换至 Mock
+            </button>
+          </div>
+        </div>
       )}
+
+      {/* ========== 新手引导 (仅 Mock 模式显示) ========== */}
+      {dataSource === 'mock' && <OnboardingTour />}
     </div>
   );
 }

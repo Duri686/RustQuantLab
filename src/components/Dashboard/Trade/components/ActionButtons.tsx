@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import type { Position } from '../../../../types/trading';
+import { UI_TEXT } from '../../../../constants/ui-glossary';
 
 /* ============================================
    Types
@@ -69,8 +70,8 @@ function ActionButtons({ disabled, currentPosition, onSubmit }: ActionButtonsPro
 
   // 按钮文案动态化
   const positionSide = currentPosition?.side;
-  const buyLabel = positionSide === 'Long' ? 'Buy / Long ↑' : 'Buy / Long';
-  const sellLabel = positionSide === 'Short' ? 'Sell / Short ↓' : 'Sell / Short';
+  const buyLabel = positionSide === 'Long' ? `${UI_TEXT.actions.buyLong} ↑` : UI_TEXT.actions.buyLong;
+  const sellLabel = positionSide === 'Short' ? `${UI_TEXT.actions.sellShort} ↓` : UI_TEXT.actions.sellShort;
 
   return (
     <div className="grid grid-cols-2 gap-2 shrink-0">
@@ -139,18 +140,17 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={isDisabled}
-      className={`h-11 rounded font-semibold text-sm transition-all ${feedbackClass} ${
-        isDisabled
+      className={`h-11 rounded font-semibold text-sm transition-all ${feedbackClass} ${isDisabled
           ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
           : 'text-white hover:brightness-110 active:scale-[0.98]'
-      }`}
+        }`}
       style={
         isDisabled
           ? undefined
           : {
-              backgroundColor: colorVar,
-              boxShadow: `0 4px 12px color-mix(in srgb, ${colorVar} 25%, transparent)`,
-            }
+            backgroundColor: colorVar,
+            boxShadow: `0 4px 12px color-mix(in srgb, ${colorVar} 25%, transparent)`,
+          }
       }
     >
       {content}

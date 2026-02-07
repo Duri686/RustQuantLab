@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type { StatsPanelProps } from '../../types/index';
+import { UI_TEXT } from '../../constants/ui-glossary';
 
 /* ============================================
    StatCell Sub-Component (高密度信息单元)
@@ -102,7 +103,7 @@ function StatsPanel({
 
       {/* Funding Rate / Countdown */}
       <StatCell
-        label="Funding / Countdown"
+        label={`${UI_TEXT.market.fundingRate} / ${UI_TEXT.market.countdown}`}
         value={`${((marketStats?.fundingRate ?? 0) * 100).toFixed(4)}%`}
         suffix={formatFundingCountdown(marketStats?.fundingCountdown ?? 0)}
         colorClass={(marketStats?.fundingRate ?? 0) >= 0 ? 'text-success' : 'text-danger'}
@@ -111,7 +112,7 @@ function StatsPanel({
 
       {/* 24h Change */}
       <StatCell
-        label="24h Change"
+        label={UI_TEXT.market.change24h}
         value={`${changeSign}${changePercent.toFixed(2)}%`}
         suffix={`${changeSign}${(marketStats?.priceChange ?? 0).toFixed(2)}`}
         colorClass={changeColor}

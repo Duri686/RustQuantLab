@@ -1,9 +1,11 @@
-import { memo, useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import type {
   Position,
   LiquidationResult,
   RiskLevel,
 } from '../../../types/trading';
+import { ConfirmDialog } from '../../common';
+import { UI_TEXT } from '../../../constants/ui-glossary';
 
 /* ============================================
    Types & Constants
@@ -67,6 +69,18 @@ function WasmPositionCard({
   const [showAddMargin, setShowAddMargin] = useState(false);
   const [marginAmount, setMarginAmount] = useState('');
 
+  // 平仓确认弹窗状态
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const handleCloseClick = useCallback(() => {
+    setShowCloseConfirm(true);
+  }, []);
+
+  const handleCloseConfirm = useCallback(() => {
+    onClose?.();
+    setShowCloseConfirm(false);
+  }, [onClose]);
+
   // 🔴 直接使用 Wasm 计算的值，无本地计算
   // Hedge Mode: 每个仓位有独立的字段，由 Rust 计算
   const pnlValue = position.unrealizedPnl;
@@ -86,10 +100,10 @@ function WasmPositionCard({
   const riskLevel = isCrossMode
     ? riskAssessment?.riskLevel ?? 'Safe'
     : position.marginRatio < 1.5
-    ? 'Critical'
-    : position.marginRatio < 3
-    ? 'High'
-    : 'Safe';
+      ? 'Critical'
+      : position.marginRatio < 3
+        ? 'High'
+        : 'Safe';
   // 计算该仓位距离强平的距离
   const distanceToLiq =
     liquidationPrice > 0
@@ -106,9 +120,8 @@ function WasmPositionCard({
 
   return (
     <div
-      className={`p-2.5 rounded bg-bg-surface-elevated border-l-2 hover:opacity-90 transition-colors ${
-        isCritical ? 'animate-pulse' : ''
-      }`}
+      className={`p-2.5 rounded bg-bg-surface-elevated border-l-2 hover:opacity-90 transition-colors ${isCritical ? 'animate-pulse' : ''
+        }`}
       style={{ borderLeftColor: borderColor }}
     >
       {/* Row 1: Symbol & PNL */}
@@ -130,11 +143,10 @@ function WasmPositionCard({
       {/* Row 2: Badges */}
       <div className="flex items-center gap-1.5 mb-2">
         <span
-          className={`px-1 py-px text-[10px] font-semibold rounded ${
-            isLong
-              ? 'bg-success/15 text-success'
-              : 'bg-danger/15 text-danger'
-          }`}
+          className={`px-1 py-px text-[10px] font-semibold rounded ${isLong
+            ? 'bg-success/15 text-success'
+            : 'bg-danger/15 text-danger'
+            }`}
         >
           {isLong ? 'Long' : 'Short'}
         </span>
@@ -148,59 +160,56 @@ function WasmPositionCard({
             color: riskColor,
           }}
         >
-          {riskLevel}
+          {UI_TEXT.riskLevel[riskLevel as keyof typeof UI_TEXT.riskLevel] ?? riskLevel}
         </span>
       </div>
 
       {/* Row 3: Data Grid - All values from Wasm */}
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] mb-2">
         <div className="flex justify-between">
-          <span className="text-gray-500">Size</span>
+          <span className="text-gray-500">{UI_TEXT.position.size}</span>
           <span className="text-gray-300 font-mono tabular-nums">
             {position.size.toFixed(4)}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Margin</span>
+          <span className="text-gray-500">{UI_TEXT.position.margin}</span>
           <span className="text-gray-300 font-mono tabular-nums">
             {position.margin.toFixed(2)}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Entry</span>
+          <span className="text-gray-500">{UI_TEXT.position.entryPrice}</span>
           <span className="text-gray-300 font-mono tabular-nums">
             {position.entryPrice.toFixed(2)}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Mark</span>
+          <span className="text-gray-500">{UI_TEXT.position.markPrice}</span>
           <span className="text-warning-alt font-mono tabular-nums">
             {currentPrice.toFixed(2)}
           </span>
         </div>
 
-        {/* 🔴 P0 Feature: Liq Price from Rust */}
         <div className="flex justify-between">
-          <span className="text-gray-500">Liq. Price</span>
+          <span className="text-gray-500">{UI_TEXT.position.liqPrice}</span>
           <span
-            className={`font-mono tabular-nums ${
-              isLiqNear ? 'text-danger' : 'text-gray-500'
-            }`}
+            className={`font-mono tabular-nums ${isLiqNear ? 'text-danger' : 'text-gray-500'
+              }`}
           >
             {liquidationPrice.toFixed(2)}
             {isLiqNear && <span className="ml-1">⚠</span>}
           </span>
         </div>
 
-        {/* Margin Ratio */}
         <div className="flex justify-between">
-          <span className="text-gray-500">Margin Ratio</span>
+          <span className="text-gray-500">{UI_TEXT.position.marginRatio}</span>
           <span className="font-mono tabular-nums" style={{ color: riskColor }}>
             {Number.isFinite(marginRatio) && marginRatio < 10000
               ? marginRatio.toFixed(2)
               : marginRatio > 10000
-              ? '>9999'
-              : '0.00'}
+                ? '>9999'
+                : '0.00'}
             x
           </span>
         </div>
@@ -261,7 +270,7 @@ function WasmPositionCard({
       {/* Row 4: Actions */}
       <div className="flex items-center justify-between pt-1.5 border-t border-border-medium">
         <span className="text-[9px] text-gray-600 font-mono">
-          距强平 {distanceToLiq.toFixed(1)}%
+          {UI_TEXT.position.distToLiq} {distanceToLiq.toFixed(1)}%
         </span>
         <div className="flex items-center gap-1.5">
           {/* 增加保证金按钮 (仅逐仓模式) - Toggle */}
@@ -271,24 +280,35 @@ function WasmPositionCard({
                 setShowAddMargin(!showAddMargin);
                 if (showAddMargin) setMarginAmount('');
               }}
-              className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${
-                showAddMargin
-                  ? 'text-success bg-success/20 border border-success/50'
-                  : 'text-success bg-success/10 hover:bg-success/20 border border-transparent'
-              }`}
+              className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${showAddMargin
+                ? 'text-success bg-success/20 border border-success/50'
+                : 'text-success bg-success/10 hover:bg-success/20 border border-transparent'
+                }`}
             >
-              Add Margin
+              {UI_TEXT.actions.addMargin}
             </button>
           )}
           <button
-            onClick={() => onClose?.()}
+            onClick={handleCloseClick}
             className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-border-medium hover:bg-danger/20 hover:text-danger rounded transition-colors"
           >
-            Close
+            {UI_TEXT.actions.close}
           </button>
         </div>
       </div>
-    </div>
+
+      {/* 平仓确认弹窗 */}
+      <ConfirmDialog
+        isOpen={showCloseConfirm}
+        title="确认平仓"
+        message={`即将以市价平仓 ${isLong ? 'Long' : 'Short'} ${position.size.toFixed(4)} ${symbol}，预计${isProfit ? '盈利' : '亏损'} ${Math.abs(pnlValue).toFixed(2)} USDT`}
+        confirmText="确认平仓"
+        cancelText="取消"
+        variant={isProfit ? 'normal' : 'warning'}
+        onConfirm={handleCloseConfirm}
+        onCancel={() => setShowCloseConfirm(false)}
+      />
+    </div >
   );
 }
 
@@ -314,9 +334,9 @@ export function EmptyPositionState() {
           />
         </svg>
       </div>
-      <span className="text-xs text-gray-600">No active position</span>
+      <span className="text-xs text-gray-600">{UI_TEXT.position.noPosition}</span>
       <span className="text-[10px] text-gray-700">
-        Open a Long or Short to start trading
+        {UI_TEXT.position.openTip}
       </span>
     </div>
   );

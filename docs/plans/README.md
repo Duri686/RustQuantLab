@@ -28,12 +28,12 @@ v0.4 UX 冲刺 (1.5 周)
 
 | # | 计划名称 | RICE 分 | 工期 | 状态 | 文件 |
 |:-:|----------|:-------:|:----:|:----:|------|
-| 01 | 交易表单优化 | 8.00 | 2d | 🔲 待执行 | [Plan-01](./Plan-01-TradeFormEnhancements.md) |
-| 02 | 账户操作安全网 | 6.00 | 1d | 🔲 待执行 | [Plan-02](./Plan-02-AccountSafetyNet.md) |
-| 03 | UI 语言统一 | 6.67 | 3d | 🔲 待执行 | [Plan-03](./Plan-03-LanguageUnification.md) |
-| 04 | LIVE 模式交易提示 | 5.00 | 1d | 🔲 待执行 | [Plan-04](./Plan-04-LiveModePrompt.md) |
-| 05 | 新手引导流程 | 3.36 | 5d | 🔲 待执行 | [Plan-05](./Plan-05-OnboardingFlow.md) |
-| 06 | 风险可视化升级 | 1.92 | 3d | 🔲 待执行 | [Plan-06](./Plan-06-RiskVisualization.md) |
+| 01 | 交易表单优化 | 8.00 | 2d | ✅ 已完成 | [Plan-01](./Plan-01-TradeFormEnhancements.md) |
+| 02 | 账户操作安全网 | 6.00 | 1d | ✅ 已完成 | [Plan-02](./Plan-02-AccountSafetyNet.md) |
+| 03 | UI 语言统一 | 6.67 | 3d | ✅ 已完成 | [Plan-03](./Plan-03-LanguageUnification.md) |
+| 04 | LIVE 模式交易提示 | 5.00 | 1d | ✅ 已完成 | [Plan-04](./Plan-04-LiveModePrompt.md) |
+| 05 | 新手引导流程 | 3.36 | 5d | ✅ 已完成 | [Plan-05](./Plan-05-OnboardingFlow.md) |
+| 06 | 风险可视化升级 | 1.92 | 3d | ✅ 已完成 | [Plan-06](./Plan-06-RiskVisualization.md) |
 
 ---
 

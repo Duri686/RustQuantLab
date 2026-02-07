@@ -9,6 +9,7 @@ import PositionContext from './components/PositionContext';
 import HighLeverageConfirm from './components/HighLeverageConfirm';
 import { useToast } from '../../Toast';
 import { LEVERAGE_CONFIG, MARGIN_MODE_CONFIG } from '../../../config/tradingConfig';
+import { UI_TEXT } from '../../../constants/ui-glossary';
 import type {
   Position,
   LiquidationResult,
@@ -118,6 +119,40 @@ function TradeInput({
 }
 
 /* ============================================
+   Sub-Component: MarketPriceDisplay
+   ============================================ */
+
+interface MarketPriceDisplayProps {
+  price: number;
+  symbol?: string;
+}
+
+/**
+ * MarketPriceDisplay - 市价单价格展示
+ *
+ * 替换 disabled 输入框为信息展示卡片，更清晰地表明不可编辑
+ */
+const MarketPriceDisplay = memo(function MarketPriceDisplay({
+  price,
+  symbol = 'USDT',
+}: MarketPriceDisplayProps) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs text-gray-400">Price ({symbol})</label>
+      <div className="flex items-center justify-between h-10 px-3 bg-bg-surface/50 rounded border border-border-dark">
+        <span className="text-sm text-gray-400">Market Price</span>
+        <span className="text-sm font-mono font-medium text-white">
+          ≈ {price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+/* ============================================
    Main Component
    ============================================ */
 
@@ -157,6 +192,11 @@ function TradePanel({
   const [sizePercent, setSizePercent] = useState<number | null>(null);
   const [marginMode, setMarginMode] = useState<MarginMode>(propMarginMode);
 
+  // Task 3 & 4: 历史仓位展开和筛选状态
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  type HistoryFilter = 'all' | 'profit' | 'loss';
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
+
   // Bug #6 fix: 外部 prop 变化时同步内部 state
   useEffect(() => { setLeverage(currentLeverage); }, [currentLeverage]);
   useEffect(() => {
@@ -186,7 +226,10 @@ function TradePanel({
   const sizeValue = parseFloat(size) || 0;
   const priceValue = parseFloat(price) || currentPrice;
   const effectivePrice = orderType === 'Market' ? currentPrice : priceValue;
-  const maxSize = effectivePrice > 0 ? (availableBalance * leverage) / effectivePrice : 0;
+  // Max 按钮计算：预留 0.04% taker fee 空间，避免总成本超过可用余额
+  const TAKER_FEE_RATE = 0.0004;
+  const maxNotional = availableBalance / (1 / leverage + TAKER_FEE_RATE);
+  const maxSize = effectivePrice > 0 ? maxNotional / effectivePrice : 0;
   const estimatedCost = leverage > 0 ? (sizeValue * effectivePrice) / leverage : 0;
 
   const isSubmitDisabled = useMemo(() => {
@@ -301,7 +344,7 @@ function TradePanel({
   const formContent = (
     <div className="flex-1 min-h-0 flex flex-col px-4 py-3 gap-3">
       {/* Leverage Slider */}
-      <div className="shrink-0">
+      <div className="shrink-0" data-tour="leverage">
         <LeverageSlider
           value={leverage}
           onChange={handleLeverageChange}
@@ -317,7 +360,7 @@ function TradePanel({
       <div className="h-px bg-border-dark shrink-0" />
 
       {/* 保证金模式切换 */}
-      <div className="shrink-0">
+      <div className="shrink-0" data-tour="margin-mode">
         <div className="flex items-center justify-between mb-1.5">
           <label className="text-xs text-gray-400">保证金模式</label>
           <span className="text-[10px] text-gray-600">
@@ -331,12 +374,11 @@ function TradePanel({
               onClick={() => handleMarginModeChange(mode.value)}
               className={`
                 flex-1 py-2 text-xs font-medium rounded transition-colors
-                ${
-                  marginMode === mode.value
-                    ? mode.value === 'cross'
-                      ? 'bg-success/20 text-success border border-success/30'
-                      : 'bg-warning/20 text-warning border border-warning/30'
-                    : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                ${marginMode === mode.value
+                  ? mode.value === 'cross'
+                    ? 'bg-success/20 text-success border border-success/30'
+                    : 'bg-warning/20 text-warning border border-warning/30'
+                  : 'text-gray-500 hover:text-gray-300 border border-transparent'
                 }
               `}
             >
@@ -356,10 +398,9 @@ function TradePanel({
             onClick={() => setOrderType(type)}
             className={`
               flex-1 py-2 text-xs font-medium rounded transition-colors
-              ${
-                orderType === type
-                  ? 'bg-border-dark text-white'
-                  : 'text-gray-500 hover:text-gray-300'
+              ${orderType === type
+                ? 'bg-border-dark text-white'
+                : 'text-gray-500 hover:text-gray-300'
               }
             `}
           >
@@ -368,35 +409,54 @@ function TradePanel({
         ))}
       </div>
 
-      {/* Price Input */}
+      {/* Price Input - Task 2: 市价单使用专用展示组件 */}
       <div className="shrink-0">
-        <TradeInput
-          label="Price (USDT)"
-          value={orderType === 'Market' ? 'Market Price' : price}
-          onChange={setPrice}
-          suffix="USDT"
-          disabled={orderType === 'Market'}
-          hint={
-            priceDeviation && orderType === 'Limit' ? (
-              <span className={priceDeviation.colorClass}>
-                {priceDeviation.label} ({currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })})
-              </span>
-            ) : undefined
-          }
-        />
+        {orderType === 'Market' ? (
+          <MarketPriceDisplay price={currentPrice} />
+        ) : (
+          <TradeInput
+            label="Price (USDT)"
+            value={price}
+            onChange={setPrice}
+            suffix="USDT"
+            hint={
+              priceDeviation ? (
+                <span className={priceDeviation.colorClass}>
+                  {priceDeviation.label} ({currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                </span>
+              ) : undefined
+            }
+          />
+        )}
       </div>
 
-      {/* Size Input */}
+      {/* Size Input - Task 1: 添加 Max 按钮 */}
       <div className="shrink-0">
-        <TradeInput
-          label={`Size (${symbol})`}
-          value={size}
-          onChange={(v) => {
-            setSize(v);
-            setSizePercent(null);
-          }}
-          suffix={symbol}
-        />
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <TradeInput
+              label={`Size (${symbol})`}
+              value={size}
+              onChange={(v) => {
+                setSize(v);
+                setSizePercent(null);
+              }}
+              suffix={symbol}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSize(maxSize.toFixed(4));
+              setSizePercent(100);
+            }}
+            className="self-end h-10 px-3 text-xs font-medium text-warning 
+                       bg-warning/10 hover:bg-warning/20 
+                       rounded border border-warning/30 transition-colors"
+          >
+            Max
+          </button>
+        </div>
       </div>
 
       {/* Size Percentage Buttons */}
@@ -407,10 +467,9 @@ function TradePanel({
             onClick={() => handleSizePreset(percent)}
             className={`
               flex-1 py-1.5 text-[10px] font-mono rounded transition-colors
-              ${
-                sizePercent === percent
-                  ? 'bg-warning/20 text-warning border border-warning/50'
-                  : 'bg-bg-surface text-gray-500 border border-border-dark hover:text-gray-300'
+              ${sizePercent === percent
+                ? 'bg-warning/20 text-warning border border-warning/50'
+                : 'bg-bg-surface text-gray-500 border border-border-dark hover:text-gray-300'
               }
             `}
           >
@@ -439,11 +498,13 @@ function TradePanel({
       <div className="h-px bg-border-dark shrink-0" />
 
       {/* Action Buttons (增强: Loading/Success/Error 反馈) */}
-      <ActionButtons
-        disabled={isSubmitDisabled}
-        currentPosition={currentSymbolPosition}
-        onSubmit={handleSubmit}
-      />
+      <div data-tour="open-position">
+        <ActionButtons
+          disabled={isSubmitDisabled}
+          currentPosition={currentSymbolPosition}
+          onSubmit={handleSubmit}
+        />
+      </div>
 
       <div className="h-px bg-border-dark shrink-0" />
 
@@ -466,8 +527,8 @@ function TradePanel({
         </div>
 
         {positions.length > 0 ||
-        closedPositions.length > 0 ||
-        pendingOrders.length > 0 ? (
+          closedPositions.length > 0 ||
+          pendingOrders.length > 0 ? (
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {/* 挂单列表 */}
             {pendingOrders.length > 0 && (
@@ -540,68 +601,121 @@ function TradePanel({
                 onAddMargin={onAddMargin}
               />
             ))}
-            {/* 历史仓位 */}
+            {/* 历史仓位 - Task 3 & 4: 展开/筛选功能 */}
             {closedPositions.length > 0 && (
               <>
-                <div className="flex items-center gap-2 pt-2 pb-1">
-                  <span className="text-[10px] text-gray-600">已平仓</span>
-                  <div className="flex-1 h-px bg-border-dark" />
+                {/* 标题栏 + 筛选按钮 */}
+                <div className="flex items-center justify-between pt-2 pb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-600">已平仓</span>
+                    <span className="text-[9px] text-gray-700">
+                      ({closedPositions.length})
+                    </span>
+                  </div>
+                  {/* 盈亏筛选按钮 */}
+                  <div className="flex gap-0.5">
+                    {(['all', 'profit', 'loss'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setHistoryFilter(filter)}
+                        className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${historyFilter === filter
+                          ? filter === 'profit'
+                            ? 'bg-success/20 text-success'
+                            : filter === 'loss'
+                              ? 'bg-danger/20 text-danger'
+                              : 'bg-gray-700 text-white'
+                          : 'text-gray-600 hover:text-gray-400'
+                          }`}
+                      >
+                        {filter === 'all' ? '全部' : filter === 'profit' ? '盈利' : '亏损'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {closedPositions
-                  .slice(-5)
-                  .reverse()
-                  .map((pos, idx) => (
-                    <div
-                      key={`closed-${idx}`}
-                      className="p-2 rounded bg-bg-surface-elevated/50 border-l-2 border-gray-600 opacity-60"
-                    >
-                      <div className="flex items-center justify-between text-[10px]">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-500">{pos.symbol}</span>
-                          <span
-                            className={
-                              pos.side === 'Long'
+                {/* 历史仓位列表 */}
+                {(() => {
+                  // 根据筛选条件过滤
+                  const filtered = historyFilter === 'all'
+                    ? closedPositions
+                    : closedPositions.filter((pos) =>
+                      historyFilter === 'profit'
+                        ? (pos.realizedPnl ?? 0) >= 0
+                        : (pos.realizedPnl ?? 0) < 0
+                    );
+                  // 根据展开状态决定显示数量
+                  const displayed = showAllHistory
+                    ? filtered
+                    : filtered.slice(-5);
+
+                  return (
+                    <>
+                      {displayed.reverse().map((pos, idx) => (
+                        <div
+                          key={`closed-${pos.id ?? idx}`}
+                          className="p-2 rounded bg-bg-surface-elevated/50 border-l-2 border-gray-600 opacity-60"
+                        >
+                          <div className="flex items-center justify-between text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-500">{pos.symbol}</span>
+                              <span
+                                className={
+                                  pos.side === 'Long'
+                                    ? 'text-success/60'
+                                    : 'text-danger/60'
+                                }
+                              >
+                                {pos.side}
+                              </span>
+                              <span className="text-gray-600">
+                                {pos.leverage}x
+                              </span>
+                              <span
+                                className={`px-1 rounded text-[9px] ${pos.status === 'liquidated'
+                                  ? 'bg-danger/20 text-danger'
+                                  : 'bg-gray-700 text-gray-400'
+                                  }`}
+                              >
+                                {pos.status === 'liquidated'
+                                  ? '已强平'
+                                  : '已平仓'}
+                              </span>
+                            </div>
+                            <span
+                              className={`font-mono ${(pos.realizedPnl ?? 0) >= 0
                                 ? 'text-success/60'
                                 : 'text-danger/60'
-                            }
-                          >
-                            {pos.side}
-                          </span>
-                          <span className="text-gray-600">
-                            {pos.leverage}x
-                          </span>
-                          <span
-                            className={`px-1 rounded text-[9px] ${
-                              pos.status === 'liquidated'
-                                ? 'bg-danger/20 text-danger'
-                                : 'bg-gray-700 text-gray-400'
-                            }`}
-                          >
-                            {pos.status === 'liquidated'
-                              ? '已强平'
-                              : '已平仓'}
-                          </span>
+                                }`}
+                            >
+                              {(pos.realizedPnl ?? 0) >= 0 ? '+' : ''}
+                              {(pos.realizedPnl ?? 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] text-gray-600 mt-1">
+                            <span>
+                              Entry: {pos.entryPrice.toFixed(2)} → Exit:{' '}
+                              {(pos.exitPrice ?? 0).toFixed(2)}
+                            </span>
+                            <span>Size: {pos.size.toFixed(4)}</span>
+                          </div>
                         </div>
-                        <span
-                          className={`font-mono ${
-                            (pos.realizedPnl ?? 0) >= 0
-                              ? 'text-success/60'
-                              : 'text-danger/60'
-                          }`}
+                      ))}
+                      {/* 展开/收起按钮 */}
+                      {filtered.length > 5 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllHistory(!showAllHistory)}
+                          className="w-full py-1.5 text-[10px] text-gray-500 hover:text-gray-400 
+                                     transition-colors text-center"
                         >
-                          {(pos.realizedPnl ?? 0) >= 0 ? '+' : ''}
-                          {(pos.realizedPnl ?? 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[9px] text-gray-600 mt-1">
-                        <span>
-                          Entry: {pos.entryPrice.toFixed(2)} → Exit:{' '}
-                          {(pos.exitPrice ?? 0).toFixed(2)}
-                        </span>
-                        <span>Size: {pos.size.toFixed(4)}</span>
-                      </div>
-                    </div>
-                  ))}
+                          {showAllHistory
+                            ? `收起 (显示最近 5 条)`
+                            : `展开全部 (${filtered.length} 条)`}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -675,7 +789,7 @@ function TradePanel({
             }}
             className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-success active:scale-[0.98] transition-all"
           >
-            Buy
+            {UI_TEXT.actions.buyLong}
           </button>
           <button
             onClick={() => {
@@ -687,7 +801,7 @@ function TradePanel({
             }}
             className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-danger active:scale-[0.98] transition-all"
           >
-            Sell
+            {UI_TEXT.actions.sellShort}
           </button>
         </div>
       </div>
