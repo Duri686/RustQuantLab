@@ -6,6 +6,7 @@ export {
   EmptyPositionState,
 } from './PositionCard';
 
-export type { TradePanelProps, OrderType } from './TradePanel';
+export type { TradePanelProps } from './TradePanel';
+export type { OrderType } from './components/TradeForm';
 export type { WasmPositionCardProps } from './PositionCard';
 export type { LeverageSliderProps } from './LeverageSlider';

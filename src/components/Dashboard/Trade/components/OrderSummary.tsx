@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { estimateMargin, estimateFee, estimateLiquidationPrice } from '../../../../config/tradingConfig';
-import type { OrderType } from '../TradePanel';
+import type { OrderType } from './TradeForm';
 import type { EstimateLiquidationResult } from '../../../../hooks/tradingState/types';
 
 /* ============================================
