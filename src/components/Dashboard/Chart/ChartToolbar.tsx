@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Settings, Camera } from 'lucide-react';
+import { Settings, Camera, BarChart2 } from 'lucide-react';
 
 /* ============================================
    Constants
@@ -42,6 +42,8 @@ export interface ChartToolbarProps {
   onSettingsClick?: () => void;
   /** Callback when screenshot is clicked */
   onScreenshotClick?: () => void;
+  /** Callback when chart view button is clicked (mobile only) */
+  onChartViewClick?: () => void;
   /** K 线收盘倒计时（秒） */
   candleCountdown?: number;
 }
@@ -74,10 +76,9 @@ function ToolbarButton({
       title={title}
       className={`
         px-2 py-1 text-[11px] font-medium rounded transition-colors
-        ${
-          active
-            ? 'text-warning bg-warning/10'
-            : 'text-gray-400 hover:text-white hover:bg-white/5'
+        ${active
+          ? 'text-warning bg-warning/10'
+          : 'text-gray-400 hover:text-white hover:bg-white/5'
         }
       `}
     >
@@ -133,10 +134,9 @@ function ChartToolbar({
   onTimeframeChange,
   activeIndicators = ['MA', 'VOL'],
   onIndicatorToggle,
-  activeChartType = 'TradingView',
-  onChartTypeChange,
   onSettingsClick,
   onScreenshotClick,
+  onChartViewClick,
   candleCountdown,
 }: ChartToolbarProps) {
   return (
@@ -199,26 +199,21 @@ function ChartToolbar({
             ))}
           </div>
 
-          {/* Chart Type - 移动端隐藏，仅桌面显示 */}
-          <div className="hidden md:flex items-center gap-0.5">
-            <Divider />
-            {CHART_TYPES.map((type) => (
-              <ToolbarButton
-                key={type}
-                active={activeChartType === type}
-                onClick={() => onChartTypeChange?.(type)}
-                title={`Switch to ${type} chart`}
-              >
-                {type}
-              </ToolbarButton>
-            ))}
-          </div>
+
         </div>
       </div>
 
       {/* ========== Right Section: Actions (固定不滚动) ========== */}
       <div className="flex items-center gap-0.5 shrink-0 ml-1">
         <Divider />
+        {/* 图表视图按钮 - 仅移动端显示 */}
+        {onChartViewClick && (
+          <IconButton
+            icon={<BarChart2 className="w-3.5 h-3.5" />}
+            onClick={onChartViewClick}
+            title="切换图表视图"
+          />
+        )}
         <IconButton
           icon={<Camera className="w-3.5 h-3.5 md:w-4 md:h-4" />}
           onClick={onScreenshotClick}

@@ -1,4 +1,5 @@
 import { memo, useCallback } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { LEVERAGE_CONFIG, getLeverageRiskLevel } from '../../../config/tradingConfig';
 
 /* ============================================
@@ -70,7 +71,7 @@ function LeverageSlider({ value, onChange, disabled = false }: LeverageSliderPro
       <div className="relative h-2 group">
         {/* Background Track */}
         <div className="absolute inset-0 rounded-full bg-border-dark" />
-        
+
         {/* Active Track (Yellow gradient) */}
         <div
           className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
@@ -134,7 +135,9 @@ function LeverageSlider({ value, onChange, disabled = false }: LeverageSliderPro
       {/* 高杠杆内联警告 (>75x) */}
       {value > LEVERAGE_CONFIG.dangerThreshold && (
         <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-danger/10 border border-danger/20">
-          <span className="text-danger text-[10px] shrink-0">⚠</span>
+          <span className="text-danger shrink-0">
+            <AlertTriangle size={12} />
+          </span>
           <span className="text-danger text-[10px] leading-tight">
             极高风险: 爆仓价格将非常接近开仓价
           </span>

@@ -18,19 +18,21 @@ interface ConfirmDialogProps {
 /* ============================================
    Constants
    ============================================ */
+import { AlertTriangle, Zap, HelpCircle } from 'lucide-react';
+
 const VARIANT_STYLES = {
     danger: {
-        icon: '⚠️',
+        icon: <Zap size={24} />,
         confirmBtn: 'bg-red-600 hover:bg-red-700 text-white',
         iconBg: 'bg-red-500/10',
     },
     warning: {
-        icon: '⚡',
+        icon: <AlertTriangle size={24} />,
         confirmBtn: 'bg-yellow-600 hover:bg-yellow-700 text-white',
         iconBg: 'bg-yellow-500/10',
     },
     normal: {
-        icon: '❓',
+        icon: <HelpCircle size={24} />,
         confirmBtn: 'bg-blue-600 hover:bg-blue-700 text-white',
         iconBg: 'bg-blue-500/10',
     },

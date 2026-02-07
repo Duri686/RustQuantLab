@@ -14,8 +14,10 @@ import KLineChart, {
 } from './components/Dashboard/Chart';
 import ChartToolbar from './components/Dashboard/Chart/ChartToolbar';
 import DepthChart from './components/Dashboard/Chart/DepthChart';
-import { TradePanel, LiveModeNotice } from './components/Dashboard/Trade';
+import { TradePanel } from './components/Dashboard/Trade';
 import OnboardingTour from './components/Onboarding/OnboardingTour';
+import { ChartTabs, TradeDrawer } from './components/Layout';
+import FloatingTradeButton from './components/Layout/FloatingTradeButton';
 import { useUiStore } from './hooks/ui/useUiStore';
 import type { UiState } from './hooks/ui/useUiStore';
 import { useMarketStats } from './hooks/useMarketStats';
@@ -207,6 +209,40 @@ function App() {
     'TradingView' | 'Depth'
   >('TradingView');
 
+  // ========== Drawer 状态 ==========
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const toggleDrawer = useCallback(() => {
+    setDrawerOpen(prev => !prev);
+  }, []);
+
+  // ========== 移动端视图状态 ==========
+  // 移动端默认显示交易面板，可切换到图表视图
+  const [mobileView, setMobileView] = useState<'trade' | 'chart'>('trade');
+
+  const switchToChartView = useCallback(() => {
+    setMobileView('chart');
+  }, []);
+
+  const switchToTradeView = useCallback(() => {
+    setMobileView('trade');
+  }, []);
+
+  // 键盘快捷键: T 切换交易面板
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 排除输入框焦点
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.key.toLowerCase() === 't' && !drawerOpen && dataSource === 'mock') {
+        toggleDrawer();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [drawerOpen, dataSource, toggleDrawer]);
+
   // TODO: AI待确认: 考虑将 isSwitching 抽离到 Zustand 全局 UI 状态，统一管理全局 UI 反馈
 
   /**
@@ -319,229 +355,15 @@ function App() {
         Desktop: 3 列专业布局
         4K: 限制最大宽度 2560px 居中
       */}
-      <main
-        className="
-          flex-1 min-h-0
-          overflow-y-auto md:overflow-hidden
-          pb-[101px] md:pb-0
-          3xl:max-w-[2560px] 3xl:mx-auto 3xl:w-full
-        "
-      >
-        {/* 响应式网格容器 */}
-        {/* 
-          - 移动端: 单列垂直布局
-          - 平板端 (md): 2列 (图表 + 订单簿)
-          - 桌面端 (xl): 
-            * 有交易表单 (MOCK): 3列 (图表 + 订单簿自适应 + 交易表单固定300px)
-            * 无交易表单 (LIVE): 2列 (图表 + 订单簿自适应占满)
-        */}
-        <div
-          className={`
-            flex flex-col
-            md:grid md:h-full
-            gap-px bg-border-dark
-            ${dataSource === 'mock'
-              ? 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_240px_300px]'
-              : 'md:grid-cols-[1fr_240px] xl:grid-cols-[1fr_auto]'
-            }
-          `}
-        >
-          {/* ========== 图表区域 (Chart + Toolbar + Stats) ========== */}
-          <section className="flex flex-col min-h-0 bg-terminal-bg">
-            {/* Chart Toolbar - 移动端横向滚动 */}
-            <ChartToolbar
-              activeTimeframe={activeTimeframe}
-              onTimeframeChange={handleTimeframeChange}
-              activeIndicators={activeIndicators}
-              onIndicatorToggle={handleIndicatorToggle}
-              activeChartType={activeChartType}
-              onChartTypeChange={handleChartTypeChange}
-              onScreenshotClick={handleScreenshot}
-              candleCountdown={marketStats?.candleCountdown}
-            />
+      {/* ========== 主内容区域 (方案 B: ChartTabs 全宽) ========== */}
+      <main className="flex-1 min-h-0 relative flex flex-col bg-terminal-bg">
+        {/* 移动端：根据 mobileView 切换视图 */}
+        {/* 桌面端：始终显示图表 */}
 
-            {/* Chart Area - 移动端图表占高度*/}
-            <div className="flex flex-col h-[60vh] md:flex-1 md:h-auto min-h-0">
-              {/* Chart Sub-Header */}
-              <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 flex items-center justify-between border-b border-border-dark bg-bg-black">
-                <div className="flex items-center gap-2 md:gap-3">
-                  <h2 className="text-[10px] md:text-[11px] font-medium text-gray-400 truncate max-w-[120px] md:max-w-none">
-                    {latestData?.symbol ?? 'BTC-USDT'} · Perp
-                  </h2>
-                  <span className="text-[9px] md:text-[10px] font-mono text-gray-600">
-                    {activeChartType === 'Depth'
-                      ? 'Market Depth'
-                      : `${candleHistory.length} candles`}
-                  </span>
-                </div>
-                <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-gray-500">
-                  {activeChartType === 'Depth' ? (
-                    <>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 bg-success rounded-sm" />
-                        <span>BID</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 bg-danger rounded-sm" />
-                        <span>ASK</span>
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 bg-success rounded-sm" />
-                        <span className="w-2 h-2 bg-danger rounded-sm" />
-                      </span>
-                      <span>OHLC</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Chart Body */}
-              <div className="flex-1 min-h-0 overflow-hidden relative">
-                {switchVisible && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-black/60 backdrop-blur-[1px]">
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="w-6 h-6 border-2 border-border-dark border-t-success rounded-full animate-spin" />
-                      <span className="text-[11px] font-mono text-gray-400">
-                        {dataSource === 'binance'
-                          ? 'LIVE 切换中…'
-                          : 'MOCK 切换中…'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {activeChartType === 'Depth' ? (
-                  <DepthChart
-                    bids={latestData?.bids ?? []}
-                    asks={latestData?.asks ?? []}
-                    price={latestData?.price}
-                  />
-                ) : (
-                  <KLineChart
-                    ref={chartRef}
-                    candleHistory={candleHistory}
-                    currentLiveCandle={currentLiveCandle}
-                    indicatorData={indicatorData}
-                    activeMainIndicators={activeMainIndicators}
-                    activeSubIndicators={activeSubIndicators}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Stats Panel - 单行 3 列 */}
-            <StatsPanel
-              analysisResult={analysisResult}
-              marketStats={marketStats}
-            />
-          </section>
-
-          {/* ========== 订单簿区域 ========== */}
-          {/* 移动端高度压缩: 工具栏(28) + 表头(18) + 卖单(70) + Ticker(28) + 买单(70) = 214px */}
-          {/* MOCK 模式: 固定宽度 240px | LIVE 模式: 自动宽度占满剩余空间 */}
-          <section
-            className={`
-              h-[214px] md:h-full min-h-0 bg-terminal-bg border-t md:border-t-0 md:border-l border-border-dark
-              ${dataSource === 'binance' ? 'xl:min-w-[320px]' : ''}
-            `}
-          >
-            <div className="relative h-full">
-              {/* 订单簿：切换/加载时使用骨架屏，不与图表遮罩重复 */}
-              {switchVisible || historyLoading ? (
-                <div className="h-full flex flex-col">
-                  {/* 表头占位 */}
-                  <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 border-b border-border-dark bg-bg-black" />
-                  {/* 买/卖两块骨架 */}
-                  <div className="flex-1 grid grid-rows-2 gap-px bg-border-dark">
-                    {/* 卖单区骨架（底部对齐，reverse 视觉） */}
-                    <div className="bg-terminal-bg p-2 md:p-3">
-                      <div className="h-full flex flex-col justify-end">
-                        <div className="space-y-1 animate-pulse">
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                          <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        </div>
-                      </div>
-                    </div>
-                    {/* 买单区骨架（顶部对齐） */}
-                    <div className="bg-terminal-bg p-2 md:p-3">
-                      <div className="space-y-1 animate-pulse">
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                        <div className="h-3 bg-linear-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40 rounded" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <OrderBook
-                  bids={latestData?.bids ?? []}
-                  asks={latestData?.asks ?? []}
-                  price={latestData?.price}
-                  priceTrend={priceTrend}
-                  priceColorClass={priceColorClass}
-                  timestamp={latestData?.timestamp}
-                />
-              )}
-            </div>
-          </section>
-
-          {/* ========== 交易面板区域 ========== */}
-          <section className="hidden xl:block h-full min-h-0 border-l border-border-dark">
-            {dataSource === 'mock' ? (
-              <TradePanel
-                symbol="BTC"
-                currentPrice={latestData?.price ?? 40000}
-                balance={tradingState?.balance ?? 10000}
-                availableBalance={tradingState?.availableBalance ?? 10000}
-                currentLeverage={tradingState?.leverage ?? 10}
-                positions={tradingState?.positions ?? []}
-                closedPositions={tradingState?.closedPositions ?? []}
-                riskAssessment={riskAssessment}
-                hasPosition={hasPosition}
-                pendingOrders={pendingOrders}
-                onPlaceOrder={placeOrder}
-                onClosePosition={(positionId) => closePosition(positionId)}
-                onSetLeverage={setLeverage}
-                onCancelOrder={cancelOrder}
-                onAddMargin={addMargin}
-                onEstimateLiquidation={estimateLiquidation}
-              />
-            ) : (
-              <div className="bg-gray-900/50 rounded-xl border border-gray-800 m-2 h-[calc(100%-1rem)]">
-                <LiveModeNotice
-                  onSwitchToMock={() => setDataSource('mock')}
-                />
-              </div>
-            )}
-          </section>
-        </div>
-      </main>
-
-      {/* ========== 移动端 Sticky 底部交易栏 ========== */}
-      {dataSource === 'mock' ? (
-        <div className="xl:hidden">
+        {/* 移动端交易面板视图 */}
+        <div className={`flex-1 min-h-0 flex flex-col md:hidden ${mobileView === 'trade' ? '' : 'hidden'}`}>
           <TradePanel
+            fullscreen
             symbol="BTC"
             currentPrice={latestData?.price ?? 40000}
             balance={tradingState?.balance ?? 10000}
@@ -558,24 +380,144 @@ function App() {
             onCancelOrder={cancelOrder}
             onAddMargin={addMargin}
             onEstimateLiquidation={estimateLiquidation}
+            onSwitchToChart={switchToChartView}
           />
         </div>
-      ) : (
-        <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 px-4 py-3 safe-area-inset-bottom">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-blue-400">ⓘ</span>
-              <span className="text-sm text-gray-400">实时行情仅供观察</span>
-            </div>
-            <button
-              onClick={() => setDataSource('mock')}
-              className="text-sm text-yellow-400 font-medium"
-            >
-              切换至 Mock
-            </button>
-          </div>
+
+        {/* 移动端图表视图 + 桌面端始终显示 */}
+        <div className={`flex-1 min-h-0 flex flex-col ${mobileView === 'chart' ? '' : 'hidden md:flex'}`}>
+          <ChartTabs
+            price={latestData?.price}
+            priceChangePercent={marketStats?.priceChangePercent}
+            priceChange={marketStats?.priceChange}
+            high24h={marketStats?.high24h}
+            low24h={marketStats?.low24h}
+            onOpenTrade={toggleDrawer}
+            chartContent={
+              <div className="flex flex-col h-full">
+                {/* Chart Toolbar */}
+                <ChartToolbar
+                  activeTimeframe={activeTimeframe}
+                  onTimeframeChange={handleTimeframeChange}
+                  activeIndicators={activeIndicators}
+                  onIndicatorToggle={handleIndicatorToggle}
+                  activeChartType={activeChartType}
+                  onChartTypeChange={handleChartTypeChange}
+                  onScreenshotClick={handleScreenshot}
+                  onChartViewClick={switchToChartView}
+                  candleCountdown={marketStats?.candleCountdown}
+                />
+
+                {/* Chart Area */}
+                <div className="flex-1 min-h-0 flex flex-col relative group">
+                  {/* Sub-Header */}
+                  <div className="shrink-0 h-7 md:h-8 px-2 md:px-3 flex items-center justify-between border-b border-border-dark bg-bg-black">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <h2 className="text-[10px] md:text-[11px] font-medium text-gray-400 truncate max-w-[120px] md:max-w-none">
+                        {latestData?.symbol ?? 'BTC-USDT'} · Perp
+                      </h2>
+                      <span className="text-[9px] md:text-[10px] font-mono text-gray-600">
+                        {activeChartType === 'Depth'
+                          ? 'Market Depth'
+                          : `${candleHistory.length} candles`}
+                      </span>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 bg-success rounded-sm" />
+                        <span className="w-2 h-2 bg-danger rounded-sm" />
+                      </span>
+                      <span>OHLC</span>
+                    </div>
+                  </div>
+
+                  {/* Chart Body */}
+                  <div className="flex-1 min-h-0 overflow-hidden relative">
+                    {switchVisible && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-black/60 backdrop-blur-[1px]">
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="w-6 h-6 border-2 border-border-dark border-t-success rounded-full animate-spin" />
+                          <span className="text-[11px] font-mono text-gray-400">
+                            {dataSource === 'binance' ? 'LIVE 切换中…' : 'MOCK 切换中…'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <KLineChart
+                      ref={chartRef}
+                      candleHistory={candleHistory}
+                      currentLiveCandle={currentLiveCandle}
+                      indicatorData={indicatorData}
+                      activeMainIndicators={activeMainIndicators}
+                      activeSubIndicators={activeSubIndicators}
+                    />
+                  </div>
+                </div>
+
+                {/* Stats Panel */}
+                <StatsPanel
+                  analysisResult={analysisResult}
+                  marketStats={marketStats}
+                />
+              </div>
+            }
+            depthContent={
+              <div className="h-full flex flex-col bg-terminal-bg relative">
+                <DepthChart
+                  bids={latestData?.bids ?? []}
+                  asks={latestData?.asks ?? []}
+                  price={latestData?.price}
+                />
+              </div>
+            }
+          />
         </div>
+      </main>
+
+
+
+      {/* ========== FAB 浮动交易按钮 (仅移动端图表视图) ========== */}
+      {mobileView === 'chart' && (
+        <FloatingTradeButton
+          onClick={switchToTradeView}
+          className="fixed bottom-6 right-4 z-30"
+        />
       )}
+
+      {/* ========== 交易 Drawer - 含订单簿 ========== */}
+      <TradeDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        orderBookContent={
+          <OrderBook
+            bids={latestData?.bids ?? []}
+            asks={latestData?.asks ?? []}
+            price={latestData?.price}
+            priceTrend={priceTrend}
+            priceColorClass={priceColorClass}
+            timestamp={latestData?.timestamp}
+          />
+        }
+      >
+        <TradePanel
+          symbol="BTC"
+          currentPrice={latestData?.price ?? 40000}
+          balance={tradingState?.balance ?? 10000}
+          availableBalance={tradingState?.availableBalance ?? 10000}
+          currentLeverage={tradingState?.leverage ?? 10}
+          positions={tradingState?.positions ?? []}
+          closedPositions={tradingState?.closedPositions ?? []}
+          riskAssessment={riskAssessment}
+          hasPosition={hasPosition}
+          pendingOrders={pendingOrders}
+          onPlaceOrder={placeOrder}
+          onClosePosition={(positionId) => closePosition(positionId)}
+          onSetLeverage={setLeverage}
+          onCancelOrder={cancelOrder}
+          onAddMargin={addMargin}
+          onEstimateLiquidation={estimateLiquidation}
+        />
+      </TradeDrawer>
 
       {/* ========== 新手引导 (仅 Mock 模式显示) ========== */}
       {dataSource === 'mock' && <OnboardingTour />}

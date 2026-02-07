@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useKeyPress } from 'ahooks';
 
 /* ============================================
@@ -59,7 +60,9 @@ function HighLeverageConfirm({
         {/* Header */}
         <div className="px-4 py-3 bg-danger/10 border-b border-danger/20">
           <div className="flex items-center gap-2">
-            <span className="text-danger text-lg">⚠</span>
+            <span className="text-danger">
+              <AlertTriangle size={24} />
+            </span>
             <span className="text-sm font-semibold text-danger">高杠杆风险确认</span>
           </div>
         </div>

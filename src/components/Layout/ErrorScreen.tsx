@@ -1,3 +1,5 @@
+import { AlertTriangle } from 'lucide-react';
+
 /**
  * ErrorScreen Props
  */
@@ -14,7 +16,9 @@ function ErrorScreen({ message }: ErrorScreenProps) {
   return (
     <div className="h-screen w-screen bg-bg-dark flex items-center justify-center p-6">
       <div className="bg-bg-surface border border-danger/30 rounded-lg p-8 max-w-md text-center">
-        <div className="text-danger text-4xl mb-4">⚠</div>
+        <div className="text-danger mb-4 flex justify-center">
+          <AlertTriangle size={48} />
+        </div>
         <h2 className="text-danger text-xl font-bold mb-2">加载失败</h2>
         <p className="text-gray-400 mb-4">{message}</p>
         <p className="text-gray-600 text-sm font-mono">

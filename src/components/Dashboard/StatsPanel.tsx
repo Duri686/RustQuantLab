@@ -32,7 +32,7 @@ function StatCell({
   suffixColorClass = 'text-gray-600',
 }: StatCellProps) {
   return (
-    <div className="flex flex-col justify-center px-1.5 md:px-3 py-1 h-full min-w-20 md:min-w-0 shrink-0 md:shrink">
+    <div className="flex flex-col items-center justify-center px-1.5 md:px-3 py-1 h-full min-w-20 md:min-w-0 shrink-0 md:shrink">
       <span className="text-[8px] md:text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-0.5 md:mb-1">
         {label}
       </span>
@@ -83,10 +83,15 @@ function StatsPanel({
   return (
     <div
       className="
-        shrink-0 h-10 md:h-12 bg-bg-black border-t border-border-dark
-        flex md:grid md:grid-cols-5 divide-x divide-border-dark
+        shrink-0 bg-bg-black border-t border-border-dark
+        hidden md:grid md:grid-cols-5 divide-x divide-border-dark
         overflow-x-auto scrollbar-hide
+        py-2
       "
+      style={{
+        // 使用 env(safe-area-inset-bottom) 处理刘海屏安全区域
+        paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
+      }}
     >
       {/* Mark Price */}
       <StatCell

@@ -99,22 +99,7 @@ function FpsMonitor() {
    Ticker 信息单元
    ============================================ */
 
-interface TickerCellProps {
-  label: string;
-  value: string;
-  colorClass?: string;
-}
 
-function TickerCell({ label, value, colorClass = 'text-gray-300' }: TickerCellProps) {
-  return (
-    <div className="flex flex-col px-3">
-      <span className="text-[8px] text-gray-500 leading-none mb-0.5">{label}</span>
-      <span className={`text-[11px] font-mono tabular-nums leading-none font-medium ${colorClass}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
 
 /* ============================================
    数据源切换按钮
@@ -140,11 +125,10 @@ function DataSourceSwitch({
       <button
         onClick={() => onChange('mock')}
         disabled={disabled}
-        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
-          !isBinance
-            ? 'bg-warning-alt/20 text-warning-alt border border-warning-alt/30'
-            : 'text-gray-500 hover:text-gray-300'
-        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${!isBinance
+          ? 'bg-warning-alt/20 text-warning-alt border border-warning-alt/30'
+          : 'text-gray-500 hover:text-gray-300'
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="模拟数据 (开发模式)"
       >
         <span className="flex items-center gap-1">
@@ -157,11 +141,10 @@ function DataSourceSwitch({
       <button
         onClick={() => onChange('binance')}
         disabled={disabled}
-        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${
-          isBinance
-            ? 'bg-success/20 text-success border border-success/30'
-            : 'text-gray-500 hover:text-gray-300'
-        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+        className={`px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1 ${isBinance
+          ? 'bg-success/20 text-success border border-success/30'
+          : 'text-gray-500 hover:text-gray-300'
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="Binance 实时数据"
       >
         <span>LIVE</span>
@@ -180,39 +163,24 @@ function DataSourceSwitch({
    格式化工具
    ============================================ */
 
-function formatVolume(vol: number): string {
-  if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(2)}M`;
-  if (vol >= 1_000) return `${(vol / 1_000).toFixed(2)}K`;
-  return vol.toFixed(2);
-}
 
-function formatFundingCountdown(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 /* ============================================
    Header Component
    ============================================ */
 
 /**
- * 顶部导航栏
- * Binance 风格：Logo | 交易对 + 价格 | 24h 行情摘要 | 控制按钮
+ * 顶部导航栏 (极简版)
+ * 价格信息已移至 Tab 行
  */
 function Header({
   isRunning,
   onToggle,
-  price,
   symbol = 'BTC-USDT',
-  priceTrend: _priceTrend = 'neutral',
-  priceColorClass = 'text-white',
   dataSource = 'mock',
   onDataSourceChange,
   connectionStatus,
   isSwitching,
-  marketStats,
 }: HeaderProps) {
   const [showDevTools, setShowDevTools] = useState(false);
 
@@ -220,10 +188,6 @@ function Header({
   const handleLogoDoubleClick = useCallback(() => {
     setShowDevTools((prev) => !prev);
   }, []);
-
-  const changePercent = marketStats?.priceChangePercent ?? 0;
-  const changeColor = changePercent >= 0 ? 'text-success' : 'text-danger';
-  const changeSign = changePercent >= 0 ? '+' : '';
 
   return (
     <header className="shrink-0 bg-bg-dark border-b border-border-dark">
@@ -243,54 +207,10 @@ function Header({
           </h1>
         </div>
 
-        {/* ========== 交易对 + 价格 ========== */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex flex-col">
-            <span className="text-xs md:text-sm font-bold text-white">{symbol}</span>
-            <span className="text-[9px] text-gray-500 font-mono">Perpetual</span>
-          </div>
-          <div className="flex flex-col items-end ml-1">
-            <span className={`text-sm md:text-base font-bold font-mono tabular-nums ${priceColorClass}`}>
-              {price?.toFixed(2) ?? '-.--'}
-            </span>
-            <span className={`text-[10px] font-mono tabular-nums ${changeColor}`}>
-              {changeSign}{changePercent.toFixed(2)}%
-            </span>
-          </div>
-        </div>
-
-        {/* ========== 分隔线 ========== */}
-        <div className="hidden md:block w-px h-7 bg-border-dark" />
-
-        {/* ========== 24h Ticker 行情摘要 ========== */}
-        <div className="hidden md:flex items-center divide-x divide-border-dark overflow-x-auto scrollbar-hide">
-          <TickerCell
-            label="24h Change"
-            value={`${changeSign}${(marketStats?.priceChange ?? 0).toFixed(2)}`}
-            colorClass={changeColor}
-          />
-          <TickerCell
-            label="24h High"
-            value={`${(marketStats?.high24h ?? 0).toFixed(2)}`}
-          />
-          <TickerCell
-            label="24h Low"
-            value={`${(marketStats?.low24h ?? 0).toFixed(2)}`}
-          />
-          <TickerCell
-            label="24h Volume"
-            value={`${formatVolume(marketStats?.volume24h ?? 0)} BTC`}
-          />
-          <TickerCell
-            label="Funding Rate"
-            value={`${((marketStats?.fundingRate ?? 0) * 100).toFixed(4)}%`}
-            colorClass={(marketStats?.fundingRate ?? 0) >= 0 ? 'text-success' : 'text-danger'}
-          />
-          <TickerCell
-            label="Funding Countdown"
-            value={formatFundingCountdown(marketStats?.fundingCountdown ?? 0)}
-            colorClass="text-gray-300"
-          />
+        {/* ========== 交易对 (极简) ========== */}
+        <div className="flex items-center shrink-0">
+          <span className="text-xs md:text-sm font-bold text-white">{symbol}</span>
+          <span className="text-[9px] text-gray-500 font-mono ml-1.5">Perpetual</span>
         </div>
 
         {/* ========== 弹性填充 ========== */}
@@ -333,11 +253,10 @@ function Header({
                 <button
                   onClick={onToggle}
                   disabled={!!isSwitching}
-                  className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${
-                    isRunning
-                      ? 'bg-bg-surface hover:bg-border-dark text-warning-alt border border-border-dark'
-                      : 'bg-success hover:opacity-80 text-black'
-                  } ${isSwitching ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center transition-colors ${isRunning
+                    ? 'bg-bg-surface hover:bg-border-dark text-warning-alt border border-border-dark'
+                    : 'bg-success hover:opacity-80 text-black'
+                    } ${isSwitching ? 'opacity-60 cursor-not-allowed' : ''}`}
                   title={isRunning ? '暂停数据流' : '启动数据流'}
                 >
                   {isRunning ? (
@@ -371,24 +290,7 @@ function Header({
         </div>
       </div>
 
-      {/* 移动端 Ticker 精简行 */}
-      <div className="flex md:hidden items-center h-7 px-2 gap-3 overflow-x-auto scrollbar-hide border-t border-border-dark bg-bg-black">
-        <span className={`text-[10px] font-mono tabular-nums whitespace-nowrap ${changeColor}`}>
-          {changeSign}{changePercent.toFixed(2)}%
-        </span>
-        <span className="text-[10px] font-mono tabular-nums text-gray-400 whitespace-nowrap">
-          H {(marketStats?.high24h ?? 0).toFixed(2)}
-        </span>
-        <span className="text-[10px] font-mono tabular-nums text-gray-400 whitespace-nowrap">
-          L {(marketStats?.low24h ?? 0).toFixed(2)}
-        </span>
-        <span className="text-[10px] font-mono tabular-nums text-gray-400 whitespace-nowrap">
-          Vol {formatVolume(marketStats?.volume24h ?? 0)}
-        </span>
-        <span className="text-[10px] font-mono tabular-nums text-success whitespace-nowrap">
-          FR {((marketStats?.fundingRate ?? 0) * 100).toFixed(4)}%
-        </span>
-      </div>
+
     </header>
   );
 }

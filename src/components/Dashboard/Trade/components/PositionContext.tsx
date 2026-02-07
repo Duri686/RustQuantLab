@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { BarChart2 } from 'lucide-react';
 import type { Position } from '../../../../types/trading';
 
 /* ============================================
@@ -35,7 +36,9 @@ function PositionContext({ position, symbol: _symbol }: PositionContextProps) {
     <div className="shrink-0 px-3 py-2 rounded bg-bg-surface border border-border-dark space-y-1.5">
       {/* 标题行 */}
       <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-        <span>📊</span>
+        <span className="text-primary/70">
+          <BarChart2 size={14} />
+        </span>
         <span>当前持仓</span>
       </div>
 
@@ -47,13 +50,12 @@ function PositionContext({ position, symbol: _symbol }: PositionContextProps) {
         <span className="text-gray-400 font-mono">
           {position.leverage}x
         </span>
-        <span className={`text-[9px] px-1 py-0.5 rounded ${
-          riskLabel === 'Safe'
-            ? 'bg-success/10 text-success'
-            : riskLabel === 'Warning'
-              ? 'bg-warning/10 text-warning'
-              : 'bg-danger/10 text-danger'
-        }`}>
+        <span className={`text-[9px] px-1 py-0.5 rounded ${riskLabel === 'Safe'
+          ? 'bg-success/10 text-success'
+          : riskLabel === 'Warning'
+            ? 'bg-warning/10 text-warning'
+            : 'bg-danger/10 text-danger'
+          }`}>
           {riskLabel}
         </span>
       </div>

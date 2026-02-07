@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import type {
   Position,
   LiquidationResult,
@@ -6,6 +6,7 @@ import type {
 } from '../../../types/trading';
 import { ConfirmDialog } from '../../common';
 import { UI_TEXT } from '../../../constants/ui-glossary';
+import { LiquidationProgress, MarginRatioGauge } from './components';
 
 /* ============================================
    Types & Constants
@@ -118,29 +119,40 @@ function WasmPositionCard({
   const pnlColor = isProfit ? 'var(--color-success)' : 'var(--color-danger)';
   const riskColor = RISK_COLORS[riskLevel];
 
+
+  // Use ref to track previous risk level for one-time vibration
+  const prevRiskLevel = useRef<RiskLevel | null>(null);
+
+  useEffect(() => {
+    // 仅在从非 Critical 变为 Critical 时触发 (前端震动)
+    if (
+      riskLevel === 'Critical' &&
+      prevRiskLevel.current !== 'Critical' &&
+      prevRiskLevel.current !== null // 初次加载不震动
+    ) {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([100, 50, 200]);
+      }
+      // Add shake class manually if needed, or rely on key (but better to use imperative animation for events)
+      const card = document.getElementById(`position-card-${position.id}`);
+      if (card) {
+        card.classList.add('animate-shake');
+        setTimeout(() => card.classList.remove('animate-shake'), 500);
+      }
+    }
+    prevRiskLevel.current = riskLevel;
+  }, [riskLevel, position.id]);
+
   return (
     <div
-      className={`p-2.5 rounded bg-bg-surface-elevated border-l-2 hover:opacity-90 transition-colors ${isCritical ? 'animate-pulse' : ''
+      id={`position-card-${position.id}`}
+      className={`p-2.5 rounded bg-bg-surface-elevated border-l-2 hover:opacity-90 transition-colors ${riskLevel === 'Critical' ? 'border-red-500 shadow-red-500/20 shadow-lg' : ''
         }`}
-      style={{ borderLeftColor: borderColor }}
+      style={{ borderLeftColor: riskLevel === 'Critical' ? undefined : borderColor }}
     >
-      {/* Row 1: Symbol & PNL */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm font-bold text-white">{symbol}USDT</span>
-        <span
-          className="text-sm font-semibold font-mono tabular-nums"
-          style={{ color: pnlColor }}
-        >
-          {isProfit ? '+' : ''}
-          {pnlValue.toFixed(2)}
-          <span className="text-[10px] ml-1 opacity-80">
-            ({isProfit ? '+' : ''}
-            {pnlPercent.toFixed(2)}%)
-          </span>
-        </span>
-      </div>
+      {/* ... Row 1 ... */}
 
-      {/* Row 2: Badges */}
+      {/* Row 2: Badges (Removed Risk Level Badge) */}
       <div className="flex items-center gap-1.5 mb-2">
         <span
           className={`px-1 py-px text-[10px] font-semibold rounded ${isLong
@@ -153,150 +165,51 @@ function WasmPositionCard({
         <span className="text-[10px] text-gray-500 font-mono">
           {position.leverage}x
         </span>
-        <span
-          className="text-[10px] px-1 py-px rounded font-medium"
-          style={{
-            backgroundColor: `${riskColor}20`,
-            color: riskColor,
-          }}
-        >
-          {UI_TEXT.riskLevel[riskLevel as keyof typeof UI_TEXT.riskLevel] ?? riskLevel}
-        </span>
       </div>
 
-      {/* Row 3: Data Grid - All values from Wasm */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] mb-2">
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.size}</span>
-          <span className="text-gray-300 font-mono tabular-nums">
-            {position.size.toFixed(4)}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.margin}</span>
-          <span className="text-gray-300 font-mono tabular-nums">
-            {position.margin.toFixed(2)}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.entryPrice}</span>
-          <span className="text-gray-300 font-mono tabular-nums">
-            {position.entryPrice.toFixed(2)}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.markPrice}</span>
-          <span className="text-warning-alt font-mono tabular-nums">
-            {currentPrice.toFixed(2)}
-          </span>
-        </div>
+      {/* ... Row 3: Data Grid ... */}
 
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.liqPrice}</span>
-          <span
-            className={`font-mono tabular-nums ${isLiqNear ? 'text-danger' : 'text-gray-500'
-              }`}
-          >
-            {liquidationPrice.toFixed(2)}
-            {isLiqNear && <span className="ml-1">⚠</span>}
-          </span>
-        </div>
-
-        <div className="flex justify-between">
-          <span className="text-gray-500">{UI_TEXT.position.marginRatio}</span>
-          <span className="font-mono tabular-nums" style={{ color: riskColor }}>
-            {Number.isFinite(marginRatio) && marginRatio < 10000
-              ? marginRatio.toFixed(2)
-              : marginRatio > 10000
-                ? '>9999'
-                : '0.00'}
-            x
-          </span>
-        </div>
-      </div>
-
-      {/* Risk Warning Banner */}
-      {isCritical && riskAssessment?.warningMessage && (
-        <div className="mb-2 px-2 py-1.5 rounded bg-danger/10 border border-danger/30 flex items-center justify-center">
-          <span className="text-[10px] text-danger leading-none">
-            ⚠️ {riskAssessment.warningMessage}
-          </span>
+      {/* Risk Visualization Section */}
+      {riskAssessment && (
+        <div className="mt-2 pt-2 border-t border-white/5 space-y-3">
+          <LiquidationProgress
+            distancePercent={distanceToLiq}
+            riskLevel={riskLevel}
+          />
+          {/* 逐仓模式下显示保证金率 */}
+          {!isCrossMode && (
+            <MarginRatioGauge
+              marginRatio={marginRatio}
+              riskLevel={riskLevel}
+            />
+          )}
         </div>
       )}
 
-      {/* 增加保证金输入 (仅逐仓模式) - 融合设计 */}
-      {showAddMargin && !isCrossMode && (
-        <div className="mb-2 flex items-center h-6 rounded overflow-hidden border border-success/50">
-          <input
-            type="number"
-            value={marginAmount}
-            onChange={(e) => setMarginAmount(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const amount = parseFloat(marginAmount);
-                if (amount > 0) {
-                  onAddMargin?.(position.id, amount);
-                  setMarginAmount('');
-                  setShowAddMargin(false);
-                }
-              } else if (e.key === 'Escape') {
-                setMarginAmount('');
-                setShowAddMargin(false);
-              }
-            }}
-            placeholder="0.00"
-            className="flex-1 h-full px-2 text-[10px] bg-bg-surface-elevated text-white placeholder-gray-500 focus:outline-none font-mono tabular-nums border-none"
-            autoFocus
-          />
-          <span className="px-1.5 text-[9px] text-gray-500 bg-bg-surface-elevated">
-            USDT
-          </span>
+      {/* Row 4: Actions (Removed distance text) */}
+      <div className="flex items-center justify-end pt-2 mt-2 gap-2">
+        {/* 增加保证金按钮 (仅逐仓模式) - Toggle */}
+        {!isCrossMode && onAddMargin && (
           <button
             onClick={() => {
-              const amount = parseFloat(marginAmount);
-              if (amount > 0) {
-                onAddMargin?.(position.id, amount);
-                setMarginAmount('');
-                setShowAddMargin(false);
-              }
+              setShowAddMargin(!showAddMargin);
+              if (showAddMargin) setMarginAmount('');
             }}
-            className="h-full px-3 text-[9px] font-semibold text-white bg-success hover:bg-success/80 transition-colors"
+            className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${showAddMargin
+              ? 'text-success bg-success/20 border border-success/50'
+              : 'text-success bg-success/10 hover:bg-success/20 border border-transparent'
+              }`}
           >
-            OK
+            {UI_TEXT.actions.addMargin}
           </button>
-        </div>
-      )}
-
-      {/* Row 4: Actions */}
-      <div className="flex items-center justify-between pt-1.5 border-t border-border-medium">
-        <span className="text-[9px] text-gray-600 font-mono">
-          {UI_TEXT.position.distToLiq} {distanceToLiq.toFixed(1)}%
-        </span>
-        <div className="flex items-center gap-1.5">
-          {/* 增加保证金按钮 (仅逐仓模式) - Toggle */}
-          {!isCrossMode && onAddMargin && (
-            <button
-              onClick={() => {
-                setShowAddMargin(!showAddMargin);
-                if (showAddMargin) setMarginAmount('');
-              }}
-              className={`h-6 px-2 text-[10px] font-medium rounded transition-colors ${showAddMargin
-                ? 'text-success bg-success/20 border border-success/50'
-                : 'text-success bg-success/10 hover:bg-success/20 border border-transparent'
-                }`}
-            >
-              {UI_TEXT.actions.addMargin}
-            </button>
-          )}
-          <button
-            onClick={handleCloseClick}
-            className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-border-medium hover:bg-danger/20 hover:text-danger rounded transition-colors"
-          >
-            {UI_TEXT.actions.close}
-          </button>
-        </div>
+        )}
+        <button
+          onClick={handleCloseClick}
+          className="h-6 px-3 text-[10px] font-medium text-gray-400 bg-border-medium hover:bg-danger/20 hover:text-danger rounded transition-colors"
+        >
+          {UI_TEXT.actions.close}
+        </button>
       </div>
-
       {/* 平仓确认弹窗 */}
       <ConfirmDialog
         isOpen={showCloseConfirm}
@@ -308,7 +221,7 @@ function WasmPositionCard({
         onConfirm={handleCloseConfirm}
         onCancel={() => setShowCloseConfirm(false)}
       />
-    </div >
+    </div>
   );
 }
 

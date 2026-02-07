@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useMemo, useEffect } from 'react';
 import { animated } from '@react-spring/web';
+import { CandlestickChart, Layers } from 'lucide-react';
 import { useBottomSheet } from '../../../hooks/ui/useBottomSheet';
 import LeverageSlider from './LeverageSlider';
 import WasmPositionCard, { EmptyPositionState } from './PositionCard';
@@ -71,6 +72,10 @@ export interface TradePanelProps {
   pendingOrders?: PendingOrder[];
   onCancelOrder?: (orderId: string) => void;
   onAddMargin?: (positionId: string, amount: number) => void;
+  /** 全屏模式 - 移动端直接显示完整表单 */
+  fullscreen?: boolean;
+  /** 切换到图表视图回调 */
+  onSwitchToChart?: () => void;
 }
 
 /* ============================================
@@ -181,6 +186,8 @@ function TradePanel({
   pendingOrders = [],
   onCancelOrder,
   onAddMargin,
+  fullscreen = false,
+  onSwitchToChart,
 }: TradePanelProps) {
   const toast = useToast();
 
@@ -728,83 +735,135 @@ function TradePanel({
 
   return (
     <>
+      {/* ========== Fullscreen: 移动端全屏表单 ========== */}
+      {fullscreen && (
+        <div className="flex flex-col h-full bg-bg-dark overflow-y-auto">
+          {/* Header: Balance + 图表切换按钮 */}
+          <div className="shrink-0 h-11 px-4 flex items-center justify-between border-b border-border-dark">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500">Balance</span>
+              <span className="text-xs font-mono font-medium text-white">
+                {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <span className="text-gray-500 ml-1">USDT</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500">Avail</span>
+                <span className="text-xs font-mono font-medium text-success">
+                  {availableBalance.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              {/* 图表切换按钮组 */}
+              {onSwitchToChart && (
+                <div className="flex rounded bg-bg-surface p-0.5">
+                  <button
+                    onClick={() => onSwitchToChart()}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                    title="K线图表"
+                  >
+                    <CandlestickChart size={12} />
+                    <span className="hidden xs:inline">图表</span>
+                  </button>
+                  <button
+                    onClick={() => onSwitchToChart()}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                    title="深度图"
+                  >
+                    <Layers size={12} />
+                    <span className="hidden xs:inline">深度</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {formContent}
+        </div>
+      )}
+
       {/* ========== Desktop: 侧边栏 (xl+) ========== */}
-      <div className="hidden xl:flex flex-col h-full bg-bg-dark">
-        {/* Header: Balance */}
-        <div className="shrink-0 h-11 px-4 flex items-center justify-between border-b border-border-dark">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">Balance</span>
-            <span className="text-xs font-mono font-medium text-white">
-              {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              <span className="text-gray-500 ml-1">USDT</span>
-            </span>
+      {!fullscreen && (
+        <div className="hidden xl:flex flex-col h-full bg-bg-dark">
+          {/* Header: Balance */}
+          <div className="shrink-0 h-11 px-4 flex items-center justify-between border-b border-border-dark">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500">Balance</span>
+              <span className="text-xs font-mono font-medium text-white">
+                {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <span className="text-gray-500 ml-1">USDT</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500">Avail</span>
+              <span className="text-xs font-mono font-medium text-success">
+                {availableBalance.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+            </div>
           </div>
+          {formContent}
+        </div>
+      )}
+
+      {/* ========== Mobile: 收起态 Sticky Bar (< xl, 非全屏模式) ========== */}
+      {!fullscreen && (
+        <div
+          {...bindSwipeUp()}
+          className="
+            fixed bottom-0 left-0 right-0 z-50
+            xl:hidden
+            bg-bg-dark border-t border-border-dark
+            px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]
+            touch-none
+          "
+        >
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">Avail</span>
-            <span className="text-xs font-mono font-medium text-success">
-              {availableBalance.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-              })}
-            </span>
+            {/* 价格 */}
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-mono font-semibold text-white tabular-nums">
+                ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* 展开按钮 (保留作为 fallback) */}
+            <button
+              onClick={() => setIsSheetOpen(true)}
+              className="px-3 py-2 text-[10px] text-gray-400 border border-border-dark rounded hover:text-white transition-colors"
+            >
+              ▲ 展开
+            </button>
+
+            {/* 快捷 Buy/Sell */}
+            <button
+              onClick={() => {
+                if (leverage > LEVERAGE_CONFIG.warningThreshold) {
+                  setLeverageConfirm({ open: true, pendingSide: 'LONG' });
+                } else {
+                  onPlaceOrder?.('LONG', 0.01, leverage, marginMode, 'market', undefined, currentPrice);
+                }
+              }}
+              className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-success active:scale-[0.98] transition-all"
+            >
+              {UI_TEXT.actions.buyLong}
+            </button>
+            <button
+              onClick={() => {
+                if (leverage > LEVERAGE_CONFIG.warningThreshold) {
+                  setLeverageConfirm({ open: true, pendingSide: 'SHORT' });
+                } else {
+                  onPlaceOrder?.('SHORT', 0.01, leverage, marginMode, 'market', undefined, currentPrice);
+                }
+              }}
+              className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-danger active:scale-[0.98] transition-all"
+            >
+              {UI_TEXT.actions.sellShort}
+            </button>
           </div>
         </div>
-        {formContent}
-      </div>
-
-      {/* ========== Mobile: 收起态 Sticky Bar (< xl) ========== */}
-      <div
-        {...bindSwipeUp()}
-        className="
-          fixed bottom-0 left-0 right-0 z-50
-          xl:hidden
-          bg-bg-dark border-t border-border-dark
-          px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]
-          touch-none
-        "
-      >
-        <div className="flex items-center gap-2">
-          {/* 价格 */}
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-mono font-semibold text-white tabular-nums">
-              ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          {/* 展开按钮 (保留作为 fallback) */}
-          <button
-            onClick={() => setIsSheetOpen(true)}
-            className="px-3 py-2 text-[10px] text-gray-400 border border-border-dark rounded hover:text-white transition-colors"
-          >
-            ▲ 展开
-          </button>
-
-          {/* 快捷 Buy/Sell */}
-          <button
-            onClick={() => {
-              if (leverage > LEVERAGE_CONFIG.warningThreshold) {
-                setLeverageConfirm({ open: true, pendingSide: 'LONG' });
-              } else {
-                onPlaceOrder?.('LONG', 0.01, leverage, marginMode, 'market', undefined, currentPrice);
-              }
-            }}
-            className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-success active:scale-[0.98] transition-all"
-          >
-            {UI_TEXT.actions.buyLong}
-          </button>
-          <button
-            onClick={() => {
-              if (leverage > LEVERAGE_CONFIG.warningThreshold) {
-                setLeverageConfirm({ open: true, pendingSide: 'SHORT' });
-              } else {
-                onPlaceOrder?.('SHORT', 0.01, leverage, marginMode, 'market', undefined, currentPrice);
-              }
-            }}
-            className="h-10 px-4 touch-target rounded-lg font-semibold text-xs text-white bg-danger active:scale-[0.98] transition-all"
-          >
-            {UI_TEXT.actions.sellShort}
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ========== Mobile: Bottom Sheet 展开态 (Spring 动画) ========== */}
       {isSheetOpen && (
