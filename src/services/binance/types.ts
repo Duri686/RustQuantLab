@@ -45,10 +45,14 @@ export interface BinanceKline {
   volume: number;
   /** 收盘时间 (毫秒) */
   closeTime: number;
-  /** 成交额 */
+  /** 成交额 (USDT) */
   quoteVolume: number;
   /** 成交笔数 */
   trades: number;
+  /** 主动买入成交量 */
+  takerBuyVolume: number;
+  /** 主动买入成交额 (USDT) */
+  takerBuyQuoteVolume: number;
 }
 
 /**
@@ -67,11 +71,14 @@ export interface BinanceTicker24h {
   symbol: string;
   priceChange: string;
   priceChangePercent: string;
+  weightedAvgPrice: string;
   lastPrice: string;
   highPrice: string;
   lowPrice: string;
   volume: string;
   quoteVolume: string;
+  openPrice: string;
+  count: number;
 }
 
 // ============================================================================

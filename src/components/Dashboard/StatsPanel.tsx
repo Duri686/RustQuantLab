@@ -69,8 +69,8 @@ function formatFundingCountdown(seconds: number): string {
 
 /**
  * 合约交易信息条
- * Binance Futures 风格：单行 5 列布局
- * Mark Price / Index Price / Funding Rate / 24h Change / Spread
+ * Binance Futures 风格：单行 7 列布局
+ * Mark Price / Index Price / Funding Rate / 24h Change / 24h Vol / Taker Buy / Spread
  */
 function StatsPanel({
   analysisResult,
@@ -80,16 +80,26 @@ function StatsPanel({
   const changeColor = changePercent >= 0 ? 'text-success' : 'text-danger';
   const changeSign = changePercent >= 0 ? '+' : '';
 
+  // 格式化大数字（成交量/额）
+  const fmtBig = (n: number): string => {
+    if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+    return n.toFixed(2);
+  };
+
+  const takerRatio = marketStats?.takerBuyRatio;
+  const takerPct = takerRatio != null ? (takerRatio * 100).toFixed(1) : '--';
+
   return (
     <div
       className="
         shrink-0 bg-bg-black border-t border-border-dark
-        hidden md:grid md:grid-cols-5 divide-x divide-border-dark
+        hidden md:grid md:grid-cols-7 divide-x divide-border-dark
         overflow-x-auto scrollbar-hide
         py-2
       "
       style={{
-        // 使用 env(safe-area-inset-bottom) 处理刘海屏安全区域
         paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
       }}
     >
@@ -122,6 +132,32 @@ function StatsPanel({
         suffix={`${changeSign}${(marketStats?.priceChange ?? 0).toFixed(2)}`}
         colorClass={changeColor}
       />
+
+      {/* 24h Volume */}
+      <StatCell
+        label="24h Vol"
+        value={fmtBig(marketStats?.volume24h ?? 0)}
+        suffix={`≈$${fmtBig(marketStats?.turnover24h ?? 0)}`}
+        suffixColorClass="text-gray-500"
+      />
+
+      {/* Taker Buy Ratio */}
+      <div className="flex flex-col items-center justify-center px-1.5 md:px-3 py-1 h-full">
+        <span className="text-[8px] md:text-[9px] text-gray-500 uppercase tracking-wider leading-none mb-0.5 md:mb-1">
+          Buy / Sell
+        </span>
+        <div className="flex items-center gap-1">
+          <div className="w-14 h-1.5 rounded-full overflow-hidden bg-danger/40">
+            <div
+              className="h-full rounded-full bg-success transition-all duration-500 ease-out"
+              style={{ width: takerRatio != null ? `${takerRatio * 100}%` : '50%' }}
+            />
+          </div>
+          <span className="text-[10px] font-mono font-bold tabular-nums text-success leading-none">
+            {takerPct}%
+          </span>
+        </div>
+      </div>
 
       {/* Spread */}
       <StatCell

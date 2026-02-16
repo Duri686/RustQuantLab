@@ -1,11 +1,13 @@
 import { memo, useState, type ReactNode } from 'react';
-import { CandlestickChart, Layers, ArrowRight } from 'lucide-react';
+import { CandlestickChart, Layers, ArrowRight, ListOrdered } from 'lucide-react';
 
-type TabType = 'chart' | 'depth';
+type TabType = 'chart' | 'depth' | 'trades';
 
 interface ChartTabsProps {
     chartContent: ReactNode;
     depthContent: ReactNode;
+    /** 逐笔成交内容 */
+    tradesContent?: ReactNode;
     /** 当前价格 */
     price?: number;
     /** 价格变化百分比 */
@@ -29,6 +31,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
     { id: 'chart', label: '图表', icon: <CandlestickChart size={14} /> },
     { id: 'depth', label: '深度', icon: <Layers size={14} /> },
+    { id: 'trades', label: '成交', icon: <ListOrdered size={14} /> },
 ];
 
 /**
@@ -42,6 +45,7 @@ const TABS: TabConfig[] = [
 function ChartTabs({
     chartContent,
     depthContent,
+    tradesContent,
     price,
     priceChangePercent = 0,
     priceChange = 0,
@@ -161,6 +165,7 @@ function ChartTabs({
             >
                 {activeTab === 'chart' && chartContent}
                 {activeTab === 'depth' && depthContent}
+                {activeTab === 'trades' && tradesContent}
             </div>
         </div>
     );

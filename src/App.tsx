@@ -16,6 +16,7 @@ import { ChartTabs, TradeDrawer } from './components/Layout';
 import FloatingTradeButton from './components/Layout/FloatingTradeButton';
 import { useUiStore, type UiState } from './hooks/ui/useUiStore';
 import { useMarketStats } from './hooks/useMarketStats';
+import RecentTrades from './components/Dashboard/RecentTrades';
 
 /* ============================================
    App - Layout Orchestrator
@@ -59,6 +60,9 @@ function App() {
     cancelOrder,
     addMargin,
     estimateLiquidation,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
   } = useWasmEngine({
     tickInterval: 100,
     dataSource,
@@ -87,6 +91,8 @@ function App() {
     latestData,
     currentPrice: latestData?.price,
     timeframe: activeTimeframe,
+    ticker24h,
+    takerBuyRatio,
   });
 
   const handleTimeframeChange = useCallback(
@@ -179,6 +185,11 @@ function App() {
                   asks={latestData?.asks ?? []}
                   price={latestData?.price}
                 />
+              </div>
+            }
+            tradesContent={
+              <div className="h-full bg-terminal-bg">
+                <RecentTrades trades={recentTrades ?? []} />
               </div>
             }
           />

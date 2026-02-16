@@ -46,6 +46,8 @@ import type {
 } from '../types/trading';
 import type { TradingWasmEngine } from './tradingState/types';
 import type { PendingIndicators } from './candle/candleUtils';
+import type { BinanceTicker24h } from '../services/binance/types';
+import type { TradeRecord } from './useBinanceMarket';
 
 // ============================================================================
 // 类型定义
@@ -100,6 +102,12 @@ export interface UseWasmEngineReturn {
   dataSource: DataSource;
   /** WebSocket 连接状态 (仅 Binance) */
   connectionStatus?: string;
+  /** 24h Ticker 统计 (仅 Binance) */
+  ticker24h?: BinanceTicker24h | null;
+  /** 最近成交记录 (仅 Binance) */
+  recentTrades?: TradeRecord[];
+  /** Taker 买入比例 (仅 Binance) */
+  takerBuyRatio?: number | null;
 
   // ========== 交易状态 (Rust 管理) ==========
   /** 交易状态快照 */
@@ -195,6 +203,9 @@ export function useWasmEngine(
     requestHistory,
     connectionStatus,
     error: marketError,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
   } = useMarketData({
     source: dataSource,
     tickInterval,
@@ -562,6 +573,9 @@ export function useWasmEngine(
     setTimeframe,
     dataSource,
     connectionStatus,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
 
     // 交易状态
     tradingState,

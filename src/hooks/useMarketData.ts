@@ -10,8 +10,9 @@
 
 import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useMockMarket } from './useMockMarket';
-import { useBinanceMarket } from './useBinanceMarket';
+import { useBinanceMarket, type TradeRecord } from './useBinanceMarket';
 import type { OrderBook, HistoryCandle } from '../types/index';
+import type { BinanceTicker24h } from '../services/binance/types';
 
 // ============================================================================
 // 类型定义
@@ -50,6 +51,12 @@ export interface UseMarketDataReturn {
   connectionStatus?: string;
   /** 错误信息 */
   error?: string | null;
+  /** 24h Ticker 统计 (仅 Binance) */
+  ticker24h?: BinanceTicker24h | null;
+  /** 最近成交记录 (仅 Binance) */
+  recentTrades?: TradeRecord[];
+  /** Taker 买入比例 (仅 Binance) */
+  takerBuyRatio?: number | null;
 }
 
 // ============================================================================
@@ -146,6 +153,9 @@ export function useMarketData(
         dataSource: 'binance',
         connectionStatus: binanceData.connectionStatus,
         error: binanceData.error,
+        ticker24h: binanceData.ticker24h,
+        recentTrades: binanceData.recentTrades,
+        takerBuyRatio: binanceData.takerBuyRatio,
       };
     }
 

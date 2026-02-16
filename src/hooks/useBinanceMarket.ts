@@ -19,9 +19,25 @@ import {
   type MarketType,
   type BinanceWsKlineMsg,
   type BinanceWsDepthMsg,
+  type BinanceWsTradeMsg,
+  type BinanceTicker24h,
   type ConnectionStatus,
 } from '../services/binance';
 import type { OrderBook, HistoryCandle } from '../types/index';
+
+/** 最近成交记录 */
+export interface TradeRecord {
+  /** 交易 ID */
+  id: number;
+  /** 价格 */
+  price: number;
+  /** 数量 */
+  qty: number;
+  /** 成交时间 (毫秒) */
+  time: number;
+  /** 是否是买方主动成交 */
+  isBuyerMaker: boolean;
+}
 
 // ============================================================================
 // 类型定义
@@ -63,6 +79,12 @@ export interface UseBinanceMarketReturn {
   currentPrice: number | null;
   /** 错误信息 */
   error: string | null;
+  /** 24h Ticker 统计数据 (来自 Binance REST API) */
+  ticker24h: BinanceTicker24h | null;
+  /** 最近成交记录 (来自 WebSocket trade stream) */
+  recentTrades: TradeRecord[];
+  /** Taker 买入比例 (0~1，实时计算) */
+  takerBuyRatio: number | null;
 }
 
 // ============================================================================
@@ -194,6 +216,9 @@ export function useBinanceMarket(
     useState<ConnectionStatus>('disconnected');
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ticker24h, setTicker24h] = useState<BinanceTicker24h | null>(null);
+  const [recentTrades, setRecentTrades] = useState<TradeRecord[]>([]);
+  const [takerBuyRatio, setTakerBuyRatio] = useState<number | null>(null);
 
   // ========== Refs ==========
   const wsRef = useRef<BinanceWebSocket | null>(null);
@@ -304,6 +329,15 @@ export function useBinanceMarket(
       console.log(`[Binance] 🚀 启动实时数据流...`);
       setIsRunning(true);
       setError(null);
+
+      // 获取 24h Ticker 统计数据
+      try {
+        const ticker = await BinanceAPI.getTicker24h(opts.symbol, opts.market);
+        setTicker24h(ticker);
+        console.log('[Binance] ✅ 24h Ticker 已加载');
+      } catch (tickerErr) {
+        console.warn('[Binance] ⚠️ 获取 24h Ticker 失败，使用 K 线估算:', tickerErr);
+      }
 
       // 如果有起始价格，设置它
       if (startPrice) {
@@ -468,8 +502,11 @@ export function useBinanceMarket(
             prevKlineVolumeRef.current = volume;
             currentKlineVolumeRef.current = volume;
 
-
-
+            // 计算 Taker 买入比例（实时）
+            const takerBuyVol = parseFloat(k.V);
+            if (volume > 0) {
+              setTakerBuyRatio(takerBuyVol / volume);
+            }
             // K 线完结后，下一根 K 线开始时 prevKlineVolumeRef 会重置为 0
 
             // 立即更新 OrderBook（包含成交量）
@@ -553,10 +590,24 @@ export function useBinanceMarket(
               }
             }
           },
+          onTrade: (trade: BinanceWsTradeMsg) => {
+            // 维护最近 50 笔成交记录
+            const record: TradeRecord = {
+              id: trade.t,
+              price: parseFloat(trade.p),
+              qty: parseFloat(trade.q),
+              time: trade.T,
+              isBuyerMaker: trade.m,
+            };
+            setRecentTrades((prev) => {
+              const next = [record, ...prev];
+              return next.length > 50 ? next.slice(0, 50) : next;
+            });
+          },
         });
 
-        // 订阅 K 线和深度数据
-        ws.connectKline().connectDepth('100ms').start();
+        // 订阅 K 线、深度和逐笔交易数据
+        ws.connectKline().connectDepth('100ms').connectTrade().start();
         wsRef.current = ws;
 
         // 定时更新 OrderBook（即使没有深度更新，也定期刷新价格）
@@ -644,5 +695,8 @@ export function useBinanceMarket(
     connectionStatus,
     currentPrice,
     error,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
   };
 }

@@ -14,6 +14,7 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { useCountDown } from 'ahooks';
 import type { Candle, OrderBook } from '../types/index';
+import type { BinanceTicker24h } from '../services/binance/types';
 
 // ============================================================================
 // 类型定义
@@ -37,12 +38,16 @@ export interface MarketStats {
   markPrice: number;
   /** Index Price（指数价格） */
   indexPrice: number;
-  /** 资金费率 (模拟值) */
+  /** 资金费率 */
   fundingRate: number;
   /** 下次资金费率结算倒计时 (秒) */
   fundingCountdown: number;
   /** 当前 K 线收盘倒计时 (秒)，基于选中的时间周期 */
   candleCountdown: number;
+  /** Taker 买入比例 (0~1，实时) */
+  takerBuyRatio: number | null;
+  /** 数据来源标识：true = 来自 Binance API，false = K 线估算 */
+  isRealData: boolean;
 }
 
 /** Hook 配置 */
@@ -55,6 +60,10 @@ interface UseMarketStatsOptions {
   currentPrice?: number;
   /** 当前时间周期（用于 K 线收盘倒计时） */
   timeframe?: string;
+  /** Binance 24h Ticker（live 模式） */
+  ticker24h?: BinanceTicker24h | null;
+  /** Taker 买入比例（来自 useBinanceMarket） */
+  takerBuyRatio?: number | null;
 }
 
 // ============================================================================
@@ -95,6 +104,8 @@ export function useMarketStats({
   latestData,
   currentPrice,
   timeframe = '1H',
+  ticker24h,
+  takerBuyRatio: externalTakerBuyRatio,
 }: UseMarketStatsOptions): MarketStats {
   const price = currentPrice ?? latestData?.price ?? 0;
 
@@ -135,6 +146,39 @@ export function useMarketStats({
   const candleCountdown = Math.ceil(countdown / 1000);
 
   return useMemo(() => {
+    // 有真实 Binance 24h Ticker 数据时，优先使用
+    if (ticker24h && price > 0) {
+      const change = parseFloat(ticker24h.priceChange);
+      const changePct = parseFloat(ticker24h.priceChangePercent);
+      const high = parseFloat(ticker24h.highPrice);
+      const low = parseFloat(ticker24h.lowPrice);
+      const vol = parseFloat(ticker24h.volume);
+      const turnover = parseFloat(ticker24h.quoteVolume);
+
+      // Mark Price = order book 中间价
+      let markPrice = price;
+      if (latestData?.bids?.length && latestData?.asks?.length) {
+        markPrice = (latestData.bids[0][0] + latestData.asks[0][0]) / 2;
+      }
+
+      return {
+        priceChange: change,
+        priceChangePercent: changePct,
+        high24h: Math.max(high, price),
+        low24h: Math.min(low, price),
+        volume24h: vol,
+        turnover24h: turnover,
+        markPrice,
+        indexPrice: price,
+        fundingRate: SIMULATED_FUNDING_RATE,
+        fundingCountdown,
+        candleCountdown,
+        takerBuyRatio: externalTakerBuyRatio ?? null,
+        isRealData: true,
+      };
+    }
+
+    // 降级方案：从 K 线历史估算
     if (candleHistory.length === 0 || price === 0) {
       return {
         priceChange: 0,
@@ -148,6 +192,8 @@ export function useMarketStats({
         fundingRate: SIMULATED_FUNDING_RATE,
         fundingCountdown,
         candleCountdown,
+        takerBuyRatio: externalTakerBuyRatio ?? null,
+        isRealData: false,
       };
     }
 
@@ -192,6 +238,8 @@ export function useMarketStats({
       fundingRate: SIMULATED_FUNDING_RATE,
       fundingCountdown,
       candleCountdown,
+      takerBuyRatio: externalTakerBuyRatio ?? null,
+      isRealData: false,
     };
-  }, [candleHistory, price, latestData, fundingCountdown, candleCountdown]);
+  }, [candleHistory, price, latestData, fundingCountdown, candleCountdown, ticker24h, externalTakerBuyRatio]);
 }

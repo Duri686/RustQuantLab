@@ -71,6 +71,8 @@ function parseKline(raw: BinanceKlineRaw): BinanceKline {
     closeTime: raw[6],
     quoteVolume: parseFloat(raw[7]),
     trades: raw[8],
+    takerBuyVolume: parseFloat(raw[9]),
+    takerBuyQuoteVolume: parseFloat(raw[10]),
   };
 }
 
