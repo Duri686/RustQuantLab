@@ -13,6 +13,7 @@ import { useMockMarket } from './useMockMarket';
 import { useBinanceMarket, type TradeRecord } from './useBinanceMarket';
 import type { OrderBook, HistoryCandle } from '../types/index';
 import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
+import { DEFAULT_MARKET } from '../services/binance/constants';
 
 // ============================================================================
 // 类型定义
@@ -99,7 +100,7 @@ export function useMarketData(
     tickInterval,
     historyCount,
     symbol,
-    market: 'futures',
+    market: DEFAULT_MARKET,
   });
 
   // ========== 统一的历史数据请求封装 ==========

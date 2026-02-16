@@ -11,19 +11,19 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  BinanceAPI,
-  BinanceWebSocket,
-  type BinanceKline,
-  type BinanceInterval,
-  type MarketType,
-  type BinanceWsKlineMsg,
-  type BinanceWsDepthMsg,
-  type BinanceWsTradeMsg,
-  type BinanceTicker24h,
-  type BinancePremiumIndex,
-  type ConnectionStatus,
+import { BinanceAPI, BinanceWebSocket } from '../services/binance';
+import type {
+  BinanceKline,
+  BinanceInterval,
+  MarketType,
+  BinanceWsKlineMsg,
+  BinanceWsTradeMsg,
+  BinanceWsDepthMsg,
+  BinancePremiumIndex,
+  BinanceTicker24h,
+  ConnectionStatus,
 } from '../services/binance';
+import { DEFAULT_MARKET, DEFAULT_SYMBOL } from '../services/binance/constants';
 import type { OrderBook, HistoryCandle } from '../types/index';
 
 /** 最近成交记录 */
@@ -96,12 +96,12 @@ export interface UseBinanceMarketReturn {
 
 /** 默认配置 */
 const DEFAULT_OPTIONS: Required<UseBinanceMarketOptions> = {
-  symbol: 'BTCUSDT',
-  market: 'futures', // 使用合约 API (USDT 永续合约)
-  historyInterval: '1m', // 历史数据用 1 分钟 K 线（Rust 引擎需要细粒度数据）
-  realtimeInterval: '1s', // 实时用 1 秒 K 线
-  historyCount: 5000, // 历史 K 线数量（5000 根 1m = 约 3.5 天，足够计算所有指标）
-  tickInterval: 100, // 100ms 更新一次 OrderBook
+  symbol: DEFAULT_SYMBOL,
+  market: DEFAULT_MARKET,
+  historyInterval: '1m',
+  realtimeInterval: '1s',
+  historyCount: 5000,
+  tickInterval: 100,
 };
 
 // ============================================================================

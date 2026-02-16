@@ -9,14 +9,6 @@
 
 import type { ManipulationEvent, MarketState } from '../types';
 import { initializeMicroTrend, calculateEventDuration } from './microTrend';
-import { LOW_VOLUME_THRESHOLD, HIGH_VOLUME_THRESHOLD } from '../constants';
-
-/**
- * 检查是否处于流动性异常状态
- */
-function isLiquidityAnomaly(s: MarketState): boolean {
-  return s.liquidityState !== 'NORMAL';
-}
 
 /**
  * 判断是否应触发操纵事件

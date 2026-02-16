@@ -133,7 +133,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
     const priceColor = isUp ? CHART_COLORS.UP : CHART_COLORS.DOWN;
     const { changePercent } = displayCandle
       ? calculateChange(displayCandle.open, displayCandle.close)
-      : { change: 0, changePercent: 0 };
+      : { changePercent: 0 };
 
     // 指标数据
     const displayMa7 = indicatorData.ma7[displayIndex];
@@ -306,5 +306,3 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
 );
 
 export default LightweightChart;
-export type { LightweightChartHandle };
-

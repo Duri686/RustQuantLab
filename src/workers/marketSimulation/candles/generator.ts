@@ -26,7 +26,6 @@ import { generateVolume, updateVolatilityAndVolumeMode } from './volume';
 import {
   MOMENTUM_DECAY,
   INERTIA_STRENGTH,
-  MAX_TICK_JUMP,
   MAX_RANGE_1M,
 } from '../constants';
 

@@ -31,11 +31,15 @@ function App() {
     handleDataSourceChange,
   } = useDataSource();
 
-  // ========== 交易对状态 ==========
-  const [activeSymbol, setActiveSymbol] = useState('BTCUSDT');
+  // ========== 交易对状态 (本地持久化) ==========
+  const SYMBOL_KEY = 'rustquantlab_symbol';
+  const [activeSymbol, setActiveSymbol] = useState(() => {
+    const saved = localStorage.getItem(SYMBOL_KEY);
+    return saved || 'BTCUSDT';
+  });
   const handleSymbolChange = useCallback((symbol: string) => {
     setActiveSymbol(symbol);
-    // 切换 symbol 时也可以触发一些重置逻辑 if needed
+    localStorage.setItem(SYMBOL_KEY, symbol);
   }, []);
 
   const setSwitching = useUiStore((s: UiState) => s.setSwitching);

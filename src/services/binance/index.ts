@@ -46,6 +46,19 @@ export {
   toHistoryCandle,
 } from './api';
 
+// 导出常量
+export {
+  DEFAULT_MARKET,
+  DEFAULT_SYMBOL,
+  DEFAULT_INTERVAL,
+  WS_ENDPOINTS,
+  REST_ENDPOINTS,
+  REST_BASE_URLS,
+  PROXY_PATHS,
+  IS_DEV,
+  getBaseUrl,
+} from './constants';
+
 // 导出 WebSocket
 export {
   BinanceWebSocket,

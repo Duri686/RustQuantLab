@@ -121,7 +121,7 @@ function ChartView({
                         <h2 className="text-[10px] md:text-[11px] font-medium text-gray-400 truncate max-w-[120px] md:max-w-none">
                             {latestData?.symbol ?? 'BTC-USDT'} · Perp
                         </h2>
-                        <span className="text-[9px] md:text-[10px] font-mono text-gray-600">
+                        <span className="text-[9px] md:text-[10px] font-mono text-gray-600 tabular-nums min-w-[70px]">
                             {activeChartType === 'Depth'
                                 ? 'Market Depth'
                                 : `${candleHistory.length} candles`}

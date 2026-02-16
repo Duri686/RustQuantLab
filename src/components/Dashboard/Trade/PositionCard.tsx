@@ -35,7 +35,7 @@ export interface WasmPositionCardProps {
 
 // 使用 CSS 变量，移除硬编码颜色常量
 /** 风险等级颜色映射 */
-const RISK_COLORS: Record<RiskLevel, string> = {
+export const RISK_COLORS: Record<RiskLevel, string> = {
   Safe: 'var(--color-success)',
   Low: 'var(--color-info)',
   Medium: 'var(--color-warning-alt)',
@@ -68,7 +68,7 @@ function WasmPositionCard({
 
   // 增加保证金弹窗状态
   const [showAddMargin, setShowAddMargin] = useState(false);
-  const [marginAmount, setMarginAmount] = useState('');
+  const [_marginAmount, setMarginAmount] = useState('');
 
   // 平仓确认弹窗状态
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
@@ -85,7 +85,6 @@ function WasmPositionCard({
   // 🔴 直接使用 Wasm 计算的值，无本地计算
   // Hedge Mode: 每个仓位有独立的字段，由 Rust 计算
   const pnlValue = position.unrealizedPnl;
-  const pnlPercent = position.pnlPercentage;
 
   // 区分全仓/逐仓模式的数据来源
   // 注意：Rust serde 序列化为小写 "cross"/"isolated"
@@ -111,13 +110,7 @@ function WasmPositionCard({
       ? Math.abs(((currentPrice - liquidationPrice) / currentPrice) * 100)
       : 100;
 
-  // 风险预警：距离强平 < 10%
-  const isLiqNear = distanceToLiq < 10;
-  const isCritical = riskLevel === 'Critical' || riskLevel === 'High';
-
   const borderColor = isLong ? 'var(--color-success)' : 'var(--color-danger)';
-  const pnlColor = isProfit ? 'var(--color-success)' : 'var(--color-danger)';
-  const riskColor = RISK_COLORS[riskLevel];
 
 
   // Use ref to track previous risk level for one-time vibration

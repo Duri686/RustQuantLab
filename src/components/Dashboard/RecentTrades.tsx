@@ -240,7 +240,7 @@ function RecentTrades({ trades, symbol = 'BTC' }: RecentTradesProps) {
               <div
                 key={trade.id}
                 className={`relative flex items-center px-2 py-[2px] transition-colors hover:bg-white/5 ${
-                  isLarge ? 'bg-white/[0.04]' : ''
+                  isLarge ? 'bg-white/4' : ''
                 }`}
               >
                 {/* 背景数量条 */}
