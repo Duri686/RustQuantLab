@@ -468,28 +468,9 @@ export function useBinanceMarket(
             prevKlineVolumeRef.current = volume;
             currentKlineVolumeRef.current = volume;
 
-            // 详细日志：记录每次 K 线更新（减少日志频率，只在重要时刻记录）
-            if (k.x || isNewKline || Math.abs(volumeDelta) > 0.0001) {
-              console.log(`[Binance] 📊 K线更新:`, {
-                time: new Date(k.t).toLocaleTimeString(),
-                price: price.toFixed(2),
-                volume: volume.toFixed(4),
-                volumeDelta: volumeDelta.toFixed(4),
-                isFinished: k.x,
-                isNewKline,
-                interval: k.i,
-              });
-            }
 
-            // 如果 K 线已完结，记录日志
-            if (k.x) {
-              console.log(
-                `[Binance] ✅ K 线完结: 总成交量=${volume.toFixed(4)}, 周期=${
-                  k.i
-                }`,
-              );
-              // K 线完结后，下一根 K 线开始时 prevKlineVolumeRef 会重置为 0
-            }
+
+            // K 线完结后，下一根 K 线开始时 prevKlineVolumeRef 会重置为 0
 
             // 立即更新 OrderBook（包含成交量）
             // 注意：WASM 引擎的 Candle::update 会累加成交量
@@ -518,18 +499,6 @@ export function useBinanceMarket(
 
               orderBook.volume = volumeToPass;
 
-              // 🔍 成交量追踪日志：K线更新
-              console.log(`[VOL追踪] 📊 K线更新 → setLatestData:`, {
-                volume: volumeToPass,
-                volumeType: k.x
-                  ? '增量(完结)'
-                  : isNewKline
-                  ? '增量(新K线)'
-                  : '增量',
-                klineFinished: k.x,
-                isNewKline,
-                orderBookHasVolume: orderBook.volume !== undefined,
-              });
 
               setLatestData(orderBook);
             }
@@ -578,12 +547,6 @@ export function useBinanceMarket(
                   // 注意：真实的成交量数据只在 K 线更新时传递
                   orderBook.volume = 0;
 
-                  // 🔍 成交量追踪日志：深度更新
-                  console.log(`[VOL追踪] 📦 深度更新 → setLatestData:`, {
-                    volume: 0,
-                    currentKlineVolume: currentKlineVolumeRef.current,
-                    note: '传递 0 避免累加，真实成交量在 K 线更新时传递',
-                  });
 
                   setLatestData(orderBook);
                 }
@@ -614,14 +577,7 @@ export function useBinanceMarket(
             // 注意：真实的成交量数据只在 K 线更新时传递
             orderBook.volume = 0;
 
-            // 🔍 成交量追踪日志：定时更新（减少频率，每10次记录一次）
-            if (Math.random() < 0.1) {
-              console.log(`[VOL追踪] ⏰ 定时更新 → setLatestData:`, {
-                volume: 0,
-                currentKlineVolume: currentKlineVolumeRef.current,
-                note: '传递 0 避免累加，真实成交量在 K 线更新时传递',
-              });
-            }
+
 
             setLatestData(orderBook);
           }

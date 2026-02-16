@@ -37,7 +37,7 @@ function TradePanelConnected({
     } = useWasmEngine({
         tickInterval: 100,
         dataSource,
-        historyCount: 1440,
+        historyCount: 5000,
     });
 
     return (

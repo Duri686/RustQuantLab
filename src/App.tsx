@@ -62,7 +62,7 @@ function App() {
   } = useWasmEngine({
     tickInterval: 100,
     dataSource,
-    historyCount: 1440,
+    historyCount: 5000,
   });
 
   // 切换完成条件

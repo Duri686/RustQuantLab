@@ -427,6 +427,30 @@ export interface WasmMarketEngine {
    */
   get_candle_count(timeframe: WasmTimeframe): number;
 
+  // ========== 历史数据加载方法 ==========
+
+  /**
+   * 加载历史 K 线数据到指定时间周期
+   *
+   * @param timeframe - 时间周期字符串
+   * @param candles - 历史 K 线数据数组
+   * @returns 加载的 K 线数量
+   */
+  load_history_candles(
+    timeframe: WasmTimeframe,
+    candles: import('./index').HistoryCandle[],
+  ): number;
+
+  /**
+   * 加载 1s K 线并自动聚合到所有高周期 (1m/5m/15m/1H/4H/1D)
+   *
+   * @param candles - 1 秒粒度的历史 K 线数据
+   * @returns 各周期名称及对应 K 线数量的数组
+   */
+  load_history_1s_and_aggregate(
+    candles: import('./index').HistoryCandle[],
+  ): [string, number][];
+
   // ========== 模拟交易方法 ==========
 
   /**

@@ -222,9 +222,7 @@ export function useWasmEngine(
   // ========== 数据源切换时重置状态 ==========
   useEffect(() => {
     if (prevDataSourceRef.current !== dataSource) {
-      console.log(
-        `[useWasmEngine] 数据源切换: ${prevDataSourceRef.current} -> ${dataSource}`,
-      );
+
 
       // 清空 Rust 引擎内部历史，避免不同数据源之间的价格/成交量互相污染
       if (engineAlive.current && engineRef.current) {
@@ -255,15 +253,10 @@ export function useWasmEngine(
   // ========== Wasm 初始化 ==========
   useEffect(() => {
     let aborted = false;
-    const t0 = performance.now();
 
     const init = async () => {
       try {
-        console.log('[Perf] ⏱️ 开始 WASM 初始化...');
         const engine = await initWasmEngine();
-        console.log(
-          `[Perf] ✅ WASM 初始化完成: ${(performance.now() - t0).toFixed(0)}ms`,
-        );
 
         if (aborted) return;
 
@@ -294,7 +287,7 @@ export function useWasmEngine(
       aborted = true;
       engineAlive.current = false;
       engineRef.current = null;
-      console.log('[useWasmEngine] 组件卸载，引擎保持活跃');
+
     };
   }, []);
 
@@ -515,7 +508,7 @@ export function useWasmEngine(
     try {
       const success = engineRef.current.set_timeframe(timeframe);
       if (success) {
-        console.log(`[useWasmEngine] 时间周期已切换为 ${timeframe}`);
+
 
         // 立即获取新周期的 K 线数据
         try {
