@@ -14,7 +14,7 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { useCountDown } from 'ahooks';
 import type { Candle, OrderBook } from '../types/index';
-import type { BinanceTicker24h } from '../services/binance/types';
+import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
 
 // ============================================================================
 // 类型定义
@@ -64,14 +64,16 @@ interface UseMarketStatsOptions {
   ticker24h?: BinanceTicker24h | null;
   /** Taker 买入比例（来自 useBinanceMarket） */
   takerBuyRatio?: number | null;
+  /** 合约标记价格 / 资金费率 */
+  premiumIndex?: BinancePremiumIndex | null;
 }
 
 // ============================================================================
 // 常量
 // ============================================================================
 
-/** 模拟资金费率：0.01%（每 8 小时） */
-const SIMULATED_FUNDING_RATE = 0.0001;
+/** 模拟资金费率：0.01%（每 8 小时）—— 作为 premiumIndex 不可用时的回退值 */
+const FALLBACK_FUNDING_RATE = 0.0001;
 
 /** 资金费率结算周期（8 小时 = 28800 秒） */
 const FUNDING_INTERVAL_SECONDS = 28800;
@@ -106,6 +108,7 @@ export function useMarketStats({
   timeframe = '1H',
   ticker24h,
   takerBuyRatio: externalTakerBuyRatio,
+  premiumIndex,
 }: UseMarketStatsOptions): MarketStats {
   const price = currentPrice ?? latestData?.price ?? 0;
 
@@ -121,9 +124,15 @@ export function useMarketStats({
 
   // 资金费率倒计时（实时更新）
   const fundingCountdown = useMemo(() => {
+    // 优先使用 premiumIndex 的真实下次结算时间
+    if (premiumIndex?.nextFundingTime) {
+      const remainMs = premiumIndex.nextFundingTime - Date.now();
+      return Math.max(0, Math.ceil(remainMs / 1000));
+    }
+    // 回退：基于 8h 周期估算
     const nowSeconds = Math.floor(Date.now() / 1000);
     return FUNDING_INTERVAL_SECONDS - (nowSeconds % FUNDING_INTERVAL_SECONDS);
-  }, [latestData?.timestamp]); // 随 tick 更新
+  }, [latestData?.timestamp, premiumIndex]); // 随 tick 更新
 
   // K 线收盘倒计时（基于当前时间周期，ahooks useCountDown 驱动）
   const calcNextClose = useCallback((tf: string) => {
@@ -155,9 +164,14 @@ export function useMarketStats({
       const vol = parseFloat(ticker24h.volume);
       const turnover = parseFloat(ticker24h.quoteVolume);
 
-      // Mark Price = order book 中间价
-      let markPrice = price;
-      if (latestData?.bids?.length && latestData?.asks?.length) {
+      // 优先使用 premiumIndex 的真实 markPrice / indexPrice / fundingRate
+      const realMarkPrice = premiumIndex ? parseFloat(premiumIndex.markPrice) : 0;
+      const realIndexPrice = premiumIndex ? parseFloat(premiumIndex.indexPrice) : 0;
+      const realFundingRate = premiumIndex ? parseFloat(premiumIndex.lastFundingRate) : 0;
+
+      // Mark Price: 优先 premiumIndex > order book 中间价 > 当前价
+      let markPrice = realMarkPrice || price;
+      if (!realMarkPrice && latestData?.bids?.length && latestData?.asks?.length) {
         markPrice = (latestData.bids[0][0] + latestData.asks[0][0]) / 2;
       }
 
@@ -169,8 +183,8 @@ export function useMarketStats({
         volume24h: vol,
         turnover24h: turnover,
         markPrice,
-        indexPrice: price,
-        fundingRate: SIMULATED_FUNDING_RATE,
+        indexPrice: realIndexPrice || price,
+        fundingRate: realFundingRate || FALLBACK_FUNDING_RATE,
         fundingCountdown,
         candleCountdown,
         takerBuyRatio: externalTakerBuyRatio ?? null,
@@ -189,7 +203,7 @@ export function useMarketStats({
         turnover24h: 0,
         markPrice: price,
         indexPrice: price,
-        fundingRate: SIMULATED_FUNDING_RATE,
+        fundingRate: premiumIndex ? parseFloat(premiumIndex.lastFundingRate) : FALLBACK_FUNDING_RATE,
         fundingCountdown,
         candleCountdown,
         takerBuyRatio: externalTakerBuyRatio ?? null,
@@ -235,11 +249,11 @@ export function useMarketStats({
       turnover24h: totalTurnover,
       markPrice,
       indexPrice: price,
-      fundingRate: SIMULATED_FUNDING_RATE,
+      fundingRate: premiumIndex ? parseFloat(premiumIndex.lastFundingRate) : FALLBACK_FUNDING_RATE,
       fundingCountdown,
       candleCountdown,
       takerBuyRatio: externalTakerBuyRatio ?? null,
       isRealData: false,
     };
-  }, [candleHistory, price, latestData, fundingCountdown, candleCountdown, ticker24h, externalTakerBuyRatio]);
+  }, [candleHistory, price, latestData, fundingCountdown, candleCountdown, ticker24h, externalTakerBuyRatio, premiumIndex]);
 }

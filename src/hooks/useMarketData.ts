@@ -12,7 +12,7 @@ import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useMockMarket } from './useMockMarket';
 import { useBinanceMarket, type TradeRecord } from './useBinanceMarket';
 import type { OrderBook, HistoryCandle } from '../types/index';
-import type { BinanceTicker24h } from '../services/binance/types';
+import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
 
 // ============================================================================
 // 类型定义
@@ -28,6 +28,8 @@ export interface UseMarketDataOptions {
   tickInterval?: number;
   /** Binance 历史 K 线数量 */
   historyCount?: number;
+  /** 交易对 (如 BTCUSDT, ETHUSDT) */
+  symbol?: string;
 }
 
 export interface UseMarketDataReturn {
@@ -57,6 +59,8 @@ export interface UseMarketDataReturn {
   recentTrades?: TradeRecord[];
   /** Taker 买入比例 (仅 Binance) */
   takerBuyRatio?: number | null;
+  /** 合约标记价格 / 资金费率 (仅 Binance) */
+  premiumIndex?: BinancePremiumIndex | null;
 }
 
 // ============================================================================
@@ -81,7 +85,8 @@ export interface UseMarketDataReturn {
 export function useMarketData(
   options: UseMarketDataOptions = {},
 ): UseMarketDataReturn {
-  const { source = 'mock', tickInterval = 100, historyCount = 1500 } = options;
+  
+  const { source = 'mock', tickInterval = 100, historyCount = 1500, symbol = 'BTCUSDT' } = options;
 
   // 追踪上一次的数据源
   const prevSourceRef = useRef<DataSource>(source);
@@ -93,6 +98,7 @@ export function useMarketData(
   const binanceData = useBinanceMarket({
     tickInterval,
     historyCount,
+    symbol,
   });
 
   // ========== 统一的历史数据请求封装 ==========
@@ -156,6 +162,7 @@ export function useMarketData(
         ticker24h: binanceData.ticker24h,
         recentTrades: binanceData.recentTrades,
         takerBuyRatio: binanceData.takerBuyRatio,
+        premiumIndex: binanceData.premiumIndex,
       };
     }
 
@@ -163,7 +170,8 @@ export function useMarketData(
     return {
       latestData: mockData.latestData,
       isRunning: mockData.isRunning,
-      start: mockData.start,
+      // 使用 options.symbol 启动 mock
+      start: (startPrice?: number) => mockData.start(symbol, startPrice),
       stop: mockData.stop,
       historyCandles: mockData.historyCandles,
       historyLoading: mockData.historyLoading,

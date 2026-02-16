@@ -64,10 +64,13 @@ export function useDataSource(): UseDataSourceResult {
     // 切换时振动反馈
     useEffect(() => {
         try {
+            // 检查用户激活状态，避免浏览器干预 (Intervention)
+            if (!(navigator as any).userActivation?.hasBeenActive) return;
+
             if (isSwitching) {
                 (navigator as any)?.vibrate?.(30);
             } else {
-                (navigator as any)?.vibrate?.(20);
+                (navigator as any)?.vibrate?.(10);
             }
         } catch { }
     }, [isSwitching]);

@@ -31,6 +31,13 @@ function App() {
     handleDataSourceChange,
   } = useDataSource();
 
+  // ========== 交易对状态 ==========
+  const [activeSymbol, setActiveSymbol] = useState('BTCUSDT');
+  const handleSymbolChange = useCallback((symbol: string) => {
+    setActiveSymbol(symbol);
+    // 切换 symbol 时也可以触发一些重置逻辑 if needed
+  }, []);
+
   const setSwitching = useUiStore((s: UiState) => s.setSwitching);
 
   // ========== Wasm 引擎 ==========
@@ -63,10 +70,12 @@ function App() {
     ticker24h,
     recentTrades,
     takerBuyRatio,
+    premiumIndex,
   } = useWasmEngine({
     tickInterval: 100,
     dataSource,
     historyCount: 5000,
+    symbol: activeSymbol,
   });
 
   // 切换完成条件
@@ -93,6 +102,7 @@ function App() {
     timeframe: activeTimeframe,
     ticker24h,
     takerBuyRatio,
+    premiumIndex,
   });
 
   const handleTimeframeChange = useCallback(
@@ -133,7 +143,7 @@ function App() {
         isRunning={isRunning}
         onToggle={dataSource === 'mock' ? toggleFeed : undefined}
         price={latestData?.price}
-        symbol={latestData?.symbol}
+        symbol={activeSymbol}
         priceTrend={priceTrend}
         priceColorClass={priceColorClass}
         dataSource={dataSource}
@@ -141,6 +151,7 @@ function App() {
         connectionStatus={connectionStatus}
         isSwitching={isSwitching}
         marketStats={marketStats}
+        onSymbolChange={handleSymbolChange}
       />
 
       <main className="flex-1 min-h-0 relative flex flex-col bg-terminal-bg">
@@ -150,6 +161,7 @@ function App() {
             fullscreen
             dataSource={dataSource}
             onSwitchToChart={switchToChartView}
+            symbol={activeSymbol}
           />
         </div>
 
@@ -189,7 +201,7 @@ function App() {
             }
             tradesContent={
               <div className="h-full bg-terminal-bg">
-                <RecentTrades trades={recentTrades ?? []} />
+                <RecentTrades trades={recentTrades ?? []} symbol={activeSymbol} />
               </div>
             }
           />
@@ -220,7 +232,7 @@ function App() {
         }
       >
         <TradePanel
-          symbol="BTC"
+          symbol={activeSymbol.replace('USDT', '')}
           currentPrice={latestData?.price ?? 40000}
           balance={tradingState?.balance ?? 10000}
           availableBalance={tradingState?.availableBalance ?? 10000}

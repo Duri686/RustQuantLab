@@ -67,11 +67,11 @@ export function useMockMarket(interval: number = 100) {
    * @param startPrice - 可选，起始价格（用于从历史数据结束价继续）
    */
   const start = useCallback(
-    (startPrice?: number) => {
+    (symbol?: string, startPrice?: number) => {
       const worker = initWorker();
       const message: WorkerStartMessage = {
         type: 'START',
-        payload: { interval, startPrice },
+        payload: { interval, symbol, startPrice },
       };
       worker.postMessage(message);
       setIsRunning(true);

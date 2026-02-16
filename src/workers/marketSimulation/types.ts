@@ -112,6 +112,9 @@ export interface MarketState {
 
   // 历史数据缓存（用于指标计算）
   priceHistory: number[];
+
+  // 交易对
+  symbol: string;
 }
 
 /** K 线生成结果 */

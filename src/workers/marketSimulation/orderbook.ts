@@ -11,7 +11,7 @@
 
 import type { OrderBook } from '../../types/index';
 import { getState } from './state';
-import { SYMBOL, LEVELS } from './constants';
+import { LEVELS } from './constants';
 import { round2, fatTailRandom } from './utils';
 import { getNextPhase, getPhaseDuration } from './wyckoff';
 import type { MarketPhase } from './types';
@@ -359,7 +359,7 @@ export function generateOrderBook(): OrderBook {
 
   // 输出快照 (浅拷贝，避免外部修改内部状态)
   return {
-    symbol: SYMBOL,
+    symbol: state.symbol,
     timestamp: Date.now(),
     price: round2(currentPrice),
     bids: bookBids.map(([p, q]) => [p, q] as [number, number]),

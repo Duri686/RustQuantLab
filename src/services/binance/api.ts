@@ -280,6 +280,25 @@ export async function getTicker24h(
 }
 
 /**
+ * 获取合约标记价格 / 资金费率 (仅合约市场)
+ *
+ * @param symbol - 交易对 (如 BTCUSDT)
+ */
+export async function getPremiumIndex(
+  symbol: string = 'BTCUSDT',
+): Promise<import('./types').BinancePremiumIndex> {
+  const baseUrl = getBaseUrl('futures');
+  const url = `${baseUrl}/fapi/v1/premiumIndex?symbol=${symbol}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Binance premiumIndex API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
  * 将 Binance K 线转换为项目内部 HistoryCandle 格式
  */
 export function toHistoryCandle(kline: BinanceKline) {

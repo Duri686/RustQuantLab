@@ -32,12 +32,13 @@ export function getStateOrNull(): MarketState | null {
 /**
  * 初始化市场状态
  */
-export function initializeState(startPrice?: number): MarketState {
-  // 如果提供了有效的起始价格，使用它；否则使用随机基准价格
+export function initializeState(symbol: string = 'BTC-USDT', startPrice?: number): MarketState {
+  // 如果提供了有效的起始价格，使用它；否则使用配置的基准价格
   const price =
-    startPrice && startPrice > 0 ? startPrice : getRandomBasePrice();
+    startPrice && startPrice > 0 ? startPrice : getRandomBasePrice(symbol);
 
   state = {
+    symbol,
     phase: 'ACCUMULATION',
     phaseProgress: 0,
     phaseDuration: 500 + Math.floor(Math.random() * 1000),

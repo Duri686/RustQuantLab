@@ -46,7 +46,7 @@ import type {
 } from '../types/trading';
 import type { TradingWasmEngine } from './tradingState/types';
 import type { PendingIndicators } from './candle/candleUtils';
-import type { BinanceTicker24h } from '../services/binance/types';
+import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
 import type { TradeRecord } from './useBinanceMarket';
 
 // ============================================================================
@@ -108,6 +108,8 @@ export interface UseWasmEngineReturn {
   recentTrades?: TradeRecord[];
   /** Taker 买入比例 (仅 Binance) */
   takerBuyRatio?: number | null;
+  /** 合约标记价格 / 资金费率 (仅 Binance) */
+  premiumIndex?: BinancePremiumIndex | null;
 
   // ========== 交易状态 (Rust 管理) ==========
   /** 交易状态快照 */
@@ -161,6 +163,8 @@ export interface UseWasmEngineOptions {
   dataSource?: DataSource;
   /** Binance 历史 K 线数量 */
   historyCount?: number;
+  /** 交易对 (如 BTCUSDT, ETHUSDT) */
+  symbol?: string;
 }
 
 /**
@@ -187,7 +191,7 @@ export function useWasmEngine(
       ? { tickInterval: options, dataSource: 'mock' as DataSource }
       : { tickInterval: 100, dataSource: 'mock' as DataSource, ...options };
 
-  const { tickInterval, dataSource, historyCount } = opts;
+  const { tickInterval, dataSource, historyCount, symbol = 'BTCUSDT' } = opts;
 
   // ========== Toast ==========
   const toast = useToast();
@@ -206,10 +210,12 @@ export function useWasmEngine(
     ticker24h,
     recentTrades,
     takerBuyRatio,
+    premiumIndex,
   } = useMarketData({
     source: dataSource,
     tickInterval,
     historyCount,
+    symbol,
   });
 
   // ========== Wasm 初始化状态 ==========
@@ -230,11 +236,12 @@ export function useWasmEngine(
   const prevDataSourceRef = useRef<DataSource>(dataSource);
   const lastMarketErrorRef = useRef<string | null>(null);
 
+  // ========== 监听 Symbol 变化 (Mock 模式) ==========
+  const prevSymbolRef = useRef(symbol);
+
   // ========== 数据源切换时重置状态 ==========
   useEffect(() => {
     if (prevDataSourceRef.current !== dataSource) {
-
-
       // 清空 Rust 引擎内部历史，避免不同数据源之间的价格/成交量互相污染
       if (engineAlive.current && engineRef.current) {
         try {
@@ -243,12 +250,32 @@ export function useWasmEngine(
           console.warn('[useWasmEngine] 清理历史数据失败:', err);
         }
       }
-
-      // 重置历史数据加载标记，允许新数据源重新加载
-      historyLoadedRef.current = false;
       prevDataSourceRef.current = dataSource;
     }
   }, [dataSource]);
+
+  useEffect(() => {
+    if (dataSource === 'mock' && prevSymbolRef.current !== symbol) {
+      console.log(`[useWasmEngine] Mock Symbol 变更: ${prevSymbolRef.current} -> ${symbol}`);
+      
+      // 如果正在运行，重启流
+      if (isRunning) {
+        stop();
+        // 稍微延迟重启，确保 worker 消息处理完成
+        setTimeout(() => {
+          start();
+        }, 100);
+      }
+      
+      // 清理历史状态
+      if (engineAlive.current && engineRef.current) {
+          engineRef.current.clear_history();
+      }
+      historyLoadedRef.current = false;
+      
+      prevSymbolRef.current = symbol;
+    }
+  }, [symbol, dataSource, isRunning, stop, start]);
 
   // ========== 分析结果 ==========
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
@@ -576,6 +603,7 @@ export function useWasmEngine(
     ticker24h,
     recentTrades,
     takerBuyRatio,
+    premiumIndex,
 
     // 交易状态
     tradingState,

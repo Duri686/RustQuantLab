@@ -3,13 +3,13 @@
  */
 
 import type { MarketState } from '../types';
-import { BASE_PRICE } from '../constants';
+import { SYMBOL_CONFIG } from '../constants';
 
 /**
  * 计算简单移动平均
  */
 export function calculateMA(prices: number[], period: number): number {
-  if (prices.length < period) return prices[prices.length - 1] || BASE_PRICE;
+  if (prices.length < period) return prices[prices.length - 1] || SYMBOL_CONFIG['BTC-USDT'].basePrice;
   const slice = prices.slice(-period);
   return slice.reduce((a, b) => a + b, 0) / period;
 }

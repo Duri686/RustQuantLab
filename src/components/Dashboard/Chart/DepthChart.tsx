@@ -27,6 +27,7 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
+  const [precision, setPrecision] = useState(0.1);
 
   // 数据处理 Hook
   const {
@@ -41,7 +42,7 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
     zoomIn,
     zoomOut,
     hasData,
-  } = useDepthData(bids, asks, price);
+  } = useDepthData(bids, asks, price, precision);
 
   // 响应式尺寸
   useEffect(() => {
@@ -166,6 +167,22 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      {/* 精度选择 (新增) */}
+      <div className="absolute top-2 right-3 z-10">
+        <select
+          value={precision}
+          onChange={(e) => setPrecision(Number(e.target.value))}
+          className="bg-bg-surface/80 backdrop-blur-sm border border-border-dark text-[10px] text-gray-400 rounded px-1.5 py-0.5 outline-none hover:text-white hover:bg-bg-surface-alt transition-colors cursor-pointer appearance-none text-right min-w-[60px]"
+          title="调整聚合精度"
+        >
+          {[0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100].map((p) => (
+            <option key={p} value={p}>
+              Step: {p}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );

@@ -31,7 +31,14 @@ export interface HeaderProps {
   isSwitching?: boolean;
   /** 24h 市场统计 */
   marketStats?: MarketStats;
+  /** 切换交易对回调 */
+  onSymbolChange?: (symbol: string) => void;
 }
+
+const SUPPORTED_SYMBOLS = [
+  { id: 'BTCUSDT', label: 'BTC', name: 'Bitcoin' },
+  { id: 'ETHUSDT', label: 'ETH', name: 'Ethereum' },
+] as const;
 
 /* ============================================
    Icon Components
@@ -160,6 +167,41 @@ function DataSourceSwitch({
 }
 
 /* ============================================
+   交易对切换按钮 (简洁版)
+   ============================================ */
+
+function SymbolSwitch({
+  currentSymbol,
+  onChange,
+  disabled,
+}: {
+  currentSymbol: string;
+  onChange: (symbol: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1 bg-bg-surface border border-border-dark rounded-md px-1 py-0.5">
+      {SUPPORTED_SYMBOLS.map((s) => {
+        const isActive = currentSymbol === s.id;
+        return (
+          <button
+            key={s.id}
+            onClick={() => onChange(s.id)}
+            disabled={disabled || isActive}
+            className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${isActive
+              ? 'bg-accent/20 text-accent border border-accent/30 shadow-sm'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================
    格式化工具
    ============================================ */
 
@@ -181,6 +223,7 @@ function Header({
   onDataSourceChange,
   connectionStatus,
   isSwitching,
+  onSymbolChange,
 }: HeaderProps) {
   const [showDevTools, setShowDevTools] = useState(false);
 
@@ -207,10 +250,23 @@ function Header({
           </h1>
         </div>
 
-        {/* ========== 交易对 (极简) ========== */}
+        {/* ========== 交易对 (切换) ========== */}
         <div className="flex items-center shrink-0">
-          <span className="text-xs md:text-sm font-bold text-white">{symbol}</span>
-          <span className="text-[9px] text-gray-500 font-mono ml-1.5">Perpetual</span>
+          {onSymbolChange ? (
+            <div className="flex items-center gap-2">
+              <SymbolSwitch
+                currentSymbol={symbol}
+                onChange={onSymbolChange}
+                disabled={isSwitching}
+              />
+              <span className="text-[9px] text-gray-500 font-mono hidden md:inline">Perpetual</span>
+            </div>
+          ) : (
+            <>
+              <span className="text-xs md:text-sm font-bold text-white">{symbol}</span>
+              <span className="text-[9px] text-gray-500 font-mono ml-1.5">Perpetual</span>
+            </>
+          )}
         </div>
 
         {/* ========== 弹性填充 ========== */}

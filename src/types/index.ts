@@ -86,6 +86,8 @@ export interface WorkerStartMessage {
   type: 'START';
   payload: {
     interval: number;
+    /** 交易对符号 (默认 BTC-USDT) */
+    symbol?: string;
     /** 起始价格 (可选，用于从历史数据结束价继续) */
     startPrice?: number;
   };

@@ -36,23 +36,28 @@ export interface UseDepthDataResult {
    数据处理函数
    ============================================ */
 
-function buildDepth(bids: [number, number][], asks: [number, number][]) {
-    // 买单：从 best bid 向外累加，反转为 [低价 → 高价]
-    const bidPts: DepthPoint[] = [];
-    let cum = 0;
-    for (const [p, a] of bids) {
-        cum += a;
-        bidPts.push({ price: p, cumVolume: cum });
-    }
-    bidPts.reverse();
+function buildDepth(bids: [number, number][], asks: [number, number][], precision: number) {
+    // 聚合逻辑
+    const aggregate = (list: [number, number][], desc: boolean) => {
+        const map = new Map<number, number>();
+        for (const [p, a] of list) {
+            // 向下取整到精度
+            const k = Math.floor(p / precision) * precision;
+            map.set(k, (map.get(k) || 0) + a);
+        }
+        const sortedKeys = Array.from(map.keys()).sort((a, b) => desc ? b - a : a - b);
+        
+        const pts: DepthPoint[] = [];
+        let cum = 0;
+        for (const k of sortedKeys) {
+            cum += map.get(k)!;
+            pts.push({ price: k, cumVolume: cum });
+        }
+        return pts;
+    };
 
-    // 卖单：从 best ask 向外累加 [低价 → 高价]
-    const askPts: DepthPoint[] = [];
-    cum = 0;
-    for (const [p, a] of asks) {
-        cum += a;
-        askPts.push({ price: p, cumVolume: cum });
-    }
+    const bidPts = aggregate(bids, true); // 买单价格降序
+    const askPts = aggregate(asks, false); // 卖单价格升序
 
     return { bidPts, askPts };
 }
@@ -65,12 +70,13 @@ export function useDepthData(
     bids: [number, number][],
     asks: [number, number][],
     price?: number,
+    precision: number = 0.1, // 默认精度
 ): UseDepthDataResult {
     const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM);
     const zoom = ZOOM_STEPS[zoomIdx];
 
     // 累积深度
-    const { bidPts, askPts } = useMemo(() => buildDepth(bids, asks), [bids, asks]);
+    const { bidPts, askPts } = useMemo(() => buildDepth(bids, asks, precision), [bids, asks, precision]);
 
     // 实时统计
     const stats = useMemo<DepthStats>(() => {

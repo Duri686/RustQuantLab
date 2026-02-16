@@ -21,6 +21,7 @@ import {
   type BinanceWsDepthMsg,
   type BinanceWsTradeMsg,
   type BinanceTicker24h,
+  type BinancePremiumIndex,
   type ConnectionStatus,
 } from '../services/binance';
 import type { OrderBook, HistoryCandle } from '../types/index';
@@ -85,6 +86,8 @@ export interface UseBinanceMarketReturn {
   recentTrades: TradeRecord[];
   /** Taker 买入比例 (0~1，实时计算) */
   takerBuyRatio: number | null;
+  /** 合约标记价格 / 资金费率 (来自 Binance premiumIndex) */
+  premiumIndex: BinancePremiumIndex | null;
 }
 
 // ============================================================================
@@ -219,10 +222,12 @@ export function useBinanceMarket(
   const [ticker24h, setTicker24h] = useState<BinanceTicker24h | null>(null);
   const [recentTrades, setRecentTrades] = useState<TradeRecord[]>([]);
   const [takerBuyRatio, setTakerBuyRatio] = useState<number | null>(null);
+  const [premiumIndex, setPremiumIndex] = useState<BinancePremiumIndex | null>(null);
 
   // ========== Refs ==========
   const wsRef = useRef<BinanceWebSocket | null>(null);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const premiumIndexIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const priceRef = useRef<number | null>(null);
   /** 本地订单簿状态 (维护完整订单簿) */
   const orderBookRef = useRef<{
@@ -338,6 +343,20 @@ export function useBinanceMarket(
       } catch (tickerErr) {
         console.warn('[Binance] ⚠️ 获取 24h Ticker 失败，使用 K 线估算:', tickerErr);
       }
+
+      // 获取合约标记价格 / 资金费率
+      const fetchPremiumIndex = async () => {
+        try {
+          const data = await BinanceAPI.getPremiumIndex(opts.symbol);
+          setPremiumIndex(data);
+        } catch (err) {
+          console.warn('[Binance] ⚠️ 获取 premiumIndex 失败:', err);
+        }
+      };
+      await fetchPremiumIndex();
+      console.log('[Binance] ✅ PremiumIndex 已加载 (标记价/资金费率)');
+      // 每 30 秒刷新一次 premiumIndex
+      premiumIndexIntervalRef.current = setInterval(fetchPremiumIndex, 30_000);
 
       // 如果有起始价格，设置它
       if (startPrice) {
@@ -617,7 +636,7 @@ export function useBinanceMarket(
             const orderBook = buildOrderBookFromState(
               orderBookRef.current,
               price,
-              'BTC-USDT',
+              opts.symbol,
               50, // 买单和卖单各50档，总共100行
             );
 
@@ -664,6 +683,20 @@ export function useBinanceMarket(
       tickIntervalRef.current = null;
     }
 
+    // 停止 premiumIndex 定时刷新
+    if (premiumIndexIntervalRef.current) {
+      clearInterval(premiumIndexIntervalRef.current);
+      premiumIndexIntervalRef.current = null;
+    }
+
+    // 清空数据状态
+    setLatestData(null);
+    setHistoryCandles([]);
+    setTicker24h(null);
+    setRecentTrades([]);
+    setTakerBuyRatio(null);
+    setPremiumIndex(null);
+
     // 清理订单簿状态
     orderBookRef.current = null;
 
@@ -680,8 +713,39 @@ export function useBinanceMarket(
       if (tickIntervalRef.current) {
         clearInterval(tickIntervalRef.current);
       }
+      if (premiumIndexIntervalRef.current) {
+        clearInterval(premiumIndexIntervalRef.current);
+      }
     };
   }, []);
+
+  // ========== 监听 Symbol 变化 ==========
+  // 如果正在运行且 Symbol 变化，则重启
+  // 使用 ref 来避免闭包陷阱和循环依赖
+  const prevSymbolRef = useRef(opts.symbol);
+  
+  useEffect(() => {
+    if (prevSymbolRef.current !== opts.symbol) {
+      console.log(`[Binance] 🔄 Symbol 变更: ${prevSymbolRef.current} -> ${opts.symbol}`);
+      prevSymbolRef.current = opts.symbol;
+
+      if (isRunning) {
+        stop();
+        // 稍微延迟重启，确保清理完成
+        setTimeout(() => {
+          start();
+        }, 100);
+      } else {
+        // 如果未运行，清除旧数据
+        setLatestData(null);
+        setHistoryCandles([]);
+        setTicker24h(null);
+        setRecentTrades([]);
+        setTakerBuyRatio(null);
+        setPremiumIndex(null);
+      }
+    }
+  }, [opts.symbol, isRunning, stop, start]);
 
   // ========== 返回 ==========
   return {
@@ -698,5 +762,6 @@ export function useBinanceMarket(
     ticker24h,
     recentTrades,
     takerBuyRatio,
+    premiumIndex,
   };
 }

@@ -15,12 +15,15 @@ export interface TradePanelConnectedProps {
     onSwitchToChart?: () => void;
     /** 数据源 */
     dataSource: DataSource;
+    /** 交易对 */
+    symbol?: string;
 }
 
 function TradePanelConnected({
     fullscreen = false,
     onSwitchToChart,
     dataSource,
+    symbol = 'BTCUSDT',
 }: TradePanelConnectedProps) {
     const {
         latestData,
@@ -38,12 +41,13 @@ function TradePanelConnected({
         tickInterval: 100,
         dataSource,
         historyCount: 5000,
+        symbol,
     });
 
     return (
         <TradePanel
             fullscreen={fullscreen}
-            symbol="BTC"
+            symbol={symbol.replace('USDT', '')}
             currentPrice={latestData?.price ?? 40000}
             balance={tradingState?.balance ?? 10000}
             availableBalance={tradingState?.availableBalance ?? 10000}

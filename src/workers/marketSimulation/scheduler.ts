@@ -76,13 +76,15 @@ function scheduleNextTick(postMessage: PostMessageFn): void {
  */
 export function startGeneration(
   _interval: number,
+  symbol: string | undefined, // Changed from startPrice: number | undefined
   startPrice: number | undefined,
   postMessage: PostMessageFn,
 ): void {
   stopGeneration();
   resetBook();
 
-  initializeState(startPrice);
+  // initializeState signature: (symbol?: string, startPrice?: number)
+  initializeState(symbol, startPrice);
   setIsRunning(true);
 
   // 立即发送第一条数据
