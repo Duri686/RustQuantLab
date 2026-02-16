@@ -99,6 +99,7 @@ export function useMarketData(
     tickInterval,
     historyCount,
     symbol,
+    market: 'futures',
   });
 
   // ========== 统一的历史数据请求封装 ==========

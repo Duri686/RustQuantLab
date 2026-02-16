@@ -56,6 +56,8 @@ export class BinanceWebSocket {
   private status: ConnectionStatus = 'disconnected';
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private streams: string[] = [];
+  /** 手动停止标记，区分主动关闭和意外断开 */
+  private manualStop = false;
 
   constructor(options: BinanceWsOptions) {
     this.options = {
@@ -121,6 +123,7 @@ export class BinanceWebSocket {
       return;
     }
 
+    this.manualStop = false;
     this.status = 'connecting';
     
     // 构建 WebSocket URL (支持多流)
@@ -138,10 +141,10 @@ export class BinanceWebSocket {
   }
 
   /**
-   * 停止 WebSocket 连接
+   * 停止 WebSocket 连接（主动关闭，不再自动重连）
    */
   stop(): void {
-    this.options.reconnect = false;
+    this.manualStop = true;
     
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -191,8 +194,8 @@ export class BinanceWebSocket {
     this.status = 'disconnected';
     this.callbacks.onDisconnect?.();
     
-    // 自动重连
-    if (this.options.reconnect) {
+    // 自动重连（仅在非主动停止且配置允许时）
+    if (this.options.reconnect && !this.manualStop) {
       console.log(`[BinanceWS] ${this.options.reconnectDelay}ms 后重连...`);
       this.reconnectTimer = setTimeout(() => {
         this.start();

@@ -97,7 +97,7 @@ export interface UseBinanceMarketReturn {
 /** 默认配置 */
 const DEFAULT_OPTIONS: Required<UseBinanceMarketOptions> = {
   symbol: 'BTCUSDT',
-  market: 'spot', // 使用现货 API (支持 CORS)
+  market: 'futures', // 使用合约 API (USDT 永续合约)
   historyInterval: '1m', // 历史数据用 1 分钟 K 线（Rust 引擎需要细粒度数据）
   realtimeInterval: '1s', // 实时用 1 秒 K 线
   historyCount: 5000, // 历史 K 线数量（5000 根 1m = 约 3.5 天，足够计算所有指标）
@@ -226,6 +226,8 @@ export function useBinanceMarket(
 
   // ========== Refs ==========
   const wsRef = useRef<BinanceWebSocket | null>(null);
+  /** 追踪运行状态（避免闭包陷阱） */
+  const isRunningRef = useRef(false);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const premiumIndexIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const priceRef = useRef<number | null>(null);
@@ -329,9 +331,10 @@ export function useBinanceMarket(
   // ========== 启动实时数据 ==========
   const start = useCallback(
     async (startPrice?: number) => {
-      if (isRunning) return;
+      if (isRunningRef.current) return;
 
       console.log(`[Binance] 🚀 启动实时数据流...`);
+      isRunningRef.current = true;
       setIsRunning(true);
       setError(null);
 
@@ -655,11 +658,11 @@ export function useBinanceMarket(
       } catch (err) {
         console.error('[Binance] ❌ 启动实时数据失败:', err);
         setError(err instanceof Error ? err.message : '启动失败');
+        isRunningRef.current = false;
         setIsRunning(false);
       }
     },
     [
-      isRunning,
       opts.symbol,
       opts.market,
       opts.realtimeInterval,
@@ -700,6 +703,7 @@ export function useBinanceMarket(
     // 清理订单簿状态
     orderBookRef.current = null;
 
+    isRunningRef.current = false;
     setIsRunning(false);
     setConnectionStatus('disconnected');
   }, []);
@@ -727,14 +731,16 @@ export function useBinanceMarket(
   useEffect(() => {
     if (prevSymbolRef.current !== opts.symbol) {
       console.log(`[Binance] 🔄 Symbol 变更: ${prevSymbolRef.current} -> ${opts.symbol}`);
+      const wasRunning = isRunningRef.current;
       prevSymbolRef.current = opts.symbol;
 
-      if (isRunning) {
+      if (wasRunning) {
+        // 先停止旧连接
         stop();
-        // 稍微延迟重启，确保清理完成
-        setTimeout(() => {
+        // 通过 requestAnimationFrame 延迟重启，确保 stop 的状态更新已生效
+        requestAnimationFrame(() => {
           start();
-        }, 100);
+        });
       } else {
         // 如果未运行，清除旧数据
         setLatestData(null);
@@ -745,7 +751,7 @@ export function useBinanceMarket(
         setPremiumIndex(null);
       }
     }
-  }, [opts.symbol, isRunning, stop, start]);
+  }, [opts.symbol, stop, start]);
 
   // ========== 返回 ==========
   return {

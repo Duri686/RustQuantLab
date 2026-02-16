@@ -3,7 +3,7 @@
  * Canvas + React 混合渲染的币安风格市场深度图
  */
 
-import { memo, useRef, useEffect, useCallback, useState } from 'react';
+import { memo, useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { drawDepthChart, fmtVol } from './depthCanvas';
 import { useDepthData } from './hooks/useDepthData';
@@ -19,6 +19,41 @@ interface DepthChartProps {
 }
 
 /* ============================================
+   工具函数
+   ============================================ */
+
+/**
+ * 根据当前价格自动计算合适的深度图聚合精度
+ * 目标：让深度图可视范围内有约 30~60 个价格档位
+ */
+function computeAutoPrecision(price: number | undefined): number {
+  if (!price || price <= 0) return 0.1;
+  // 取价格量级，然后选择约为价格 0.01% ~ 0.02% 的精度
+  const magnitude = Math.pow(10, Math.floor(Math.log10(price)));
+  // 产生的最小步长约为价格的 0.01%
+  const rawStep = magnitude * 0.0001;
+  // 对齐到整数量级: 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100...
+  const niceSteps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  return niceSteps.find(s => s >= rawStep) ?? rawStep;
+}
+
+/**
+ * 根据当前价格生成合理的精度选项列表
+ */
+function computePrecisionOptions(price: number | undefined): number[] {
+  if (!price || price <= 0) return [0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100];
+  const auto = computeAutoPrecision(price);
+  // 生成 auto 为基准的 5 个档位: auto/10, auto/5, auto, auto*5, auto*10
+  const candidates = [auto / 10, auto / 5, auto / 2, auto, auto * 2, auto * 5, auto * 10, auto * 50];
+  // 过滤掉小于 0.01 和重复值，保留合理范围
+  return [...new Set(candidates.filter(v => v >= 0.01).map(v => {
+    // 美化数字：避免浮点精度问题
+    if (v >= 1) return Math.round(v);
+    return parseFloat(v.toPrecision(2));
+  }))].sort((a, b) => a - b);
+}
+
+/* ============================================
    组件
    ============================================ */
 
@@ -27,7 +62,14 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
-  const [precision, setPrecision] = useState(0.1);
+  
+  // 自动精度：基于价格动态计算
+  const autoPrecision = useMemo(() => computeAutoPrecision(price), [price]);
+  const [userPrecision, setUserPrecision] = useState<number | null>(null);
+  const precision = userPrecision ?? autoPrecision;
+  
+  // 动态精度选项
+  const precisionOptions = useMemo(() => computePrecisionOptions(price), [price]);
 
   // 数据处理 Hook
   const {
@@ -169,15 +211,15 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
         </button>
       </div>
 
-      {/* 精度选择 (新增) */}
+      {/* 精度选择 */}
       <div className="absolute top-2 right-3 z-10">
         <select
           value={precision}
-          onChange={(e) => setPrecision(Number(e.target.value))}
+          onChange={(e) => setUserPrecision(Number(e.target.value))}
           className="bg-bg-surface/80 backdrop-blur-sm border border-border-dark text-[10px] text-gray-400 rounded px-1.5 py-0.5 outline-none hover:text-white hover:bg-bg-surface-alt transition-colors cursor-pointer appearance-none text-right min-w-[60px]"
           title="调整聚合精度"
         >
-          {[0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100].map((p) => (
+          {precisionOptions.map((p) => (
             <option key={p} value={p}>
               Step: {p}
             </option>
@@ -189,3 +231,4 @@ function DepthChart({ bids, asks, price }: DepthChartProps) {
 }
 
 export default memo(DepthChart);
+
