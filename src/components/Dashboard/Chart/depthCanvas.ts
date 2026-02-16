@@ -196,13 +196,15 @@ export function drawDepthChart(
         ? (stats.bestBid + stats.bestAsk) / 2
         : price ?? 0;
 
-    const bidEdgePts = visibleBids.length > 0
+    // 买方：按价格升序排列（从左到右），累积量从大到小
+    const sortedBids = [...visibleBids].reverse();
+    const bidEdgePts = sortedBids.length > 0
         ? [
-            { price: priceRange.min, cumVolume: visibleBids[0].cumVolume },
-            ...visibleBids,
+            { price: priceRange.min, cumVolume: sortedBids[0].cumVolume },
+            ...sortedBids,
             { price: dynamicMid, cumVolume: 0 },
         ]
-        : visibleBids;
+        : sortedBids;
     const askEdgePts = visibleAsks.length > 0
         ? [
             { price: dynamicMid, cumVolume: 0 },
