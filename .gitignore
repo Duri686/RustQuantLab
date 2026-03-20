@@ -18,6 +18,7 @@ Cargo.lock
 *.swp
 *.swo
 .cursorrules
+.cursor
 
 # OS
 .DS_Store
