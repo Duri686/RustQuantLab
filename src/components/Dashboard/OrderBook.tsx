@@ -1,27 +1,6 @@
 import { memo, useMemo, useState, useEffect, useRef } from 'react';
 import type { OrderBookProps } from '../../types/index';
 
-/* ============================================
-   CSS 变量辅助函数
-   ============================================ */
-
-/**
- * 获取 CSS 变量值（用于内联样式）
- */
-function getCssVar(varName: string): string {
-  if (typeof window === 'undefined') return '';
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue(varName)
-    .trim();
-}
-
-// Binance 颜色常量（从 CSS 变量获取，用于内联样式）
-const COLORS = {
-  bidGreen: '#0ECB81', // var(--color-success)
-  askRed: '#F6465D',   // var(--color-danger)
-  textGray: '#9ca3af',
-} as const;
-
 /** 视图模式类型 */
 type ViewMode = 'both' | 'bids' | 'asks';
 
@@ -65,7 +44,7 @@ function ViewModeButton({ mode, active, onClick, title }: ViewModeButtonProps) {
     <button
       onClick={onClick}
       className={`w-6 h-6 rounded flex flex-col items-center justify-center gap-0.5 p-1 transition-colors ${
-        active ? 'bg-[var(--color-border-dark)]' : 'hover:bg-white/5'
+        active ? 'bg-border-dark' : 'hover:bg-white/5'
       }`}
       title={title}
     >
@@ -122,7 +101,7 @@ interface OrderRowProps {
 
 /**
  * 订单行子组件
- * Binance 风格：3 列网格 + 深度背景条
+ * Binance 风格：2 列网格 (Price | Amount) + 深度背景条
  */
 function OrderRow({
   price,
@@ -150,16 +129,17 @@ function OrderRow({
       {/* 价格列 - 左对齐 */}
       <span
         className={`relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-left ${
-          isBid ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
+          isBid ? 'text-success' : 'text-danger'
         }`}
       >
         {price.toFixed(pricePrecision)}
       </span>
 
-      {/* 数量列 - 右对齐 */}
+      {/* 数量列 - 右对齐，智能精度 */}
       <span className="relative z-10 font-mono text-[10px] md:text-[11px] tabular-nums text-right text-gray-400">
-        {amount.toFixed(5)}
+        {amount >= 1000 ? amount.toFixed(2) : amount >= 1 ? amount.toFixed(4) : amount.toFixed(5)}
       </span>
+
     </div>
   );
 }
@@ -274,7 +254,7 @@ function OrderBook({
     <div className="bg-terminal-bg flex flex-col h-full overflow-hidden">
       {/* ========== 工具栏 ========== */}
       {/* 高度与 ChartToolbar 对齐: h-9 md:h-10 */}
-      <div className="shrink-0 h-9 md:h-10 px-2 md:px-3 flex items-center justify-between border-b border-[var(--color-border-dark)]">
+      <div className="shrink-0 h-9 md:h-10 px-2 md:px-3 flex items-center justify-between border-b border-border-dark">
         {/* 小数精度选择器 */}
         <button
           onClick={cyclePrecision}
@@ -320,7 +300,7 @@ function OrderBook({
 
       {/* ========== 表头 ========== */}
       {/* 高度与图表子标题对齐: h-7 md:h-8 */}
-      <div className="shrink-0 h-7 md:h-8 grid grid-cols-[1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-[var(--color-border-dark)] bg-[var(--color-bg-black)]">
+      <div className="shrink-0 h-7 md:h-8 grid grid-cols-[1fr_1fr] px-2 items-center text-[9px] md:text-[10px] text-gray-500 border-b border-border-dark bg-bg-black">
         <span className="text-left">Price</span>
         <span className="text-right">Amount</span>
       </div>
@@ -347,7 +327,7 @@ function OrderBook({
       )}
 
       {/* ========== 中间价格 Ticker (Sticky) ========== */}
-      <div className="shrink-0 h-8 md:h-10 px-2 md:px-3 bg-[var(--color-bg-surface-alt)] flex items-center gap-1.5 md:gap-2 border-y border-[var(--color-border-dark)]">
+      <div className="shrink-0 h-8 md:h-10 px-2 md:px-3 bg-bg-surface-alt flex items-center gap-1.5 md:gap-2 border-y border-border-dark">
         {/* 当前价格 - 使用 clamp 流体字体 */}
         <span
           className="font-mono text-[clamp(14px,4vw,18px)] md:text-lg font-semibold tabular-nums flex items-center gap-1"

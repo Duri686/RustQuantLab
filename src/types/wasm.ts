@@ -312,6 +312,23 @@ export interface WasmAnalysisResult {
   volMa5: number | null;
 }
 
+/**
+ * 合并的 Tick 处理结果
+ *
+ * 将 AnalysisResult + CandleHistory + TradingState 合并为单次 WASM 调用返回，
+ * 减少 3 次跨边界序列化为 1 次。
+ *
+ * @see TickFullResult in core/src/engine/types.rs
+ */
+export interface WasmTickFullResult {
+  /** 技术指标分析结果 */
+  analysis: WasmAnalysisResult;
+  /** 当前活跃周期的 K 线历史 + 指标 */
+  candles: WasmCandleHistory;
+  /** 交易状态快照 */
+  tradingState: import('./trading').TradingState;
+}
+
 /* ============================================================================
    Wasm 模块接口
    ============================================================================ */
@@ -347,6 +364,17 @@ export interface WasmMarketEngine {
    * @throws 解析失败时抛出错误
    */
   on_tick(data: WasmOrderBook): WasmAnalysisResult;
+
+  /**
+   * 处理 Tick 数据更新（合并版）
+   *
+   * 将 on_tick + get_active_candles + get_trading_state 合并为单次 WASM 调用，
+   * 减少 3 次跨边界序列化为 1 次。
+   *
+   * @param data - 订单簿数据
+   * @returns 合并的 TickFullResult { analysis, candles, tradingState }
+   */
+  on_tick_full(data: WasmOrderBook): WasmTickFullResult;
 
   /**
    * 获取当前价格历史长度
@@ -398,6 +426,30 @@ export interface WasmMarketEngine {
    * @returns K 线数量
    */
   get_candle_count(timeframe: WasmTimeframe): number;
+
+  // ========== 历史数据加载方法 ==========
+
+  /**
+   * 加载历史 K 线数据到指定时间周期
+   *
+   * @param timeframe - 时间周期字符串
+   * @param candles - 历史 K 线数据数组
+   * @returns 加载的 K 线数量
+   */
+  load_history_candles(
+    timeframe: WasmTimeframe,
+    candles: import('./index').HistoryCandle[],
+  ): number;
+
+  /**
+   * 加载 1s K 线并自动聚合到所有高周期 (1m/5m/15m/1H/4H/1D)
+   *
+   * @param candles - 1 秒粒度的历史 K 线数据
+   * @returns 各周期名称及对应 K 线数量的数组
+   */
+  load_history_1s_and_aggregate(
+    candles: import('./index').HistoryCandle[],
+  ): [string, number][];
 
   // ========== 模拟交易方法 ==========
 

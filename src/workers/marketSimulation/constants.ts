@@ -2,18 +2,42 @@
  * 市场模拟常量配置
  */
 
-export const SYMBOL = 'BTC-USDT';
+// ============================================================================
+// 交易对配置
+// ============================================================================
 
-/**
- * 生成随机基准价格（锚点价格）
- * 范围: 100000 - 200000
- */
-export function getRandomBasePrice(): number {
-  return 100000 + Math.random() * (200000 - 100000);
+export interface SymbolConfig {
+  basePrice: number;
+  volatility: number;
+  precision: number;
 }
 
-/** @deprecated 使用 getRandomBasePrice() 替代 */
-export const BASE_PRICE = 40000.0;
+export const SYMBOL_CONFIG: Record<string, SymbolConfig> = {
+  'BTC-USDT': { basePrice: 95000, volatility: 1.0, precision: 2 },
+  'ETH-USDT': { basePrice: 2600, volatility: 1.2, precision: 2 },
+  // 兼容前端传参格式 (不带横杠)
+  'BTC': { basePrice: 95000, volatility: 1.0, precision: 2 },
+  'ETH': { basePrice: 2600, volatility: 1.2, precision: 2 },
+  'BTCUSDT': { basePrice: 95000, volatility: 1.0, precision: 2 },
+  'ETHUSDT': { basePrice: 2600, volatility: 1.2, precision: 2 },
+} as const;
+
+/**
+ * 获取交易对配置
+ */
+export function getSymbolConfig(symbol: string): SymbolConfig {
+  return SYMBOL_CONFIG[symbol] || SYMBOL_CONFIG['BTC-USDT'];
+}
+
+/**
+ * 获取随机基准价格
+ */
+export function getRandomBasePrice(symbol: string = 'BTC-USDT'): number {
+  const config = getSymbolConfig(symbol);
+  // 随机波动 ±20% 作为初始价格
+  const variation = 1 + (Math.random() * 0.4 - 0.2);
+  return config.basePrice * variation;
+}
 
 export const LEVELS = 50; // 订单簿深度
 export const PRICE_PRECISION = 100; // 价格精度 (0.01)
@@ -70,4 +94,3 @@ export const WICK_EVENT_MIN_DURATION = 5;
 export const WICK_EVENT_MAX_DURATION = 15;
 /** V型反转各阶段比例 [下跌, 换手, 回升] */
 export const V_REVERSAL_PHASES = [0.35, 0.15, 0.5] as const;
-

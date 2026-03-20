@@ -56,17 +56,7 @@ export async function initWasmEngine(): Promise<MarketEngineInstance> {
         const wasmExports = await wasm.default();
         wasmSingleton.wasmInstance = wasmExports;
 
-        // 调试：检查 memory 是否存在
-        const hasMemory = wasmExports && 'memory' in wasmExports;
-        console.log(`[Wasm] wasmExports.memory 存在: ${hasMemory}`);
-        if (hasMemory) {
-          const mem = (wasmExports as { memory: WebAssembly.Memory }).memory;
-          console.log(
-            `[Wasm] 初始内存: ${(mem.buffer.byteLength / 1024 / 1024).toFixed(
-              2,
-            )} MB`,
-          );
-        }
+
       }
 
       const wasmMod = wasm as unknown as WasmModule;

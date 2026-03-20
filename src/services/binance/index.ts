@@ -27,6 +27,7 @@ export type {
   BinanceKlineRaw,
   BinanceDepth,
   BinanceTicker24h,
+  BinancePremiumIndex,
   BinanceWsKlineMsg,
   BinanceWsTradeMsg,
   BinanceWsDepthMsg,
@@ -41,8 +42,22 @@ export {
   getKlinesBatch,
   getDepth,
   getTicker24h,
+  getPremiumIndex,
   toHistoryCandle,
 } from './api';
+
+// 导出常量
+export {
+  DEFAULT_MARKET,
+  DEFAULT_SYMBOL,
+  DEFAULT_INTERVAL,
+  WS_ENDPOINTS,
+  REST_ENDPOINTS,
+  REST_BASE_URLS,
+  PROXY_PATHS,
+  IS_DEV,
+  getBaseUrl,
+} from './constants';
 
 // 导出 WebSocket
 export {
@@ -74,6 +89,8 @@ export const BinanceAPI = {
   getDepth: api.getDepth,
   /** 获取 24h 价格统计 */
   getTicker24h: api.getTicker24h,
+  /** 获取合约标记价格 / 资金费率 */
+  getPremiumIndex: api.getPremiumIndex,
   /** 转换为内部 HistoryCandle 格式 */
   toHistoryCandle: api.toHistoryCandle,
 } as const;

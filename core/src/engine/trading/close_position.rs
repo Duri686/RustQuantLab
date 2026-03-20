@@ -52,7 +52,7 @@ impl TradingExecutor {
             TradeAction::Reduced { realized_pnl, remaining_size, closed_size } => {
                 pending_events.push(EngineEvent::PositionReduced {
                     symbol: symbol.to_string(),
-                    side: format!("{:?}", position.side),
+                    side: position.side.to_string(),
                     closed_size: *closed_size,
                     remaining_size: *remaining_size,
                     realized_pnl: *realized_pnl,
@@ -75,7 +75,7 @@ impl TradingExecutor {
             let event = if is_liquidation {
                 EngineEvent::Liquidated {
                     symbol: position.symbol.clone(),
-                    side: format!("{:?}", position.side),
+                    side: position.side.to_string(),
                     size: position.size,
                     entry_price: position.entry_price,
                     liquidation_price: position.liquidation_price,
@@ -84,7 +84,7 @@ impl TradingExecutor {
             } else {
                 EngineEvent::PositionClosed {
                     symbol: position.symbol.clone(),
-                    side: format!("{:?}", position.side),
+                    side: position.side.to_string(),
                     size: position.size,
                     entry_price: position.entry_price,
                     exit_price,

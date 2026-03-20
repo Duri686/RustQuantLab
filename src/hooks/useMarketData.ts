@@ -10,8 +10,10 @@
 
 import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useMockMarket } from './useMockMarket';
-import { useBinanceMarket } from './useBinanceMarket';
+import { useBinanceMarket, type TradeRecord } from './useBinanceMarket';
 import type { OrderBook, HistoryCandle } from '../types/index';
+import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
+import { DEFAULT_MARKET } from '../services/binance/constants';
 
 // ============================================================================
 // 类型定义
@@ -27,6 +29,8 @@ export interface UseMarketDataOptions {
   tickInterval?: number;
   /** Binance 历史 K 线数量 */
   historyCount?: number;
+  /** 交易对 (如 BTCUSDT, ETHUSDT) */
+  symbol?: string;
 }
 
 export interface UseMarketDataReturn {
@@ -50,6 +54,14 @@ export interface UseMarketDataReturn {
   connectionStatus?: string;
   /** 错误信息 */
   error?: string | null;
+  /** 24h Ticker 统计 (仅 Binance) */
+  ticker24h?: BinanceTicker24h | null;
+  /** 最近成交记录 (仅 Binance) */
+  recentTrades?: TradeRecord[];
+  /** Taker 买入比例 (仅 Binance) */
+  takerBuyRatio?: number | null;
+  /** 合约标记价格 / 资金费率 (仅 Binance) */
+  premiumIndex?: BinancePremiumIndex | null;
 }
 
 // ============================================================================
@@ -74,7 +86,8 @@ export interface UseMarketDataReturn {
 export function useMarketData(
   options: UseMarketDataOptions = {},
 ): UseMarketDataReturn {
-  const { source = 'mock', tickInterval = 100, historyCount = 1500 } = options;
+  
+  const { source = 'mock', tickInterval = 100, historyCount = 1500, symbol = 'BTCUSDT' } = options;
 
   // 追踪上一次的数据源
   const prevSourceRef = useRef<DataSource>(source);
@@ -86,6 +99,8 @@ export function useMarketData(
   const binanceData = useBinanceMarket({
     tickInterval,
     historyCount,
+    symbol,
+    market: DEFAULT_MARKET,
   });
 
   // ========== 统一的历史数据请求封装 ==========
@@ -110,25 +125,11 @@ export function useMarketData(
   // ========== 数据源切换时，强制停止旧数据流 ==========
   useEffect(() => {
     if (prevSourceRef.current !== source) {
-      console.log(
-        `[useMarketData] 🔄 数据源切换: ${prevSourceRef.current} -> ${source}`,
-      );
-
       // 强制停止旧数据源
       if (prevSourceRef.current === 'mock') {
-        console.log('[useMarketData] ⏹️ 停止 MOCK 数据源');
-        // 多次调用 stop 确保完全停止
-        mockData.stop();
-        // 延迟再次停止，确保 Worker 完全清理
-        setTimeout(() => {
-          if (mockData.isRunning) {
-            console.warn('[useMarketData] ⚠️ MOCK 仍在运行，再次停止');
-            mockData.stop();
-          }
-        }, 200);
+        mockData.terminate();
       }
       if (prevSourceRef.current === 'binance') {
-        console.log('[useMarketData] ⏹️ 停止 Binance 数据源');
         binanceData.stop();
       }
 
@@ -138,51 +139,13 @@ export function useMarketData(
 
   // ========== 持续监控：确保只有一个数据源在运行 ==========
   useEffect(() => {
-    // 如果当前是 binance 模式，确保 mock 完全停止
-    if (source === 'binance') {
-      if (mockData.isRunning) {
-        console.warn(
-          '[useMarketData] ⚠️ LIVE 模式下检测到 MOCK 数据仍在运行，强制停止',
-        );
-        console.warn(
-          '[useMarketData] 🔍 当前数据源:',
-          source,
-          'MOCK运行状态:',
-          mockData.isRunning,
-          'Binance运行状态:',
-          binanceData.isRunning,
-        );
-        mockData.stop();
-      }
-      // 额外检查：确保返回的是 Binance 数据
-      if (mockData.latestData && binanceData.latestData) {
-        console.warn(
-          '[useMarketData] ⚠️ 检测到两个数据源都有数据，当前应使用 Binance 数据',
-        );
-        console.warn(
-          '[useMarketData] 🔍 MOCK数据:',
-          mockData.latestData,
-          'Binance数据:',
-          binanceData.latestData,
-        );
-      }
+    if (source === 'binance' && mockData.isRunning) {
+      mockData.terminate();
     }
-    // 如果当前是 mock 模式，确保 binance 完全停止
-    if (source === 'mock') {
-      if (binanceData.isRunning) {
-        console.warn(
-          '[useMarketData] ⚠️ MOCK 模式下检测到 Binance 数据仍在运行，强制停止',
-        );
-        binanceData.stop();
-      }
+    if (source === 'mock' && binanceData.isRunning) {
+      binanceData.stop();
     }
-  }, [
-    source,
-    mockData.isRunning,
-    binanceData.isRunning,
-    mockData,
-    binanceData,
-  ]);
+  }, [source, mockData.isRunning, binanceData.isRunning, mockData, binanceData]);
 
   // ========== 根据数据源选择返回值 ==========
   const result = useMemo((): UseMarketDataReturn => {
@@ -198,6 +161,10 @@ export function useMarketData(
         dataSource: 'binance',
         connectionStatus: binanceData.connectionStatus,
         error: binanceData.error,
+        ticker24h: binanceData.ticker24h,
+        recentTrades: binanceData.recentTrades,
+        takerBuyRatio: binanceData.takerBuyRatio,
+        premiumIndex: binanceData.premiumIndex,
       };
     }
 
@@ -205,7 +172,8 @@ export function useMarketData(
     return {
       latestData: mockData.latestData,
       isRunning: mockData.isRunning,
-      start: mockData.start,
+      // 使用 options.symbol 启动 mock
+      start: (startPrice?: number) => mockData.start(symbol, startPrice),
       stop: mockData.stop,
       historyCandles: mockData.historyCandles,
       historyLoading: mockData.historyLoading,

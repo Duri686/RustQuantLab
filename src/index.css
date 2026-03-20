@@ -1,31 +1,26 @@
 @import 'tailwindcss';
 
 /* ============================================
-   RustQuantLab - Cyberpunk Fintech Theme
-   4K Ultra-Wide Ready Trading Terminal
+   RustQuantLab Design System
+   Binance Futures Trading Terminal Theme
+   ============================================
+   Token 命名规范:
+   - 背景: bg-{level}    (dark > black > surface-alt > surface > elevated)
+   - 文字: Tailwind gray-* 系列 (400/500/600) + 语义色
+   - 语义: success(涨/买) / danger(跌/卖) / warning(强调) / info / cyan
+   - 边框: border-dark(主) / border-medium(辅)
    ============================================ */
 
-/* 自定义主题配置 (Tailwind v4 CSS-first 方式) */
 @theme {
-  /* Core Palette */
-  --color-terminal-bg: #0a0a0a;
-  --color-surface: #111111;
-  --color-surface-elevated: #161616;
-  --color-border: rgba(255, 255, 255, 0.05);
-  --color-border-bright: rgba(255, 255, 255, 0.1);
+  /* ---- 背景层级 (深 → 浅) ---- */
+  --color-terminal-bg: #0b0e11;
+  --color-bg-dark: #0b0e11;
+  --color-bg-black: #0d0d0d;
+  --color-bg-surface-alt: #161a1e;
+  --color-bg-surface: #1e2026;
+  --color-bg-surface-elevated: #1e2329;
 
-  /* Text */
-  --color-text: #e5e5e5;
-  --color-text-muted: #737373;
-  --color-text-dim: #525252;
-
-  /* Accent Colors - Neon */
-  --color-neon-green: #00f090;
-  --color-neon-red: #ff3b30;
-  --color-neon-cyan: #00d4ff;
-  --color-neon-amber: #ffb800;
-
-  /* Binance Color Palette */
+  /* ---- 语义色 (Binance Palette) ---- */
   --color-success: #0ECB81;
   --color-danger: #F6465D;
   --color-warning: #FCD535;
@@ -33,25 +28,15 @@
   --color-info: #3B82F6;
   --color-cyan: #00B8D9;
 
-  /* Binance Background Colors */
-  --color-bg-dark: #0b0e11;
-  --color-bg-surface: #1e2026;
-  --color-bg-surface-alt: #161a1e;
-  --color-bg-surface-elevated: #161a25;
-  --color-bg-black: #0d0d0d;
-
-  /* Binance Border Colors */
+  /* ---- 边框 ---- */
   --color-border-dark: #2b2f36;
   --color-border-medium: #252a36;
 
-  /* Legacy Compat */
-  --color-primary: #00d4ff;
-  --color-primary-hover: #00b8e6;
-  --color-accent: #00d4ff;
-  --color-error: #ff3b30;
+  /* ---- 文字 (仅用于 body 基础色) ---- */
+  --color-text: #eaecef;
 }
 
-/* 基础样式 - Full Viewport */
+/* 基础样式 */
 :root {
   color-scheme: dark;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -65,7 +50,7 @@ body {
   width: 100%;
   height: 100%;
   overflow-x: hidden;
-  background-color: var(--color-terminal-bg);
+  background-color: var(--color-bg-dark);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -79,76 +64,41 @@ body {
   flex-direction: column;
 }
 
-/* Tabular Numbers - 防止数字抖动 */
+/* 等宽数字 - 防止数字宽度抖动 */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
 
-/* 自定义滚动条 - Pro Trading 风格 */
+/* 自定义滚动条 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-surface);
+  background: var(--color-bg-surface-alt);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-bright);
+  background: var(--color-border-dark);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-border-medium);
 }
 
-/* Glassmorphism 效果 */
-.glass {
-  background: rgba(17, 17, 17, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* 深度条动画 */
+/* 深度条过渡 */
 .depth-bar {
   transition: width 150ms ease-out;
 }
 
-/* Neon Glow 效果 */
-.glow-green {
-  box-shadow: 0 0 20px rgba(0, 240, 144, 0.3);
-}
-
-.glow-red {
-  box-shadow: 0 0 20px rgba(255, 59, 48, 0.3);
-}
-
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-}
-
-/* 脉冲动画 - 数据流状态 */
-@keyframes pulse-neon {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-.animate-pulse-neon {
-  animation: pulse-neon 2s ease-in-out infinite;
-}
-
 /* ============================================
-   Mobile-First 响应式工具类
+   工具类
    ============================================ */
 
-/* 隐藏滚动条 (用于工具栏横向滚动) */
+/* 隐藏滚动条 (工具栏横向滚动) */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -173,12 +123,53 @@ body {
   min-width: 44px;
 }
 
-/* ============================================
-   自定义断点扩展 (Tailwind v4)
-   ============================================ */
+/* ActionButtons 错误抖动动画 */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
 
 /* 3xl 断点: 2560px+ (4K/超宽屏) */
 @custom-media --3xl (width >= 2560px);
 
-/* 使用示例: @media (--3xl) { ... } */
-/* Tailwind v4 会自动识别 3xl: 前缀 */
+/* Drawer 动画 */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-slide-in-bottom {
+  animation: slide-in-bottom 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}

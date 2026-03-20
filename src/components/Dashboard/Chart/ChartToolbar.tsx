@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Settings, Camera } from 'lucide-react';
+import { Settings, Camera, BarChart2 } from 'lucide-react';
 
 /* ============================================
    Constants
@@ -42,6 +42,10 @@ export interface ChartToolbarProps {
   onSettingsClick?: () => void;
   /** Callback when screenshot is clicked */
   onScreenshotClick?: () => void;
+  /** Callback when chart view button is clicked (mobile only) */
+  onChartViewClick?: () => void;
+  /** K 线收盘倒计时（秒） */
+  candleCountdown?: number;
 }
 
 /* ============================================
@@ -72,10 +76,9 @@ function ToolbarButton({
       title={title}
       className={`
         px-2 py-1 text-[11px] font-medium rounded transition-colors
-        ${
-          active
-            ? 'text-[var(--color-warning)] bg-[var(--color-warning)]/10'
-            : 'text-gray-400 hover:text-white hover:bg-white/5'
+        ${active
+          ? 'text-warning bg-warning/10'
+          : 'text-gray-400 hover:text-white hover:bg-white/5'
         }
       `}
     >
@@ -105,7 +108,7 @@ function IconButton({ icon, onClick, title }: IconButtonProps) {
 
 /** Vertical divider */
 function Divider() {
-  return <div className="w-px h-5 bg-[var(--color-border-dark)] mx-1" />;
+  return <div className="w-px h-5 bg-border-dark mx-1" />;
 }
 
 /* ============================================
@@ -118,18 +121,26 @@ function Divider() {
  * Professional trading chart toolbar mimicking Binance/TradingView style.
  * Provides controls for timeframes, indicators, chart types, and actions.
  */
+/** 格式化倒计时秒数为 HH:MM:SS */
+function formatCountdown(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function ChartToolbar({
   activeTimeframe = '1H',
   onTimeframeChange,
   activeIndicators = ['MA', 'VOL'],
   onIndicatorToggle,
-  activeChartType = 'TradingView',
-  onChartTypeChange,
   onSettingsClick,
   onScreenshotClick,
+  onChartViewClick,
+  candleCountdown,
 }: ChartToolbarProps) {
   return (
-    <div className="h-9 md:h-10 bg-[var(--color-bg-surface-alt)] border-b border-[var(--color-border-dark)] px-1 md:px-2 flex items-center justify-between overflow-hidden">
+    <div className="h-9 md:h-10 bg-bg-surface-alt border-b border-border-dark px-1 md:px-2 flex items-center justify-between overflow-hidden">
       {/* ========== Left Section: 横向滚动容器 ========== */}
       <div className="flex-1 overflow-x-auto scrollbar-hide">
         <div className="flex items-center gap-1 min-w-max">
@@ -146,6 +157,16 @@ function ChartToolbar({
               </ToolbarButton>
             ))}
           </div>
+
+          {/* K 线收盘倒计时 */}
+          {candleCountdown != null && (
+            <span
+              className="px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-gray-400 bg-white/5 rounded select-none"
+              title={`${activeTimeframe} K 线收盘倒计时`}
+            >
+              {formatCountdown(candleCountdown)}
+            </span>
+          )}
 
           <Divider />
 
@@ -178,26 +199,21 @@ function ChartToolbar({
             ))}
           </div>
 
-          {/* Chart Type - 移动端隐藏，仅桌面显示 */}
-          <div className="hidden md:flex items-center gap-0.5">
-            <Divider />
-            {CHART_TYPES.map((type) => (
-              <ToolbarButton
-                key={type}
-                active={activeChartType === type}
-                onClick={() => onChartTypeChange?.(type)}
-                title={`Switch to ${type} chart`}
-              >
-                {type}
-              </ToolbarButton>
-            ))}
-          </div>
+
         </div>
       </div>
 
       {/* ========== Right Section: Actions (固定不滚动) ========== */}
       <div className="flex items-center gap-0.5 shrink-0 ml-1">
         <Divider />
+        {/* 图表视图按钮 - 仅移动端显示 */}
+        {onChartViewClick && (
+          <IconButton
+            icon={<BarChart2 className="w-3.5 h-3.5" />}
+            onClick={onChartViewClick}
+            title="切换图表视图"
+          />
+        )}
         <IconButton
           icon={<Camera className="w-3.5 h-3.5 md:w-4 md:h-4" />}
           onClick={onScreenshotClick}

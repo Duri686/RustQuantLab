@@ -7,7 +7,8 @@
  * @module hooks/tradingEngine/useTradingActions
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
+import { useDebounceFn } from 'ahooks';
 import { handleEngineEvents, safeToFixed } from '../tradingState/eventHandler';
 import type {
   TradingState,
@@ -18,7 +19,7 @@ import type {
   MarginMode,
   OrderType,
 } from '../../types/trading';
-import type { TradingWasmEngine, AddMarginResult } from '../tradingState/types';
+import type { TradingWasmEngine, AddMarginResult, EstimateLiquidationResult } from '../tradingState/types';
 import type { MarketEngineInstance } from '../../types/index';
 
 // ============================================================================
@@ -80,10 +81,17 @@ export interface UseTradingActionsReturn {
   cancelOrder: (orderId: string) => CancelOrderResult | null;
   /** 增加保证金 (逐仓模式) */
   addMargin: (positionId: string, amount: number) => AddMarginResult | null;
+  /** 预估强平价格 (Wasm 引擎计算) */
+  estimateLiquidation: (
+    side: 'LONG' | 'SHORT',
+    size: number,
+    leverage: number,
+    marginMode: string,
+  ) => EstimateLiquidationResult | null;
 }
 
-// 导出 AddMarginResult 类型（从 tradingState/types 重导出）
-export type { AddMarginResult } from '../tradingState/types';
+// 导出类型（从 tradingState/types 重导出）
+export type { AddMarginResult, EstimateLiquidationResult } from '../tradingState/types';
 
 // ============================================================================
 // Hook 实现
@@ -108,8 +116,9 @@ export function useTradingActions(
   } = params;
 
   // ========== Toast 防抖控制 ==========
-  const leverageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
+  const { run: debouncedLeverageToast } = useDebounceFn(
+    (leverage: number) => toast.success(`杠杆已设置为 ${leverage}x`),
+    { wait: 300 },
   );
 
   // ========== 辅助函数：同步状态 ==========
@@ -267,13 +276,7 @@ export function useTradingActions(
           onStateUpdate(state);
 
           // 防抖 Toast
-          if (leverageToastTimerRef.current) {
-            clearTimeout(leverageToastTimerRef.current);
-          }
-          leverageToastTimerRef.current = setTimeout(() => {
-            toast.success(`杠杆已设置为 ${leverage}x`);
-            leverageToastTimerRef.current = null;
-          }, 300);
+          debouncedLeverageToast(leverage);
         } else {
           toast.error('无法修改杠杆: 持仓期间不能修改杠杆');
         }
@@ -283,7 +286,7 @@ export function useTradingActions(
         return false;
       }
     },
-    [engineRef, engineAlive, toast, onStateUpdate],
+    [engineRef, engineAlive, toast, onStateUpdate, debouncedLeverageToast],
   );
 
   // ========== 重置账户 ==========
@@ -376,6 +379,32 @@ export function useTradingActions(
     [engineRef, engineAlive, toast, syncState],
   );
 
+  // ========== 预估强平价格 ==========
+  const estimateLiquidation = useCallback(
+    (
+      side: 'LONG' | 'SHORT',
+      size: number,
+      leverage: number,
+      marginMode: string,
+    ): EstimateLiquidationResult | null => {
+      if (!engineAlive.current || !engineRef.current) return null;
+
+      try {
+        const engine = engineRef.current as unknown as TradingWasmEngine;
+        return engine.estimate_liquidation_price(
+          side.toLowerCase(),
+          size,
+          leverage,
+          marginMode,
+        );
+      } catch (err) {
+        console.warn('[useTradingActions] 预估强平价格失败:', err);
+        return null;
+      }
+    },
+    [engineRef, engineAlive],
+  );
+
   return {
     placeOrder,
     closePosition,
@@ -383,5 +412,6 @@ export function useTradingActions(
     resetAccount,
     cancelOrder,
     addMargin,
+    estimateLiquidation,
   };
 }

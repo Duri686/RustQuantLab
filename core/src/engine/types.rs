@@ -32,6 +32,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use crate::models::{AnalysisResult, CandleHistory};
 use crate::risk::LiquidationResult;
 use crate::trading::{MarginMode, OrderType, PendingOrder, Position};
 
@@ -219,8 +220,11 @@ pub struct OpenPositionRequest {
     pub order_type: OrderType,
 }
 
+/// 默认交易对符号 (全局统一常量)
+pub const PRIMARY_SYMBOL: &str = "BTCUSDT";
+
 fn default_symbol() -> String {
-    "BTCUSDT".to_string()
+    PRIMARY_SYMBOL.to_string()
 }
 
 /// 开仓结果
@@ -284,4 +288,33 @@ pub struct AddMarginResult {
     /// 错误信息
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// 预估强平价格结果
+///
+/// 用于 UI 下单前的风险预览，不实际开仓
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateLiquidationResult {
+    /// 预估强平价格
+    pub liquidation_price: f64,
+    /// 预估所需保证金 (USDT)
+    pub margin: f64,
+    /// 预估维持保证金 (USDT)
+    pub maintenance_margin: f64,
+}
+
+/// 合并的 Tick 处理结果
+///
+/// 将 AnalysisResult + CandleHistory + TradingState 合并为单次 WASM 调用，
+/// 减少 3 次跨边界序列化为 1 次。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TickFullResult {
+    /// 技术指标分析结果
+    pub analysis: AnalysisResult,
+    /// 当前活跃周期的 K 线历史 + 指标
+    pub candles: CandleHistory,
+    /// 交易状态快照
+    pub trading_state: TradingState,
 }

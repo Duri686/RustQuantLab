@@ -45,8 +45,8 @@ function handleHistoryRequest(timeframeSeconds: number, count: number): void {
 /**
  * 处理启动请求
  */
-function handleStart(interval: number, startPrice?: number): void {
-  startGeneration(interval, startPrice, (msg) => self.postMessage(msg));
+function handleStart(interval: number, startPrice?: number, symbol?: string): void {
+  startGeneration(interval, symbol, startPrice, (msg) => self.postMessage(msg));
 }
 
 /**
@@ -65,8 +65,8 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
   switch (type) {
     case 'START': {
-      const { interval, startPrice } = event.data.payload;
-      handleStart(interval, startPrice);
+      const { interval, startPrice, symbol } = event.data.payload;
+      handleStart(interval, startPrice, symbol);
       break;
     }
     case 'STOP': {

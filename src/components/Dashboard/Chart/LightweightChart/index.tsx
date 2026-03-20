@@ -121,7 +121,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
       return (
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-center">
-            <div className="inline-block w-8 h-8 border-2 border-[var(--color-neon-cyan)] border-t-transparent rounded-full animate-spin mb-3" />
+            <div className="inline-block w-8 h-8 border-2 border-warning-alt border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-neutral-500 font-mono text-sm">等待 K 线数据...</p>
           </div>
         </div>
@@ -133,7 +133,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
     const priceColor = isUp ? CHART_COLORS.UP : CHART_COLORS.DOWN;
     const { changePercent } = displayCandle
       ? calculateChange(displayCandle.open, displayCandle.close)
-      : { change: 0, changePercent: 0 };
+      : { changePercent: 0 };
 
     // 指标数据
     const displayMa7 = indicatorData.ma7[displayIndex];
@@ -160,7 +160,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
           <div
             className="absolute top-1 left-1 z-10 flex flex-wrap items-center gap-x-3 gap-y-0.5
                        text-[10px] md:text-xs font-mono pointer-events-none
-                       bg-[var(--color-bg-surface-alt)]/80 backdrop-blur-sm rounded px-2 py-1"
+                       bg-bg-surface-alt/80 backdrop-blur-sm rounded px-2 py-1"
           >
             {/* 时间 */}
             <span className="text-neutral-400">{displayCandle.timeStr}</span>
@@ -269,7 +269,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
             <button
               onClick={handleReSync}
               className="flex items-center gap-1.5 px-3 py-1.5
-                         bg-[var(--color-success)] hover:opacity-80
+                         bg-success hover:opacity-80
                          text-white text-[10px] md:text-xs font-medium
                          rounded-md transition-colors shadow-lg"
             >
@@ -306,5 +306,3 @@ const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProp
 );
 
 export default LightweightChart;
-export type { LightweightChartHandle };
-

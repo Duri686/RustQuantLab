@@ -45,10 +45,14 @@ export interface BinanceKline {
   volume: number;
   /** 收盘时间 (毫秒) */
   closeTime: number;
-  /** 成交额 */
+  /** 成交额 (USDT) */
   quoteVolume: number;
   /** 成交笔数 */
   trades: number;
+  /** 主动买入成交量 */
+  takerBuyVolume: number;
+  /** 主动买入成交额 (USDT) */
+  takerBuyQuoteVolume: number;
 }
 
 /**
@@ -67,11 +71,35 @@ export interface BinanceTicker24h {
   symbol: string;
   priceChange: string;
   priceChangePercent: string;
+  weightedAvgPrice: string;
   lastPrice: string;
   highPrice: string;
   lowPrice: string;
   volume: string;
   quoteVolume: string;
+  openPrice: string;
+  count: number;
+}
+
+/**
+ * 合约标记价格 / 资金费率数据 (来自 /fapi/v1/premiumIndex)
+ */
+export interface BinancePremiumIndex {
+  symbol: string;
+  /** 标记价格 */
+  markPrice: string;
+  /** 指数价格 */
+  indexPrice: string;
+  /** 预估结算价格 */
+  estimatedSettlePrice: string;
+  /** 最近一次资金费率 */
+  lastFundingRate: string;
+  /** 下次资金费率结算时间 (ms) */
+  nextFundingTime: number;
+  /** 下次倒数资金费率 */
+  interestRate: string;
+  /** 数据时间 */
+  time: number;
 }
 
 // ============================================================================

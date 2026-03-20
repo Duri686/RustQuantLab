@@ -14,15 +14,7 @@ import type {
   MarketType,
   ConnectionStatus,
 } from './types';
-
-// ============================================================================
-// WebSocket 端点配置
-// ============================================================================
-
-const WS_ENDPOINTS = {
-  spot: 'wss://stream.binance.com:9443/ws',
-  futures: 'wss://fstream.binance.com/ws',
-} as const;
+import { WS_ENDPOINTS, DEFAULT_MARKET } from './constants';
 
 // ============================================================================
 // 类型定义
@@ -56,6 +48,8 @@ export class BinanceWebSocket {
   private status: ConnectionStatus = 'disconnected';
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private streams: string[] = [];
+  /** 手动停止标记，区分主动关闭和意外断开 */
+  private manualStop = false;
 
   constructor(options: BinanceWsOptions) {
     this.options = {
@@ -121,6 +115,7 @@ export class BinanceWebSocket {
       return;
     }
 
+    this.manualStop = false;
     this.status = 'connecting';
     
     // 构建 WebSocket URL (支持多流)
@@ -138,10 +133,10 @@ export class BinanceWebSocket {
   }
 
   /**
-   * 停止 WebSocket 连接
+   * 停止 WebSocket 连接（主动关闭，不再自动重连）
    */
   stop(): void {
-    this.options.reconnect = false;
+    this.manualStop = true;
     
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -191,8 +186,8 @@ export class BinanceWebSocket {
     this.status = 'disconnected';
     this.callbacks.onDisconnect?.();
     
-    // 自动重连
-    if (this.options.reconnect) {
+    // 自动重连（仅在非主动停止且配置允许时）
+    if (this.options.reconnect && !this.manualStop) {
       console.log(`[BinanceWS] ${this.options.reconnectDelay}ms 后重连...`);
       this.reconnectTimer = setTimeout(() => {
         this.start();
@@ -217,7 +212,7 @@ export class BinanceWebSocket {
 export function createKlineWs(
   symbol: string = 'BTCUSDT',
   interval: BinanceInterval = '1m',
-  market: MarketType = 'futures',
+  market: MarketType = DEFAULT_MARKET,
   onKline: (k: BinanceWsKlineMsg['k']) => void,
 ): BinanceWebSocket {
   const ws = new BinanceWebSocket({ symbol, market, interval });
@@ -230,7 +225,7 @@ export function createKlineWs(
  */
 export function createTradeWs(
   symbol: string = 'BTCUSDT',
-  market: MarketType = 'futures',
+  market: MarketType = DEFAULT_MARKET,
   onTrade: (trade: BinanceWsTradeMsg) => void,
 ): BinanceWebSocket {
   const ws = new BinanceWebSocket({ symbol, market });
@@ -244,7 +239,7 @@ export function createTradeWs(
 export function createMultiStreamWs(
   symbol: string = 'BTCUSDT',
   interval: BinanceInterval = '1m',
-  market: MarketType = 'futures',
+  market: MarketType = DEFAULT_MARKET,
   callbacks: BinanceWsCallbacks,
 ): BinanceWebSocket {
   const ws = new BinanceWebSocket({ symbol, market, interval });

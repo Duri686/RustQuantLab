@@ -417,6 +417,7 @@ impl Position {
     /// 更新未实现盈亏
     ///
     /// 根据当前市场价格重新计算 unrealized_pnl, pnl_percentage 和 margin_ratio
+    #[inline]
     pub fn update_pnl(&mut self, current_price: f64) {
         self.unrealized_pnl = self.calculate_pnl(current_price, self.size);
         self.pnl_percentage = if self.margin > 0.0 {

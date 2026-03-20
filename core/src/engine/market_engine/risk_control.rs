@@ -50,7 +50,7 @@ impl MarketEngine {
         self.pending_events.push(EngineEvent::LimitOrderFilled {
             order_id: order.id.clone(),
             symbol: order.symbol.clone(),
-            side: format!("{:?}", order.side),
+            side: order.side.to_string(),
             size: order.size,
             fill_price,
         });

@@ -86,6 +86,8 @@ export interface WorkerStartMessage {
   type: 'START';
   payload: {
     interval: number;
+    /** 交易对符号 (默认 BTC-USDT) */
+    symbol?: string;
     /** 起始价格 (可选，用于从历史数据结束价继续) */
     startPrice?: number;
   };
@@ -272,6 +274,7 @@ export interface IndicatorData {
  */
 export interface MarketEngineInstance {
   on_tick: (data: OrderBook) => AnalysisResult;
+  on_tick_full: (data: OrderBook) => import('../types/wasm').WasmTickFullResult;
   history_length: () => number;
   clear_history: () => void;
   free: () => void;
@@ -429,14 +432,13 @@ export interface HeaderProps {
 
 /**
  * StatsPanel 组件 Props
+ * 合约交易信息条：Mark Price / Index Price / Funding Rate / 24h Change / Spread
  */
 export interface StatsPanelProps {
-  /** 最新市场数据 */
-  latestData: OrderBook | null;
-  /** Wasm 分析结果 */
+  /** Wasm 分析结果（用于 Spread） */
   analysisResult: AnalysisResult | null;
-  /** 价格颜色类 */
-  priceColorClass: string;
+  /** 24h 市场统计（来自 useMarketStats） */
+  marketStats?: import('../hooks/useMarketStats').MarketStats;
 }
 
 /**

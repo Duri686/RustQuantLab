@@ -39,7 +39,6 @@ export function initializeMicroTrend(
 
   // 计算各阶段的K线数量
   const panicBars = Math.max(2, Math.floor(totalDuration * V_REVERSAL_PHASES[0]));
-  const climaxBars = Math.max(1, Math.floor(totalDuration * V_REVERSAL_PHASES[1]));
   // 剩余给反转阶段
 
   s.microTrend = {
@@ -137,7 +136,7 @@ function advanceMicroTrendPhase(s: MarketState): void {
 export function generateMicroTrendCandle(
   s: MarketState,
   open: number,
-  timeframeSeconds: number,
+  _timeframeSeconds: number,
 ): CandleResult {
   const { microTrend } = s;
   const { phase, direction } = microTrend;

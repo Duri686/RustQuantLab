@@ -11,17 +11,34 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  BinanceAPI,
-  BinanceWebSocket,
-  type BinanceKline,
-  type BinanceInterval,
-  type MarketType,
-  type BinanceWsKlineMsg,
-  type BinanceWsDepthMsg,
-  type ConnectionStatus,
+import { BinanceAPI, BinanceWebSocket } from '../services/binance';
+import type {
+  BinanceKline,
+  BinanceInterval,
+  MarketType,
+  BinanceWsKlineMsg,
+  BinanceWsTradeMsg,
+  BinanceWsDepthMsg,
+  BinancePremiumIndex,
+  BinanceTicker24h,
+  ConnectionStatus,
 } from '../services/binance';
+import { DEFAULT_MARKET, DEFAULT_SYMBOL } from '../services/binance/constants';
 import type { OrderBook, HistoryCandle } from '../types/index';
+
+/** 最近成交记录 */
+export interface TradeRecord {
+  /** 交易 ID */
+  id: number;
+  /** 价格 */
+  price: number;
+  /** 数量 */
+  qty: number;
+  /** 成交时间 (毫秒) */
+  time: number;
+  /** 是否是买方主动成交 */
+  isBuyerMaker: boolean;
+}
 
 // ============================================================================
 // 类型定义
@@ -63,6 +80,14 @@ export interface UseBinanceMarketReturn {
   currentPrice: number | null;
   /** 错误信息 */
   error: string | null;
+  /** 24h Ticker 统计数据 (来自 Binance REST API) */
+  ticker24h: BinanceTicker24h | null;
+  /** 最近成交记录 (来自 WebSocket trade stream) */
+  recentTrades: TradeRecord[];
+  /** Taker 买入比例 (0~1，实时计算) */
+  takerBuyRatio: number | null;
+  /** 合约标记价格 / 资金费率 (来自 Binance premiumIndex) */
+  premiumIndex: BinancePremiumIndex | null;
 }
 
 // ============================================================================
@@ -71,12 +96,12 @@ export interface UseBinanceMarketReturn {
 
 /** 默认配置 */
 const DEFAULT_OPTIONS: Required<UseBinanceMarketOptions> = {
-  symbol: 'BTCUSDT',
-  market: 'spot', // 使用现货 API (支持 CORS)
-  historyInterval: '1m', // 历史数据用 1 分钟 K 线（Rust 引擎需要细粒度数据）
-  realtimeInterval: '1s', // 实时用 1 秒 K 线
-  historyCount: 5000, // 历史 K 线数量（5000 根 1m = 约 3.5 天，足够计算所有指标）
-  tickInterval: 100, // 100ms 更新一次 OrderBook
+  symbol: DEFAULT_SYMBOL,
+  market: DEFAULT_MARKET,
+  historyInterval: '1m',
+  realtimeInterval: '1s',
+  historyCount: 5000,
+  tickInterval: 100,
 };
 
 // ============================================================================
@@ -194,10 +219,17 @@ export function useBinanceMarket(
     useState<ConnectionStatus>('disconnected');
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ticker24h, setTicker24h] = useState<BinanceTicker24h | null>(null);
+  const [recentTrades, setRecentTrades] = useState<TradeRecord[]>([]);
+  const [takerBuyRatio, setTakerBuyRatio] = useState<number | null>(null);
+  const [premiumIndex, setPremiumIndex] = useState<BinancePremiumIndex | null>(null);
 
   // ========== Refs ==========
   const wsRef = useRef<BinanceWebSocket | null>(null);
+  /** 追踪运行状态（避免闭包陷阱） */
+  const isRunningRef = useRef(false);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const premiumIndexIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const priceRef = useRef<number | null>(null);
   /** 本地订单簿状态 (维护完整订单簿) */
   const orderBookRef = useRef<{
@@ -299,11 +331,35 @@ export function useBinanceMarket(
   // ========== 启动实时数据 ==========
   const start = useCallback(
     async (startPrice?: number) => {
-      if (isRunning) return;
+      if (isRunningRef.current) return;
 
       console.log(`[Binance] 🚀 启动实时数据流...`);
+      isRunningRef.current = true;
       setIsRunning(true);
       setError(null);
+
+      // 获取 24h Ticker 统计数据
+      try {
+        const ticker = await BinanceAPI.getTicker24h(opts.symbol, opts.market);
+        setTicker24h(ticker);
+        console.log('[Binance] ✅ 24h Ticker 已加载');
+      } catch (tickerErr) {
+        console.warn('[Binance] ⚠️ 获取 24h Ticker 失败，使用 K 线估算:', tickerErr);
+      }
+
+      // 获取合约标记价格 / 资金费率
+      const fetchPremiumIndex = async () => {
+        try {
+          const data = await BinanceAPI.getPremiumIndex(opts.symbol);
+          setPremiumIndex(data);
+        } catch (err) {
+          console.warn('[Binance] ⚠️ 获取 premiumIndex 失败:', err);
+        }
+      };
+      await fetchPremiumIndex();
+      console.log('[Binance] ✅ PremiumIndex 已加载 (标记价/资金费率)');
+      // 每 30 秒刷新一次 premiumIndex
+      premiumIndexIntervalRef.current = setInterval(fetchPremiumIndex, 30_000);
 
       // 如果有起始价格，设置它
       if (startPrice) {
@@ -468,28 +524,12 @@ export function useBinanceMarket(
             prevKlineVolumeRef.current = volume;
             currentKlineVolumeRef.current = volume;
 
-            // 详细日志：记录每次 K 线更新（减少日志频率，只在重要时刻记录）
-            if (k.x || isNewKline || Math.abs(volumeDelta) > 0.0001) {
-              console.log(`[Binance] 📊 K线更新:`, {
-                time: new Date(k.t).toLocaleTimeString(),
-                price: price.toFixed(2),
-                volume: volume.toFixed(4),
-                volumeDelta: volumeDelta.toFixed(4),
-                isFinished: k.x,
-                isNewKline,
-                interval: k.i,
-              });
+            // 计算 Taker 买入比例（实时）
+            const takerBuyVol = parseFloat(k.V);
+            if (volume > 0) {
+              setTakerBuyRatio(takerBuyVol / volume);
             }
-
-            // 如果 K 线已完结，记录日志
-            if (k.x) {
-              console.log(
-                `[Binance] ✅ K 线完结: 总成交量=${volume.toFixed(4)}, 周期=${
-                  k.i
-                }`,
-              );
-              // K 线完结后，下一根 K 线开始时 prevKlineVolumeRef 会重置为 0
-            }
+            // K 线完结后，下一根 K 线开始时 prevKlineVolumeRef 会重置为 0
 
             // 立即更新 OrderBook（包含成交量）
             // 注意：WASM 引擎的 Candle::update 会累加成交量
@@ -518,18 +558,6 @@ export function useBinanceMarket(
 
               orderBook.volume = volumeToPass;
 
-              // 🔍 成交量追踪日志：K线更新
-              console.log(`[VOL追踪] 📊 K线更新 → setLatestData:`, {
-                volume: volumeToPass,
-                volumeType: k.x
-                  ? '增量(完结)'
-                  : isNewKline
-                  ? '增量(新K线)'
-                  : '增量',
-                klineFinished: k.x,
-                isNewKline,
-                orderBookHasVolume: orderBook.volume !== undefined,
-              });
 
               setLatestData(orderBook);
             }
@@ -578,22 +606,30 @@ export function useBinanceMarket(
                   // 注意：真实的成交量数据只在 K 线更新时传递
                   orderBook.volume = 0;
 
-                  // 🔍 成交量追踪日志：深度更新
-                  console.log(`[VOL追踪] 📦 深度更新 → setLatestData:`, {
-                    volume: 0,
-                    currentKlineVolume: currentKlineVolumeRef.current,
-                    note: '传递 0 避免累加，真实成交量在 K 线更新时传递',
-                  });
 
                   setLatestData(orderBook);
                 }
               }
             }
           },
+          onTrade: (trade: BinanceWsTradeMsg) => {
+            // 维护最近 50 笔成交记录
+            const record: TradeRecord = {
+              id: trade.t,
+              price: parseFloat(trade.p),
+              qty: parseFloat(trade.q),
+              time: trade.T,
+              isBuyerMaker: trade.m,
+            };
+            setRecentTrades((prev) => {
+              const next = [record, ...prev];
+              return next.length > 50 ? next.slice(0, 50) : next;
+            });
+          },
         });
 
-        // 订阅 K 线和深度数据
-        ws.connectKline().connectDepth('100ms').start();
+        // 订阅 K 线、深度和逐笔交易数据
+        ws.connectKline().connectDepth('100ms').connectTrade().start();
         wsRef.current = ws;
 
         // 定时更新 OrderBook（即使没有深度更新，也定期刷新价格）
@@ -603,7 +639,7 @@ export function useBinanceMarket(
             const orderBook = buildOrderBookFromState(
               orderBookRef.current,
               price,
-              'BTC-USDT',
+              opts.symbol,
               50, // 买单和卖单各50档，总共100行
             );
 
@@ -614,14 +650,7 @@ export function useBinanceMarket(
             // 注意：真实的成交量数据只在 K 线更新时传递
             orderBook.volume = 0;
 
-            // 🔍 成交量追踪日志：定时更新（减少频率，每10次记录一次）
-            if (Math.random() < 0.1) {
-              console.log(`[VOL追踪] ⏰ 定时更新 → setLatestData:`, {
-                volume: 0,
-                currentKlineVolume: currentKlineVolumeRef.current,
-                note: '传递 0 避免累加，真实成交量在 K 线更新时传递',
-              });
-            }
+
 
             setLatestData(orderBook);
           }
@@ -629,11 +658,11 @@ export function useBinanceMarket(
       } catch (err) {
         console.error('[Binance] ❌ 启动实时数据失败:', err);
         setError(err instanceof Error ? err.message : '启动失败');
+        isRunningRef.current = false;
         setIsRunning(false);
       }
     },
     [
-      isRunning,
       opts.symbol,
       opts.market,
       opts.realtimeInterval,
@@ -657,9 +686,24 @@ export function useBinanceMarket(
       tickIntervalRef.current = null;
     }
 
+    // 停止 premiumIndex 定时刷新
+    if (premiumIndexIntervalRef.current) {
+      clearInterval(premiumIndexIntervalRef.current);
+      premiumIndexIntervalRef.current = null;
+    }
+
+    // 清空数据状态
+    setLatestData(null);
+    setHistoryCandles([]);
+    setTicker24h(null);
+    setRecentTrades([]);
+    setTakerBuyRatio(null);
+    setPremiumIndex(null);
+
     // 清理订单簿状态
     orderBookRef.current = null;
 
+    isRunningRef.current = false;
     setIsRunning(false);
     setConnectionStatus('disconnected');
   }, []);
@@ -673,8 +717,41 @@ export function useBinanceMarket(
       if (tickIntervalRef.current) {
         clearInterval(tickIntervalRef.current);
       }
+      if (premiumIndexIntervalRef.current) {
+        clearInterval(premiumIndexIntervalRef.current);
+      }
     };
   }, []);
+
+  // ========== 监听 Symbol 变化 ==========
+  // 如果正在运行且 Symbol 变化，则重启
+  // 使用 ref 来避免闭包陷阱和循环依赖
+  const prevSymbolRef = useRef(opts.symbol);
+  
+  useEffect(() => {
+    if (prevSymbolRef.current !== opts.symbol) {
+      console.log(`[Binance] 🔄 Symbol 变更: ${prevSymbolRef.current} -> ${opts.symbol}`);
+      const wasRunning = isRunningRef.current;
+      prevSymbolRef.current = opts.symbol;
+
+      if (wasRunning) {
+        // 先停止旧连接
+        stop();
+        // 通过 requestAnimationFrame 延迟重启，确保 stop 的状态更新已生效
+        requestAnimationFrame(() => {
+          start();
+        });
+      } else {
+        // 如果未运行，清除旧数据
+        setLatestData(null);
+        setHistoryCandles([]);
+        setTicker24h(null);
+        setRecentTrades([]);
+        setTakerBuyRatio(null);
+        setPremiumIndex(null);
+      }
+    }
+  }, [opts.symbol, stop, start]);
 
   // ========== 返回 ==========
   return {
@@ -688,5 +765,9 @@ export function useBinanceMarket(
     connectionStatus,
     currentPrice,
     error,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
+    premiumIndex,
   };
 }

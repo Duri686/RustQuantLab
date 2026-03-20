@@ -13,45 +13,12 @@ import type {
   BinanceInterval,
   MarketType,
 } from './types';
-
-// ============================================================================
-// API 端点配置
-// ============================================================================
-
-/**
- * 检测是否是本地开发环境
- */
-const isDev = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-/**
- * 获取 API 基础 URL
- * 本地开发使用 Vite 代理，生产环境直连 Binance
- */
-function getBaseUrl(market: 'spot' | 'futures'): string {
-  if (isDev) {
-    // 本地开发: 使用 Vite 代理路径
-    return market === 'spot' ? '/binance-spot' : '/binance-futures';
-  }
-  
-  // 生产环境: 直连 Binance API
-  return market === 'spot' 
-    ? 'https://api.binance.com'
-    : 'https://fapi.binance.com';
-}
-
-const ENDPOINTS = {
-  spot: {
-    klines: '/api/v3/klines',
-    depth: '/api/v3/depth',
-    ticker24h: '/api/v3/ticker/24hr',
-  },
-  futures: {
-    klines: '/fapi/v1/klines',
-    depth: '/fapi/v1/depth',
-    ticker24h: '/fapi/v1/ticker/24hr',
-  },
-} as const;
+import {
+  DEFAULT_MARKET,
+  DEFAULT_SYMBOL,
+  REST_ENDPOINTS as ENDPOINTS,
+  getBaseUrl,
+} from './constants';
 
 // ============================================================================
 // 工具函数
@@ -71,6 +38,8 @@ function parseKline(raw: BinanceKlineRaw): BinanceKline {
     closeTime: raw[6],
     quoteVolume: parseFloat(raw[7]),
     trades: raw[8],
+    takerBuyVolume: parseFloat(raw[9]),
+    takerBuyQuoteVolume: parseFloat(raw[10]),
   };
 }
 
@@ -109,10 +78,10 @@ function buildUrl(
  * @param endTime - 结束时间 (毫秒)
  */
 export async function getKlines(
-  symbol: string = 'BTCUSDT',
+  symbol: string = DEFAULT_SYMBOL,
   interval: BinanceInterval = '1h',
   limit: number = 500,
-  market: MarketType = 'spot',
+  market: MarketType = DEFAULT_MARKET,
   startTime?: number,
   endTime?: number,
 ): Promise<BinanceKline[]> {
@@ -157,10 +126,10 @@ export async function getKlines(
  * @param market - 市场类型
  */
 export async function getKlinesBatch(
-  symbol: string = 'BTCUSDT',
+  symbol: string = DEFAULT_SYMBOL,
   interval: BinanceInterval = '1h',
   totalCount: number = 2000,
-  market: MarketType = 'spot',
+  market: MarketType = DEFAULT_MARKET,
 ): Promise<BinanceKline[]> {
   const allKlines: BinanceKline[] = [];
   const batchSize = 1500; // Binance 单次最大限制
@@ -223,9 +192,9 @@ export async function getKlinesBatch(
  * @param market - 市场类型
  */
 export async function getDepth(
-  symbol: string = 'BTCUSDT',
-  limit: number = 100, // 默认获取 100 档深度数据（Binance 支持: 5, 10, 20, 50, 100, 500, 1000, 5000）
-  market: MarketType = 'spot',
+  symbol: string = DEFAULT_SYMBOL,
+  limit: number = 100,
+  market: MarketType = DEFAULT_MARKET,
 ): Promise<BinanceDepth> {
   // 验证 limit 参数（Binance 有效值）
   const validLimits = [5, 10, 20, 50, 100, 500, 1000, 5000];
@@ -274,6 +243,25 @@ export async function getTicker24h(
     throw new Error(`Binance API error: ${response.status}`);
   }
   
+  return response.json();
+}
+
+/**
+ * 获取合约标记价格 / 资金费率 (仅合约市场)
+ *
+ * @param symbol - 交易对 (如 BTCUSDT)
+ */
+export async function getPremiumIndex(
+  symbol: string = 'BTCUSDT',
+): Promise<import('./types').BinancePremiumIndex> {
+  const baseUrl = getBaseUrl('futures');
+  const url = `${baseUrl}/fapi/v1/premiumIndex?symbol=${symbol}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Binance premiumIndex API error: ${response.status}`);
+  }
+
   return response.json();
 }
 

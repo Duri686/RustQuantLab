@@ -46,6 +46,8 @@ import type {
 } from '../types/trading';
 import type { TradingWasmEngine } from './tradingState/types';
 import type { PendingIndicators } from './candle/candleUtils';
+import type { BinanceTicker24h, BinancePremiumIndex } from '../services/binance/types';
+import type { TradeRecord } from './useBinanceMarket';
 
 // ============================================================================
 // 类型定义
@@ -100,6 +102,14 @@ export interface UseWasmEngineReturn {
   dataSource: DataSource;
   /** WebSocket 连接状态 (仅 Binance) */
   connectionStatus?: string;
+  /** 24h Ticker 统计 (仅 Binance) */
+  ticker24h?: BinanceTicker24h | null;
+  /** 最近成交记录 (仅 Binance) */
+  recentTrades?: TradeRecord[];
+  /** Taker 买入比例 (仅 Binance) */
+  takerBuyRatio?: number | null;
+  /** 合约标记价格 / 资金费率 (仅 Binance) */
+  premiumIndex?: BinancePremiumIndex | null;
 
   // ========== 交易状态 (Rust 管理) ==========
   /** 交易状态快照 */
@@ -128,6 +138,8 @@ export interface UseWasmEngineReturn {
   cancelOrder: UseTradingActionsReturn['cancelOrder'];
   /** 增加保证金 (逐仓模式) */
   addMargin: UseTradingActionsReturn['addMargin'];
+  /** 预估强平价格 (Wasm 引擎计算) */
+  estimateLiquidation: UseTradingActionsReturn['estimateLiquidation'];
 }
 
 // ============================================================================
@@ -151,6 +163,8 @@ export interface UseWasmEngineOptions {
   dataSource?: DataSource;
   /** Binance 历史 K 线数量 */
   historyCount?: number;
+  /** 交易对 (如 BTCUSDT, ETHUSDT) */
+  symbol?: string;
 }
 
 /**
@@ -177,7 +191,7 @@ export function useWasmEngine(
       ? { tickInterval: options, dataSource: 'mock' as DataSource }
       : { tickInterval: 100, dataSource: 'mock' as DataSource, ...options };
 
-  const { tickInterval, dataSource, historyCount } = opts;
+  const { tickInterval, dataSource, historyCount, symbol = 'BTCUSDT' } = opts;
 
   // ========== Toast ==========
   const toast = useToast();
@@ -193,10 +207,15 @@ export function useWasmEngine(
     requestHistory,
     connectionStatus,
     error: marketError,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
+    premiumIndex,
   } = useMarketData({
     source: dataSource,
     tickInterval,
     historyCount,
+    symbol,
   });
 
   // ========== Wasm 初始化状态 ==========
@@ -217,13 +236,12 @@ export function useWasmEngine(
   const prevDataSourceRef = useRef<DataSource>(dataSource);
   const lastMarketErrorRef = useRef<string | null>(null);
 
+  // ========== 监听 Symbol 变化 (Mock 模式) ==========
+  const prevSymbolRef = useRef(symbol);
+
   // ========== 数据源切换时重置状态 ==========
   useEffect(() => {
     if (prevDataSourceRef.current !== dataSource) {
-      console.log(
-        `[useWasmEngine] 数据源切换: ${prevDataSourceRef.current} -> ${dataSource}`,
-      );
-
       // 清空 Rust 引擎内部历史，避免不同数据源之间的价格/成交量互相污染
       if (engineAlive.current && engineRef.current) {
         try {
@@ -232,12 +250,32 @@ export function useWasmEngine(
           console.warn('[useWasmEngine] 清理历史数据失败:', err);
         }
       }
-
-      // 重置历史数据加载标记，允许新数据源重新加载
-      historyLoadedRef.current = false;
       prevDataSourceRef.current = dataSource;
     }
   }, [dataSource]);
+
+  useEffect(() => {
+    if (dataSource === 'mock' && prevSymbolRef.current !== symbol) {
+      console.log(`[useWasmEngine] Mock Symbol 变更: ${prevSymbolRef.current} -> ${symbol}`);
+      
+      // 如果正在运行，重启流
+      if (isRunning) {
+        stop();
+        // 稍微延迟重启，确保 worker 消息处理完成
+        setTimeout(() => {
+          start();
+        }, 100);
+      }
+      
+      // 清理历史状态
+      if (engineAlive.current && engineRef.current) {
+          engineRef.current.clear_history();
+      }
+      historyLoadedRef.current = false;
+      
+      prevSymbolRef.current = symbol;
+    }
+  }, [symbol, dataSource, isRunning, stop, start]);
 
   // ========== 分析结果 ==========
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
@@ -253,15 +291,10 @@ export function useWasmEngine(
   // ========== Wasm 初始化 ==========
   useEffect(() => {
     let aborted = false;
-    const t0 = performance.now();
 
     const init = async () => {
       try {
-        console.log('[Perf] ⏱️ 开始 WASM 初始化...');
         const engine = await initWasmEngine();
-        console.log(
-          `[Perf] ✅ WASM 初始化完成: ${(performance.now() - t0).toFixed(0)}ms`,
-        );
 
         if (aborted) return;
 
@@ -292,7 +325,7 @@ export function useWasmEngine(
       aborted = true;
       engineAlive.current = false;
       engineRef.current = null;
-      console.log('[useWasmEngine] 组件卸载，引擎保持活跃');
+
     };
   }, []);
 
@@ -317,43 +350,18 @@ export function useWasmEngine(
         return;
       }
 
-      // 1. 调用 Rust on_tick 处理市场数据
-      // 🔍 成交量追踪日志：传递给 WASM 引擎
-      console.log(`[VOL追踪] 🚀 useWasmEngine → on_tick:`, {
-        hasVolume: latestData.volume !== undefined,
-        volume: latestData.volume,
-        volumeType: typeof latestData.volume,
-        price: latestData.price.toFixed(2),
-        dataSource,
-        timestamp: latestData.timestamp,
-      });
+      // 合并调用: on_tick + get_active_candles + get_trading_state → 单次 WASM 跨边界
+      const { analysis, candles, tradingState } = engineRef.current.on_tick_full(latestData);
 
-      const result = engineRef.current.on_tick(latestData);
-      setAnalysisResult(result);
+      setAnalysisResult(analysis);
       prevPriceRef.current = latestData.price;
+      setRustCandleHistory(candles);
+      setTradingState(tradingState);
 
-      // 2. 获取 K 线数据
-      try {
-        const candles = engineRef.current.get_active_candles();
-        setRustCandleHistory(candles);
-      } catch {
-        // K 线获取失败不影响主流程
-      }
-
-      // 3. 同步交易状态 (Rust 内部已处理价格更新和风险检查)
-      try {
-        const state = (
-          engineRef.current as unknown as TradingWasmEngine
-        ).get_trading_state();
-        setTradingState(state);
-
-        // 处理事件
-        if (state.pendingEvents && state.pendingEvents.length > 0) {
-          handleEngineEvents(state.pendingEvents, toast);
-          setLastEvents(state.pendingEvents);
-        }
-      } catch {
-        // 交易状态获取失败不影响主流程
+      // 处理事件
+      if (tradingState.pendingEvents && tradingState.pendingEvents.length > 0) {
+        handleEngineEvents(tradingState.pendingEvents, toast);
+        setLastEvents(tradingState.pendingEvents);
       }
 
       // 重置错误计数
@@ -512,8 +520,8 @@ export function useWasmEngine(
   }, [latestData]);
 
   const priceColorClass = useMemo(() => {
-    if (priceTrend === 'up') return 'text-[var(--color-neon-green)]';
-    if (priceTrend === 'down') return 'text-[var(--color-neon-red)]';
+    if (priceTrend === 'up') return 'text-success';
+    if (priceTrend === 'down') return 'text-danger';
     return 'text-white';
   }, [priceTrend]);
 
@@ -538,7 +546,7 @@ export function useWasmEngine(
     try {
       const success = engineRef.current.set_timeframe(timeframe);
       if (success) {
-        console.log(`[useWasmEngine] 时间周期已切换为 ${timeframe}`);
+
 
         // 立即获取新周期的 K 线数据
         try {
@@ -592,6 +600,10 @@ export function useWasmEngine(
     setTimeframe,
     dataSource,
     connectionStatus,
+    ticker24h,
+    recentTrades,
+    takerBuyRatio,
+    premiumIndex,
 
     // 交易状态
     tradingState,

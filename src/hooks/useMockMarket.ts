@@ -48,16 +48,8 @@ export function useMockMarket(interval: number = 100) {
       if (type === 'DATA') {
         setLatestData(event.data.payload);
       } else if (type === 'HISTORY') {
-        const t0 = performance.now();
-        const candles = event.data.payload.candles;
-        console.log(`[Perf] 📦 Worker 历史数据到达: ${candles.length} 根`);
-        setHistoryCandles(candles);
+        setHistoryCandles(event.data.payload.candles);
         setHistoryLoading(false);
-        console.log(
-          `[Perf] ✅ React state 更新: ${(performance.now() - t0).toFixed(
-            0,
-          )}ms`,
-        );
       }
     };
 
@@ -75,11 +67,11 @@ export function useMockMarket(interval: number = 100) {
    * @param startPrice - 可选，起始价格（用于从历史数据结束价继续）
    */
   const start = useCallback(
-    (startPrice?: number) => {
+    (symbol?: string, startPrice?: number) => {
       const worker = initWorker();
       const message: WorkerStartMessage = {
         type: 'START',
-        payload: { interval, startPrice },
+        payload: { interval, symbol, startPrice },
       };
       worker.postMessage(message);
       setIsRunning(true);
@@ -99,6 +91,18 @@ export function useMockMarket(interval: number = 100) {
   }, []);
 
   /**
+   * 完全终止 Worker（切换数据源时调用）
+   */
+  const terminate = useCallback(() => {
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+      setIsRunning(false);
+      setLatestData(null);
+    }
+  }, []);
+
+  /**
    * 请求历史 K 线数据
    * @param timeframeSeconds - 时间周期 (秒)，默认 1m = 60
    * @param count - K 线数量，默认 1296000 (15 天 1s K 线)
@@ -108,7 +112,6 @@ export function useMockMarket(interval: number = 100) {
       timeframeSeconds: number = TIMEFRAME_1S_SECONDS,
       count: number = DEFAULT_HISTORY_COUNT,
     ) => {
-      console.log(`[Perf] 📤 请求历史数据: ${count} 根 K 线...`);
       const worker = initWorker();
       setHistoryLoading(true);
       const message: WorkerHistoryRequestMessage = {
@@ -137,6 +140,8 @@ export function useMockMarket(interval: number = 100) {
     isRunning,
     start,
     stop,
+    /** 完全终止 Worker（切换数据源时调用） */
+    terminate,
     /** 历史 K 线数据 */
     historyCandles,
     /** 历史数据加载中 */

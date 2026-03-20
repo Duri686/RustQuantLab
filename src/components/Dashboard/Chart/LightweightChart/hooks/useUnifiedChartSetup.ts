@@ -195,6 +195,18 @@ export function useUnifiedChartSetup({
         vertLines: { color: CHART_COLORS.GRID },
         horzLines: { color: CHART_COLORS.GRID },
       },
+      localization: {
+        // 覆盖十字线浮窗的时间显示，从 UTC 转为当地时间
+        timeFormatter: (time: Time) => {
+          const d = new Date((time as number) * 1000);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const HH = String(d.getHours()).padStart(2, '0');
+          const MM = String(d.getMinutes()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd} ${HH}:${MM}`;
+        },
+      },
       rightPriceScale: {
         borderColor: CHART_COLORS.BORDER,
         scaleMargins: { top: 0.1, bottom: 0.1 },

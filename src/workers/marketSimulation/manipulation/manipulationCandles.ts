@@ -9,8 +9,7 @@
 
 import type { CandleResult, MarketState } from '../types';
 import { generateBartCandle } from './bart';
-import { generateMicroTrendCandle, isMicroTrendComplete } from './microTrend';
-import { getNormalRange } from '../candles/shadows';
+import { generateMicroTrendCandle } from './microTrend';
 
 // 前向声明，实际实现在 candles/generator.ts
 // 为避免循环依赖，这里使用函数参数传入

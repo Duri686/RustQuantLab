@@ -18,6 +18,7 @@
 /// let sma = calculate_sma(&prices, 3);
 /// assert_eq!(sma, Some(40.0)); // (30 + 40 + 50) / 3
 /// ```
+#[inline]
 #[must_use]
 pub fn calculate_sma(data: &[f64], period: usize) -> Option<f64> {
     if data.len() < period || period == 0 {
@@ -41,6 +42,7 @@ pub fn calculate_sma(data: &[f64], period: usize) -> Option<f64> {
 /// # 返回
 /// - `Some(f64)`: 计算结果
 /// - `None`: 数据不足
+#[inline]
 #[must_use]
 pub fn calculate_ema(data: &[f64], period: usize) -> Option<f64> {
     if data.len() < period || period == 0 {
